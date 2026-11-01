@@ -15,3 +15,9 @@ Clean-room iPhone/iPad sideloader: sign IPAs with a **free Apple ID** and instal
 Free-account limits: 3 active sideloaded apps (incl. iSideload), 10 App IDs / 7 days, 7-day profiles, app extensions each consume an App ID.
 
 Build: GitHub Actions (`.github/workflows/build.yml`) → unsigned `iSideload.ipa` artifact.
+
+## Activation & hardening
+- `ios/iSideload/License/` = shared LicenseKit (app id `isideload`, codes `ISL-…`, server tvsideload-license worker). `LicenseGate` wraps the whole UI; `requireValid()` before every sensitive op.
+- The Rust core re-verifies the signed license (Ed25519, device_id, app, exp, 7-day offline grace) on every sensitive op (`sign_in`, `device`, `apps`, `install`, `certs`, `revoke_cert`). Public key is XOR-masked; no secrets in the IPA.
+- Integrity: core is built with the commit SHA and refuses to run if the app's `ISLGitSHA` differs (detects swapped core/app). Code-signature pinning is impossible because every user re-signs the IPA.
+- Release: Rust `strip = true`, `panic = "abort"`; Xcode strips all symbols.

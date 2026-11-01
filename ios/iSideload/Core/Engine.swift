@@ -42,15 +42,9 @@ final class Engine: ObservableObject {
     private func base(_ op: String) -> [String: Any] {
         ["op": op, "apple_id": appleID, "password": Keychain.load(appleID) ?? "", "anisette_url": anisetteURL,
          "storage_dir": Self.storage.path, "pairing_path": Self.pairingURL.path, "target": vpnTarget,
-         "license": Keychain.load(Self.licenseAccount) ?? "",
-         "device_id": UIDevice.current.identifierForVendor?.uuidString ?? "",
+         "license": LicenseManager.shared.license ?? "",
+         "device_id": LicenseManager.deviceID,
          "build_sha": Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? ""]
-    }
-
-    /// Keychain account holding the signed activation token from the license server.
-    /// LicenseKit (when integrated) should store its token via `Engine.storeLicense(_:)`.
-    static let licenseAccount = "__isideload_license__"
-    static func storeLicense(_ token: String) { Keychain.save(token, for: licenseAccount)
     }
 
     // Prompt plumbing: the core thread blocks until the sheet answers.
@@ -62,6 +56,10 @@ final class Engine: ObservableObject {
     func answerPrompt(_ a: String?) { answer = a; prompt = nil; answered.signal() }
 
     private func run(_ req: [String: Any]) async throws -> [String: Any] {
+        if ["sign_in", "device", "apps", "install", "certs", "revoke_cert"].contains(req["op"] as? String ?? ""),
+           !LicenseManager.shared.requireValid() {
+            throw CoreError(message: "iSideload chưa được kích hoạt hoặc giấy phép không hợp lệ.")
+        }
         busy = true; stage = ""; progress = 0
         defer { busy = false }
         let r = await CoreCall.runAsync(req, onEvent: { s, p in
