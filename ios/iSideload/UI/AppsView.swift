@@ -18,9 +18,12 @@ struct AppsView: View {
                            (!engine.lcLatest.isEmpty && engine.lcLatest != lc!.version ? "Cập nhật LiveContainer \(engine.lcLatest)" : "Cài lại LiveContainer (bản mới nhất)")) {
                         Task { await engine.installLiveContainer() }
                     }.disabled(engine.busy)
+                    Button { Task { await engine.exportCertToLiveContainer() } } label: {
+                        Label("Xuất chứng chỉ cho LiveContainer", systemImage: "key.horizontal")
+                    }.disabled(engine.busy)
                     if let lc { Text("Đang cài \(lc.version)" + (engine.lcLatest.isEmpty ? "" : " · mới nhất \(engine.lcLatest)")).font(.footnote) }
                 } header: { Text("LiveContainer") } footer: {
-                    Text("Tải bản chính thức từ GitHub LiveContainer, ký bằng Apple ID của bạn. Cập nhật giữ nguyên dữ liệu. Được ký lại cùng các app khác.")
+                    Text("Tải bản chính thức từ GitHub LiveContainer, ký bằng Apple ID của bạn. Cập nhật giữ nguyên dữ liệu. Được ký lại cùng các app khác. Sau khi cài, chứng chỉ ký được tự gửi sang LiveContainer (chế độ JIT-less); bấm Xuất chứng chỉ nếu cần gửi lại.")
                 }
                 .task { await engine.checkLiveContainer() }
                 Section("Đã sideload") {

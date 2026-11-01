@@ -1557,6 +1557,7 @@ checksum = "a1133e156a6beed9d5e14a2b9618d52f8c2c6786326f4efbd73c7aecfcabab4c"
 name = "isl_core"
 version = "1.0.0"
 dependencies = [
+ "base64 0.22.1",
  "idevice",
  "isideload",
  "plist",

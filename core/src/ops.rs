@@ -10,7 +10,10 @@ use isideload::dev::device_type::DeveloperDeviceType;
 use isideload::dev::devices::DevicesApi;
 use isideload::dev::teams::TeamsApi;
 use isideload::sideload::builder::{MaxCertsBehavior, SideloaderBuilder};
-use isideload::util::callbacks::MaxCertsCallbackFuture;
+use isideload::util::callbacks::{MaxCertsCallbackBox, MaxCertsCallbackFuture};
+use isideload::sideload::cert_identity::CertificateIdentity;
+use isideload::dev::teams::DeveloperTeam;
+use base64::Engine as _;
 use isideload::util::fs_storage::FsStorage;
 use rootcause::Report;
 use serde_json::{json, Value};
@@ -80,7 +83,7 @@ fn explain(context: &str, e: &Report) -> String {
 
 pub async fn dispatch(req: Value, ui: Ui) -> Value {
     let op = s(&req, "op");
-    if matches!(op, "sign_in" | "device" | "apps" | "install" | "certs" | "revoke_cert") {
+    if matches!(op, "sign_in" | "device" | "apps" | "install" | "certs" | "revoke_cert" | "export_cert") {
         if let Err(e) = crate::license::require(&req) {
             return fail(e);
         }
@@ -93,6 +96,7 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "install" => install(&req, ui).await,
         "certs" => certs(&req, ui).await,
         "revoke_cert" => revoke(&req, ui).await,
+        "export_cert" => export_cert(&req, ui).await,
         "inspect" => inspect(&req),
         "pack_self" => pack_self(&req),
         "pair_host" => device::host_pairing(s(&req, "pairing_path"), ui)
@@ -254,6 +258,43 @@ async fn revoke(req: &Value, ui: Ui) -> Result<Value, String> {
     Ok(json!({"ok": true}))
 }
 
+// ---- LiveContainer certificate export ----
+
+/// Loads the development certificate iSideload signs with (private key kept in storage)
+/// and encodes it as a password-protected PKCS#12 for LiveContainer's
+/// `livecontainer://certificate?cert=<base64>&password=<pw>` import.
+/// Never creates or revokes certificates: it only exports the one already in use.
+async fn lc_cert_json(dev: &mut DeveloperSession, team: &DeveloperTeam, req: &Value) -> Result<Value, String> {
+    let id = CertificateIdentity::retrieve(
+        HOST_NAME,
+        s(req, "apple_id"),
+        dev,
+        team,
+        &storage(req),
+        &MaxCertsBehavior::<MaxCertsCallbackBox>::Error,
+    )
+    .await
+    .map_err(|e| explain("Không lấy được chứng chỉ", &e))?;
+    let password = if id.machine_id.is_empty() { "isideload".to_string() } else { id.machine_id.clone() };
+    let p12 = id.as_p12(&password).await.map_err(|e| explain("Không xuất được file .p12", &e))?;
+    Ok(json!({
+        "p12_base64": base64::engine::general_purpose::STANDARD.encode(&p12),
+        "password": password,
+        "serial": id.get_serial_number(),
+        "team_id": team.team_id,
+    }))
+}
+
+async fn export_cert(req: &Value, ui: Ui) -> Result<Value, String> {
+    let (_a, mut dev) = sign_in(req, ui).await?;
+    let team = dev.list_teams().await.map_err(|e| explain("No developer team", &e))?
+        .into_iter().next().ok_or("This Apple ID has no developer team.")?;
+    ui.progress("Đang xuất chứng chỉ…", None);
+    let mut v = lc_cert_json(&mut dev, &team, req).await?;
+    v["ok"] = json!(true);
+    Ok(v)
+}
+
 // ---- Install / refresh ----
 
 /// Reads ExpirationDate from the signed bundle's embedded.mobileprovision.
@@ -325,7 +366,7 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     ui.progress("Đang ký app…", Some(0.0));
     let progress = move |f: f32| async move { ui.progress("Đang ký app…", Some(f as f64)) };
     let (signed, _) = sideloader
-        .sign_app(ipa, Some(team), false, Some(progress), None, Some(&udid))
+        .sign_app(ipa, Some(team.clone()), false, Some(progress), None, Some(&udid))
         .await
         .map_err(|e| explain("Signing failed", &e))?;
     let (bundle_id, name, version) = bundle_info(&signed);
@@ -346,7 +387,13 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     }
     let _ = std::fs::remove_dir_all(&signed);
 
+    // LiveContainer needs the signing certificate for JIT-less mode: hand it back so the app can pass it on.
+    let lc_cert = if bundle_id.starts_with("com.kdt.livecontainer") {
+        lc_cert_json(sideloader.get_dev_session(), &team, req).await.ok()
+    } else { None };
+
     Ok(json!({
+        "lc_cert": lc_cert,
         "ok": true,
         "bundle_id": bundle_id,
         "name": name,

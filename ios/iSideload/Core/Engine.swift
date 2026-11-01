@@ -58,7 +58,7 @@ final class Engine: ObservableObject {
     func answerPrompt(_ a: String?) { answer = a; prompt = nil; answered.signal() }
 
     private func run(_ req: [String: Any]) async throws -> [String: Any] {
-        if ["sign_in", "device", "apps", "install", "certs", "revoke_cert"].contains(req["op"] as? String ?? ""),
+        if ["sign_in", "device", "apps", "install", "certs", "revoke_cert", "export_cert"].contains(req["op"] as? String ?? ""),
            !LicenseManager.shared.requireValid() {
             throw CoreError(message: "iSideload chưa được kích hoạt hoặc giấy phép không hợp lệ.")
         }
@@ -149,6 +149,7 @@ final class Engine: ObservableObject {
             let exp = (r["expires"] as? Double).map { Date(timeIntervalSince1970: $0) }
             let rec = SideloadedApp(bundleID: bid, name: r["name"] as? String ?? bid, version: r["version"] as? String ?? "",
                                     expires: exp, ipaFile: ipa.lastPathComponent)
+            if let c = r["lc_cert"] as? [String: Any] { lastLCCert = c }
             apps.removeAll { $0.bundleID == bid }
             apps.append(rec); save()
             infoText = "Đã cài \(rec.name)" + (exp.map { ", hết hạn \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
@@ -263,7 +264,50 @@ final class Engine: ObservableObject {
             let r = try await LiveContainer.latest()
             let ipa = try await LiveContainer.download(r, into: Self.ipaDir)
             let existing = apps.contains { $0.bundleID.hasPrefix(LiveContainer.bundlePrefix) }
+            lastLCCert = nil
             await install(ipa: ipa, upgrade: existing)
+            // Right after installing, hand LiveContainer the signing certificate automatically.
+            if let c = lastLCCert, errorText == nil {
+                try await Task.sleep(nanoseconds: 1_500_000_000)
+                try sendCertToLiveContainer(c)
+            }
+        }
+    }
+
+    // MARK: LiveContainer certificate
+    var lastLCCert: [String: Any]?
+
+    /// Exports the certificate this Apple ID signs with (.p12 + password) and opens
+    /// livecontainer://certificate so LiveContainer stores it for JIT-less mode.
+    func exportCertToLiveContainer() async {
+        guard signedIn else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
+        guard liveContainerInstalled != nil || UIApplication.shared.canOpenURL(URL(string: "livecontainer://")!) else {
+            errorText = "Chưa cài LiveContainer. Hãy bấm Cài LiveContainer trước."; return
+        }
+        await guarded {
+            let r = try await run(base("export_cert"))
+            try sendCertToLiveContainer(r)
+        }
+    }
+
+    private func sendCertToLiveContainer(_ c: [String: Any]) throws {
+        guard let b64 = c["p12_base64"] as? String, let pw = c["password"] as? String else {
+            throw CoreError(message: "Không có dữ liệu chứng chỉ.")
+        }
+        var allowed = CharacterSet.alphanumerics; allowed.insert(charactersIn: "-._~")
+        let enc = { (x: String) in x.addingPercentEncoding(withAllowedCharacters: allowed) ?? "" }
+        guard let url = URL(string: "livecontainer://certificate?cert=\(enc(b64))&password=\(enc(pw))") else {
+            throw CoreError(message: "Không tạo được liên kết cho LiveContainer.")
+        }
+        // Keep a copy so the user can also import it by hand in LiveContainer › Settings.
+        if let d = Data(base64Encoded: b64) {
+            try? d.write(to: Self.docs.appendingPathComponent("LiveContainer-cert.p12"), options: .completeFileProtection)
+        }
+        UIApplication.shared.open(url) { ok in
+            Task { @MainActor in
+                if ok { self.infoText = "Đã gửi chứng chỉ (team \(c["team_id"] as? String ?? "")) sang LiveContainer. Trong LiveContainer hãy bấm đồng ý nhập." }
+                else { self.errorText = "Không mở được LiveContainer. Mở LiveContainer một lần rồi thử lại." }
+            }
         }
     }
 
