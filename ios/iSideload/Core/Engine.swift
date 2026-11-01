@@ -58,10 +58,6 @@ final class Engine: ObservableObject {
     func answerPrompt(_ a: String?) { answer = a; prompt = nil; answered.signal() }
 
     private func run(_ req: [String: Any]) async throws -> [String: Any] {
-        if ["sign_in", "device", "apps", "install", "certs", "revoke_cert", "export_cert"].contains(req["op"] as? String ?? ""),
-           !LicenseManager.shared.requireValid() {
-            throw CoreError(message: "iSideload chưa được kích hoạt hoặc giấy phép không hợp lệ.")
-        }
         busy = true; stage = ""; progress = 0
         defer { busy = false }
         let r = await CoreCall.runAsync(req, onEvent: { s, p in

@@ -14,11 +14,10 @@ struct iSideloadApp: App {
 
     var body: some Scene {
         WindowGroup {
-            LicenseGate(license) {
-                ContentView()
-                    .environmentObject(engine)
-                    .onOpenURL { engine.handleURL($0) }
-            }
+            // No activation code: the app opens straight to normal use.
+            ContentView()
+                .environmentObject(engine)
+                .onOpenURL { engine.handleURL($0) }
         }
         .onChange(of: phase) { _, p in if p == .background { AutoRefresh.schedule() } }
     }
