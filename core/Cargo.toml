@@ -1,0 +1,31 @@
+[package]
+name = "isl_core"
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+description = "iSideload core: Apple ID sign-in, signing, and on-device install over a loopback VPN, exposed over a small C ABI"
+
+[lib]
+name = "isl_core"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+idevice = { version = "0.1.61", default-features = false, features = [
+  "afc", "installation_proxy", "tcp", "ring",
+] }
+isideload = { version = "0.4.6", default-features = false, features = ["install", "fs-storage", "tokio-mt"] }
+rootcause = "0.12.0"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "fs", "time", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+plist = "1.8"
+zip = { version = "*", default-features = false, features = ["deflate"] }
+
+[patch.crates-io]
+idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "d32c8189c51c2789496b0768039419c3705498c3" }
+isideload = { path = "vendor/isideload" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"

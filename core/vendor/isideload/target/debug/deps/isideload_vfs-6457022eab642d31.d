@@ -1,0 +1,11 @@
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/isideload_vfs-6457022eab642d31.d: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/fs.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/native.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/memory.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/traits.rs
+
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/libisideload_vfs-6457022eab642d31.rlib: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/fs.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/native.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/memory.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/traits.rs
+
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/libisideload_vfs-6457022eab642d31.rmeta: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/fs.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/native.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/memory.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/traits.rs
+
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/lib.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/fs.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/native.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/memory.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/isideload-vfs-0.0.1/src/traits.rs:

@@ -1,0 +1,36 @@
+import SwiftUI
+
+struct DeviceView: View {
+    @EnvironmentObject var engine: Engine
+    @State private var picking = false
+    @State private var tick = 0
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Label(engine.hasPairing ? "Đã có file ghép nối" : "Chưa có file ghép nối",
+                          systemImage: engine.hasPairing ? "checkmark.seal.fill" : "exclamationmark.triangle")
+                        .foregroundStyle(engine.hasPairing ? .green : .orange)
+                    Button("Nhập file ghép nối (.mobiledevicepairing / .plist)") { picking = true }
+                } header: { Text("1. File ghép nối") } footer: {
+                    Text("Tạo một lần trên máy tính (iOS 18–26): cắm iPhone, tin cậy máy tính, rồi dùng idevice_pair / iloader / Jitterbug pair để xuất file. Gửi file qua AirDrop/Files rồi nhập ở đây.")
+                }
+                Section {
+                    Label(engine.vpnActive ? "VPN loopback đang bật" : "VPN loopback đang tắt",
+                          systemImage: engine.vpnActive ? "network" : "network.slash")
+                        .foregroundStyle(engine.vpnActive ? .green : .orange).id(tick)
+                    Button(LoopbackVPN.helperInstalled ? "Bật VPN trong LocalDevVPN" : "Tải LocalDevVPN (App Store)") { LoopbackVPN.turnOn() }
+                } header: { Text("2. VPN loopback") } footer: {
+                    Text("VPN chuyển gói tin tới 10.7.0.1 quay ngược lại chính máy, để iSideload nói chuyện với lockdownd như một máy tính. Apple ID miễn phí không ký được Network Extension nên iSideload dùng app LocalDevVPN miễn phí trên App Store.")
+                }
+                Section("3. Kiểm tra") {
+                    Button("Kiểm tra kết nối thiết bị") { tick += 1; Task { await engine.checkDevice() } }
+                    if !engine.deviceLine.isEmpty { Text(engine.deviceLine) }
+                }
+            }
+            .navigationTitle("Thiết bị")
+            .sheet(isPresented: $picking) { DocumentPicker { engine.importPairing(from: $0) } }
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in tick += 1 }
+        }
+    }
+}

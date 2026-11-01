@@ -1,0 +1,68 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: core }
+      - run: cargo test --manifest-path core/Cargo.toml
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: aarch64-apple-ios }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: core, key: ios }
+      - name: Build Rust core
+        run: |
+          export IPHONEOS_DEPLOYMENT_TARGET=17.0
+          cargo build --release --target aarch64-apple-ios --manifest-path core/Cargo.toml
+          ls -la core/target/aarch64-apple-ios/release/libisl_core.a
+      - name: Generate Xcode project
+        run: brew install xcodegen && xcodegen generate
+      - name: Build tunnel extension (compile check only, not shipped)
+        run: |
+          xcodebuild -project iSideload.xcodeproj -target iSideloadTunnel -configuration Release -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -5
+          test "${PIPESTATUS[0]}" = 0
+      - name: Build app (unsigned)
+        run: |
+          xcodebuild -version
+          xcodebuild -project iSideload.xcodeproj -scheme iSideload -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -40
+          test "${PIPESTATUS[0]}" = 0
+      - name: Package IPA
+        run: |
+          APP=build/Build/Products/Release-iphoneos/iSideload.app
+          /usr/libexec/PlistBuddy -c "Set :ISLGitSHA ${GITHUB_SHA::7}" "$APP/Info.plist"
+          mkdir -p out/Payload && cp -R "$APP" out/Payload/
+          (cd out && zip -qry ../iSideload.ipa Payload)
+          ls -la iSideload.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iSideload-${{ github.run_number }}
+          path: iSideload.ipa
+      - name: Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" iSideload.ipa --title "iSideload $VER" --generate-notes

@@ -1,0 +1,12 @@
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/pkcs8-45ec6d5e808262e0.d: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/error.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/private_key_info.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/traits.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/version.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/../README.md
+
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/libpkcs8-45ec6d5e808262e0.rlib: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/error.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/private_key_info.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/traits.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/version.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/../README.md
+
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/libpkcs8-45ec6d5e808262e0.rmeta: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/error.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/private_key_info.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/traits.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/version.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/../README.md
+
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/lib.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/error.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/private_key_info.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/traits.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/version.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pkcs8-0.11.0/src/../README.md:

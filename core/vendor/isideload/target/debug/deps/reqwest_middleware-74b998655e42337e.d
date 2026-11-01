@@ -1,0 +1,11 @@
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/reqwest_middleware-74b998655e42337e.d: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/client.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/error.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/middleware.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/req_init.rs
+
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/libreqwest_middleware-74b998655e42337e.rlib: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/client.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/error.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/middleware.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/req_init.rs
+
+/workspace/TVSideload/core/vendor/isideload/target/debug/deps/libreqwest_middleware-74b998655e42337e.rmeta: /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/lib.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/client.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/error.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/middleware.rs /home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/req_init.rs
+
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/lib.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/client.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/error.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/middleware.rs:
+/home/box/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/reqwest-middleware-0.5.2/src/req_init.rs:

@@ -1,0 +1,11 @@
+core/target/
+build/
+out/
+*.xcodeproj/
+*.ipa
+.DS_Store
+core/target/
+build/
+*.xcodeproj/
+out/
+*.ipa
