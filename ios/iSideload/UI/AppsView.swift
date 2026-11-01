@@ -40,7 +40,7 @@ struct AppsView: View {
                                 } else { Text("Không rõ hạn").font(.caption).foregroundStyle(.secondary) }
                             }
                             Spacer()
-                            Button("Làm mới") { Task { await engine.refresh(app) } }.buttonStyle(.bordered).disabled(engine.busy)
+                            Button("Làm mới") { Task { await engine.refreshAndPush(app) } }.buttonStyle(.bordered).disabled(engine.busy)
                         }
                     }
                 }

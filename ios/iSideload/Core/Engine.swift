@@ -156,7 +156,15 @@ final class Engine: ObservableObject {
         guard let f = app.ipaFile, FileManager.default.fileExists(atPath: Self.ipaDir.appendingPathComponent(f).path) else {
             errorText = "Không còn file IPA gốc của \(app.name). Hãy chọn lại IPA để cài đè."; return
         }
+        errorText = nil
         await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true)
+        if errorText == nil { markLCCertPending() }
+    }
+
+    /// Manual "Làm mới" button: re-sign one app, then push the certificate to LiveContainer.
+    func refreshAndPush(_ app: SideloadedApp) async {
+        await refresh(app)
+        await pushPendingLCCert()
     }
 
     /// Re-sign and re-install iSideload itself from its own running bundle (no PC needed).
@@ -169,6 +177,8 @@ final class Engine: ObservableObject {
             _ = try await run(["op": "pack_self", "app_path": Bundle.main.bundleURL.path, "out_path": out.path])
         } catch { errorText = "Không đóng gói được iSideload: \(error)"; return }
         infoText = "Đang ký lại iSideload — app sẽ tự đóng khi cài xong, mở lại là xong."
+        // iOS usually kills the app when the install finishes: the push happens on next launch.
+        markLCCertPending()
         await install(ipa: out, upgrade: true)
     }
 
@@ -251,6 +261,8 @@ final class Engine: ObservableObject {
         } else {
             AutoRefresh.notify(failed.isEmpty ? "Ký lại xong" : "Ký lại có lỗi", summary.isEmpty ? "Không có app nào cần ký lại." : summary)
         }
+        if !ok.isEmpty { markLCCertPending() }
+        if !background { await pushPendingLCCert() }
         return failed.isEmpty
     }
 
@@ -272,6 +284,25 @@ final class Engine: ObservableObject {
 
     // MARK: LiveContainer certificate
     var lastLCCert: [String: Any]?
+    private static let lcPendingKey = "lcCertPending"
+
+    /// After a successful re-sign: remember to push the current certificate to LiveContainer.
+    func markLCCertPending() {
+        if liveContainerInstalled != nil { UserDefaults.standard.set(true, forKey: Self.lcPendingKey) }
+    }
+
+    /// Pushes the certificate if a re-sign left it pending. Only works in the foreground
+    /// (URLs can't be opened from a background task); otherwise it waits for the next launch/foreground.
+    func pushPendingLCCert() async {
+        guard UserDefaults.standard.bool(forKey: Self.lcPendingKey) else { return }
+        guard liveContainerInstalled != nil else { UserDefaults.standard.set(false, forKey: Self.lcPendingKey); return }
+        guard UIApplication.shared.applicationState == .active, !busy, signedIn else { return }
+        do {
+            let r = try await run(base("export_cert"))
+            try sendCertToLiveContainer(r)
+            UserDefaults.standard.set(false, forKey: Self.lcPendingKey)
+        } catch { errorText = "Chưa gửi được chứng chỉ sang LiveContainer: \(error.localizedDescription)" }
+    }
 
     /// Exports the certificate this Apple ID signs with (.p12 + password) and opens
     /// livecontainer://certificate so LiveContainer stores it for JIT-less mode.
