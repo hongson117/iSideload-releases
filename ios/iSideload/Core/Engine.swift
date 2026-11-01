@@ -5,6 +5,7 @@ import UserNotifications
 
 @MainActor
 final class Engine: ObservableObject {
+    static let shared = Engine()
     @AppStorage("appleID") var appleID = ""
     @AppStorage("anisetteURL") var anisetteURL = ""
     @AppStorage("vpnTarget") var vpnTarget = ""
@@ -217,6 +218,68 @@ final class Engine: ObservableObject {
         svc.setTXTRecord(NetService.data(fromTXTRecord: txt))
         svc.publish()
         bonjour = svc
+    }
+
+    // MARK: Auto refresh
+    @Published var lcLatest: String = ""
+
+    var isideloadBundleID: String { Bundle.main.bundleIdentifier ?? "" }
+
+    /// Re-signs due apps from stored IPAs (others first, iSideload itself last). Returns success.
+    @discardableResult
+    func refreshAll(includeSelf: Bool, onlyDue: Bool, background: Bool, onlySelf: Bool = false) async -> Bool {
+        guard !busy else { return false }
+        guard vpnActive else {
+            if !background { LoopbackVPN.turnOn() }
+            AutoRefresh.notify("iSideload chưa ký lại", "LocalDevVPN chưa bật. Bật VPN rồi chạy lại.")
+            return false
+        }
+        let due: (SideloadedApp) -> Bool = { !onlyDue || ($0.daysLeft ?? 0) < AutoRefresh.thresholdDays }
+        var ok: [String] = [], failed: [String] = []
+        if !onlySelf {
+            for app in apps where app.bundleID != isideloadBundleID && !app.bundleID.hasPrefix(isideloadBundleID + ".") && due(app) {
+                errorText = nil
+                await refresh(app)
+                if errorText == nil { ok.append(app.name) } else { failed.append("\(app.name): \(errorText ?? "")") }
+            }
+        }
+        UserDefaults.standard.set(Date(), forKey: "lastRefresh")
+        let selfDue = apps.first(where: { $0.bundleID.hasPrefix(isideloadBundleID) }).map(due) ?? true
+        let summary = (ok.isEmpty ? "" : "Đã ký lại: " + ok.joined(separator: ", ") + ". ")
+            + (failed.isEmpty ? "" : "Lỗi: " + failed.joined(separator: "; "))
+        if includeSelf && selfDue {
+            AutoRefresh.notify("iSideload đang tự ký lại", summary + " iSideload sẽ tự thoát khi cài xong.")
+            await refreshSelf()   // process is usually terminated here on success
+            if let e = errorText { AutoRefresh.notify("iSideload ký lại thất bại", e); return false }
+        } else {
+            AutoRefresh.notify(failed.isEmpty ? "Ký lại xong" : "Ký lại có lỗi", summary.isEmpty ? "Không có app nào cần ký lại." : summary)
+        }
+        return failed.isEmpty
+    }
+
+    func installLiveContainer() async {
+        await guarded {
+            stage = "Đang tải LiveContainer…"
+            let r = try await LiveContainer.latest()
+            let ipa = try await LiveContainer.download(r, into: Self.ipaDir)
+            let existing = apps.contains { $0.bundleID.hasPrefix(LiveContainer.bundlePrefix) }
+            await install(ipa: ipa, upgrade: existing)
+        }
+    }
+
+    func checkLiveContainer() async {
+        if let r = try? await LiveContainer.latest() { lcLatest = r.version }
+    }
+
+    var liveContainerInstalled: SideloadedApp? { apps.first { $0.bundleID.hasPrefix(LiveContainer.bundlePrefix) } }
+
+    func handleURL(_ url: URL) {
+        if url.scheme == "isideload" {
+            if url.host == "refresh" { Task { await refreshAll(includeSelf: true, onlyDue: false, background: false) } }
+            else if url.host == "refresh-apps" { Task { await refreshAll(includeSelf: false, onlyDue: false, background: false) } }
+            return
+        }
+        importIPA(from: url)
     }
 
     // MARK: Certificates

@@ -13,7 +13,7 @@
 	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ISLGitSHA</key><string>dev</string>
 	<key>LSRequiresIPhoneOS</key><true/>
-	<key>LSApplicationQueriesSchemes</key><array><string>localdevvpn</string></array>
+	<key>LSApplicationQueriesSchemes</key><array><string>livecontainer</string><string>localdevvpn</string></array>
 	<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLSchemes</key><array><string>isideload</string></array></dict></array>
 	<key>UILaunchScreen</key><dict/>
 	<key>UISupportedInterfaceOrientations</key>
@@ -48,5 +48,9 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>iSideload cần mạng cục bộ để iPhone tìm thấy và ghép nối với chính iSideload.</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array><string>com.hongson117.isideload.refresh</string></array>
+	<key>UIBackgroundModes</key>
+	<array><string>fetch</string><string>processing</string></array>
 </dict>
 </plist>

@@ -12,6 +12,17 @@ struct AppsView: View {
                 } footer: {
                     Text("Apple ID miễn phí: tối đa 3 app sideload cùng lúc (tính cả iSideload), 10 App ID mỗi 7 ngày, app hết hạn sau 7 ngày — bấm Làm mới trước khi hết hạn.")
                 }
+                Section {
+                    let lc = engine.liveContainerInstalled
+                    Button(lc == nil ? "Cài LiveContainer" :
+                           (!engine.lcLatest.isEmpty && engine.lcLatest != lc!.version ? "Cập nhật LiveContainer \(engine.lcLatest)" : "Cài lại LiveContainer (bản mới nhất)")) {
+                        Task { await engine.installLiveContainer() }
+                    }.disabled(engine.busy)
+                    if let lc { Text("Đang cài \(lc.version)" + (engine.lcLatest.isEmpty ? "" : " · mới nhất \(engine.lcLatest)")).font(.footnote) }
+                } header: { Text("LiveContainer") } footer: {
+                    Text("Tải bản chính thức từ GitHub LiveContainer, ký bằng Apple ID của bạn. Cập nhật giữ nguyên dữ liệu. Được ký lại cùng các app khác.")
+                }
+                .task { await engine.checkLiveContainer() }
                 Section("Đã sideload") {
                     if engine.apps.isEmpty { Text("Chưa có app nào.").foregroundStyle(.secondary) }
                     ForEach(engine.apps) { app in
