@@ -94,6 +94,7 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "certs" => certs(&req, ui).await,
         "revoke_cert" => revoke(&req, ui).await,
         "inspect" => inspect(&req),
+        "pack_self" => pack_self(&req),
         "version" => Ok(json!({"ok": true, "version": env!("CARGO_PKG_VERSION")})),
         other => Err(format!("Unknown op '{other}'.")),
     };
@@ -101,6 +102,11 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
 }
 
 async fn device_info(req: &Value) -> Result<Value, String> {
+    if device::is_rp_pairing(s(req, "pairing_path")) {
+        let (_a, hs) = device::rp_tunnel(s(req, "target"), s(req, "pairing_path")).await?;
+        return Ok(json!({"ok": true, "name": "iPhone", "udid": device::rsd_prop(&hs, "UniqueDeviceID"),
+                         "ios": device::rsd_prop(&hs, "OSVersion"), "mode": "remote_pairing"}));
+    }
     let p = device::provider(s(req, "target"), s(req, "pairing_path"))?;
     let (name, udid, ios) = device::info(&p).await?;
     Ok(json!({"ok": true, "name": name, "udid": udid, "ios": ios}))
@@ -272,9 +278,18 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     let upgrade = req.get("upgrade").and_then(Value::as_bool).unwrap_or(false);
 
     // 1. Reach this device through the loopback VPN first.
-    let provider = device::provider(s(req, "target"), s(req, "pairing_path"))?;
+    let rp = device::is_rp_pairing(s(req, "pairing_path"));
     ui.progress("Đang kết nối thiết bị qua VPN…", None);
-    let (dev_name, udid, _ios) = device::info(&provider).await?;
+    let (provider, mut tunnel, dev_name, udid) = if rp {
+        let (a, hs) = device::rp_tunnel(s(req, "target"), s(req, "pairing_path")).await?;
+        let udid = device::rsd_prop(&hs, "UniqueDeviceID");
+        if udid.is_empty() { return Err("Thiết bị không trả về UDID qua RSD.".into()); }
+        (None, Some((a, hs)), "iPhone".to_string(), udid)
+    } else {
+        let p = device::provider(s(req, "target"), s(req, "pairing_path"))?;
+        let (n, u, _ios) = device::info(&p).await?;
+        (Some(p), None, n, u)
+    };
 
     // 2. Apple ID + developer session; certificate is reused from storage when valid.
     let (_account, dev) = sign_in(req, ui).await?;
@@ -316,11 +331,16 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     // 5. Upload (AFC) + install (installation_proxy) on this same device.
     let label = if upgrade { "Đang làm mới app…" } else { "Đang cài app…" };
     ui.progress(label, Some(0.0));
-    isideload::sideload::install::install_app(&provider, &signed, move |p| {
-        ui.progress(label, Some((p as f64 / 100.0).clamp(0.0, 1.0)))
-    })
-    .await
-    .map_err(|e| explain("Install failed", &e))?;
+    let cb = move |p: u64| ui.progress(label, Some((p as f64 / 100.0).clamp(0.0, 1.0)));
+    if let Some((adapter, hs)) = tunnel.as_mut() {
+        isideload::sideload::install::install_app_rsd_mode(adapter, hs, &signed, upgrade, cb)
+            .await
+            .map_err(|e| explain("Install failed", &e))?;
+    } else if let Some(p) = provider.as_ref() {
+        isideload::sideload::install::install_app(p, &signed, cb)
+            .await
+            .map_err(|e| explain("Install failed", &e))?;
+    }
     let _ = std::fs::remove_dir_all(&signed);
 
     Ok(json!({
@@ -381,6 +401,41 @@ pub fn inspect_ipa(path: &std::path::Path) -> Result<Value, String> {
         "has_extensions": (0..zip.len()).filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_string()))
             .any(|n| n.contains(".appex/")),
     }))
+}
+
+/// Packs the running app bundle (.app dir) into an IPA so iSideload can re-sign and
+/// re-install itself on-device. Existing signature files are dropped by the signer anyway.
+fn pack_self(req: &Value) -> Result<Value, String> {
+    use std::io::Write;
+    let app = PathBuf::from(s(req, "app_path"));
+    let out = PathBuf::from(s(req, "out_path"));
+    let name = app.file_name().and_then(|n| n.to_str()).ok_or("Bad app path")?.to_string();
+    let f = std::fs::File::create(&out).map_err(|e| format!("Can't create IPA: {e}"))?;
+    let mut z = zip::ZipWriter::new(f);
+    let opt = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let mut stack = vec![app.clone()];
+    while let Some(dir) = stack.pop() {
+        for e in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+            let e = e.map_err(|e| e.to_string())?;
+            let path = e.path();
+            let rel = path.strip_prefix(&app).map_err(|e| e.to_string())?.to_string_lossy().replace('\\', "/");
+            let entry = format!("Payload/{name}/{rel}");
+            let ft = e.file_type().map_err(|e| e.to_string())?;
+            if ft.is_dir() {
+                z.add_directory(format!("{entry}/"), opt).map_err(|e| e.to_string())?;
+                stack.push(path);
+            } else if ft.is_file() {
+                let mode = {
+                    use std::os::unix::fs::PermissionsExt;
+                    e.metadata().map(|m| m.permissions().mode()).unwrap_or(0o644)
+                };
+                z.start_file(entry, opt.unix_permissions(mode)).map_err(|e| e.to_string())?;
+                z.write_all(&std::fs::read(&path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    z.finish().map_err(|e| e.to_string())?;
+    Ok(json!({"ok": true, "ipa_path": out.to_string_lossy()}))
 }
 
 fn inspect(req: &Value) -> Result<Value, String> {

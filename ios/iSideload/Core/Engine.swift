@@ -160,6 +160,19 @@ final class Engine: ObservableObject {
         await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true)
     }
 
+    /// Re-sign and re-install iSideload itself from its own running bundle (no PC needed).
+    /// iOS terminates the app while installation_proxy replaces it; reopen afterwards.
+    func refreshSelf() async {
+        let out = Self.ipaDir.appendingPathComponent("iSideload-self.ipa")
+        try? FileManager.default.createDirectory(at: Self.ipaDir, withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: out)
+        do {
+            _ = try await run(["op": "pack_self", "app_path": Bundle.main.bundleURL.path, "out_path": out.path])
+        } catch { errorText = "Không đóng gói được iSideload: \(error)"; return }
+        infoText = "Đang ký lại iSideload — app sẽ tự đóng khi cài xong, mở lại là xong."
+        await install(ipa: out, upgrade: true)
+    }
+
     // MARK: Certificates
     @Published var certs: [[String: Any]] = []
     func loadCerts() async { await guarded { certs = (try await run(base("certs"))["certs"] as? [[String: Any]]) ?? [] } }

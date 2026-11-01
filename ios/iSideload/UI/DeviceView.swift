@@ -11,9 +11,9 @@ struct DeviceView: View {
                     Label(engine.hasPairing ? "Đã có file ghép nối" : "Chưa có file ghép nối",
                           systemImage: engine.hasPairing ? "checkmark.seal.fill" : "exclamationmark.triangle")
                         .foregroundStyle(engine.hasPairing ? .green : .orange)
-                    Button("Nhập file ghép nối (.mobiledevicepairing / .plist)") { picking = true }
+                    Button("Nhập file ghép nối (.plist / .rppair.plist)") { picking = true }
                 } header: { Text("1. File ghép nối") } footer: {
-                    Text("Tạo một lần trên máy tính (iOS 18–26): cắm iPhone, tin cậy máy tính, rồi dùng idevice_pair / iloader / Jitterbug pair để xuất file. Gửi file qua AirDrop/Files rồi nhập ở đây.")
+                    Text("Tạo một lần trên máy tính (hoặc VPS qua Tailscale): cắm iPhone, tin cậy máy tính, rồi dùng idevice_pair / iloader / Jitterbug pair để xuất file. Gửi file qua AirDrop/Files rồi nhập ở đây.")
                 }
                 Section {
                     Label(engine.vpnActive ? "VPN loopback đang bật" : "VPN loopback đang tắt",
@@ -26,6 +26,11 @@ struct DeviceView: View {
                 Section("3. Kiểm tra") {
                     Button("Kiểm tra kết nối thiết bị") { tick += 1; Task { await engine.checkDevice() } }
                     if !engine.deviceLine.isEmpty { Text(engine.deviceLine) }
+                }
+                Section {
+                    Button("Tự ký lại iSideload (gia hạn 7 ngày)") { Task { await engine.refreshSelf() } }
+                } header: { Text("4. Gia hạn chính iSideload") } footer: {
+                    Text("Cần: đã đăng nhập Apple ID, có file ghép nối và VPN loopback đang bật. App sẽ tự thoát khi cài đè xong — mở lại là dùng tiếp 7 ngày mới.")
                 }
             }
             .navigationTitle("Thiết bị")
