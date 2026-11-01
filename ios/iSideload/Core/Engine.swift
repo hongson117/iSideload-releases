@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import UserNotifications
 
 @MainActor
 final class Engine: ObservableObject {
@@ -171,6 +172,51 @@ final class Engine: ObservableObject {
         } catch { errorText = "Không đóng gói được iSideload: \(error)"; return }
         infoText = "Đang ký lại iSideload — app sẽ tự đóng khi cài xong, mở lại là xong."
         await install(ipa: out, upgrade: true)
+    }
+
+    // MARK: In-app pairing (iOS 27)
+    @Published var pairingPIN: String = ""
+    @Published var pairingActive = false
+    private var bonjour: NetService?
+
+    func pairOnDevice() async {
+        pairingPIN = ""; pairingActive = true
+        // Settings is in front while pairing, so keep running in the background and
+        // deliver the PIN as a notification the user can read from Settings.
+        let bg = UIApplication.shared.beginBackgroundTask(withName: "pairing") {}
+        defer { UIApplication.shared.endBackgroundTask(bg) }
+        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        CoreCall.structured = { [weak self] obj in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let ad = obj["advertise"] as? [String: Any] { self.publish(ad) }
+                if let pin = obj["pin"] as? String {
+                    self.pairingPIN = pin
+                    let c = UNMutableNotificationContent()
+                    c.title = "Mã ghép nối iSideload"; c.body = pin; c.sound = .default
+                    UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "isl-pin", content: c, trigger: nil))
+                }
+            }
+        }
+        defer { CoreCall.structured = nil; bonjour?.stop(); bonjour = nil; pairingActive = false; pairingPIN = "" }
+        let tmp = Self.storage.appendingPathComponent("pairing-new.plist")
+        await guarded {
+            var req = base("pair_host"); req["pairing_path"] = tmp.path
+            _ = try await run(req)
+            try? FileManager.default.removeItem(at: Self.pairingURL)
+            try FileManager.default.moveItem(at: tmp, to: Self.pairingURL)
+            infoText = "Ghép nối thành công. Bật LocalDevVPN rồi bấm Kiểm tra kết nối."
+        }
+    }
+
+    private func publish(_ ad: [String: Any]) {
+        guard let port = ad["port"] as? Int, let name = ad["name"] as? String else { return }
+        let svc = NetService(domain: "local.", type: "_remotepairing-pairable-host._tcp.", name: name, port: Int32(port))
+        var txt: [String: Data] = [:]
+        for (k, v) in ad["txt"] as? [String: String] ?? [:] { txt[k] = Data(v.utf8) }
+        svc.setTXTRecord(NetService.data(fromTXTRecord: txt))
+        svc.publish()
+        bonjour = svc
     }
 
     // MARK: Certificates

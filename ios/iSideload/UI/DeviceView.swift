@@ -11,6 +11,18 @@ struct DeviceView: View {
                     Label(engine.hasPairing ? "Đã có file ghép nối" : "Chưa có file ghép nối",
                           systemImage: engine.hasPairing ? "checkmark.seal.fill" : "exclamationmark.triangle")
                         .foregroundStyle(engine.hasPairing ? .green : .orange)
+                    Button(engine.pairingActive ? "Đang chờ iPhone…" : "Ghép nối ngay trên máy (iOS 27+)") {
+                        Task { await engine.pairOnDevice() }
+                    }.disabled(engine.pairingActive)
+                    if engine.pairingActive {
+                        if engine.pairingPIN.isEmpty {
+                            Text("Mở Cài đặt › Quyền riêng tư & Bảo mật › Chế độ nhà phát triển › Thiết bị khác, chọn \"iSideload\". Giữ Wi-Fi bật.")
+                                .font(.footnote)
+                        } else {
+                            Text("Nhập mã này trên iPhone:").font(.footnote)
+                            Text(engine.pairingPIN).font(.system(size: 40, weight: .bold, design: .monospaced))
+                        }
+                    }
                     Button("Nhập file ghép nối (.plist / .rppair.plist)") { picking = true }
                 } header: { Text("1. File ghép nối") } footer: {
                     Text("Tạo một lần trên máy tính (hoặc VPS qua Tailscale): cắm iPhone, tin cậy máy tính, rồi dùng idevice_pair / iloader / Jitterbug pair để xuất file. Gửi file qua AirDrop/Files rồi nhập ở đây.")

@@ -95,6 +95,9 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "revoke_cert" => revoke(&req, ui).await,
         "inspect" => inspect(&req),
         "pack_self" => pack_self(&req),
+        "pair_host" => device::host_pairing(s(&req, "pairing_path"), ui)
+            .await
+            .map(|udid| json!({"ok": true, "udid": udid})),
         "version" => Ok(json!({"ok": true, "version": env!("CARGO_PKG_VERSION")})),
         other => Err(format!("Unknown op '{other}'.")),
     };

@@ -131,3 +131,48 @@ pub async fn rp_tunnel(target: &str, pairing_path: &str) -> Result<(AdapterHandl
 pub fn rsd_prop(hs: &RsdHandshake, key: &str) -> String {
     hs.properties.get(key).and_then(|v| v.as_string()).unwrap_or("").to_string()
 }
+
+// ---- In-app pairing (iOS 27 device-initiated RemotePairing, "pairable host" role) ----
+// iSideload listens on a TCP port; the app layer publishes it over Bonjour as
+// `_remotepairing-pairable-host._tcp`. The iPhone lists us under Developer Mode >
+// Other Devices, connects, and runs SRP pair-setup; we show the 6-digit PIN that the
+// user types on the iPhone. The resulting RPPairing identity is written to `out_path`.
+
+use idevice::remote_pairing::{PairableHost, PairableHostInfo};
+
+pub async fn host_pairing(out_path: &str, ui: crate::bridge::Ui) -> Result<String, String> {
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", 0))
+        .await
+        .map_err(|e| format!("Không mở được cổng ghép nối: {e}"))?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    let mut identity = RpPairingFile::generate("iSideload");
+    let info = PairableHostInfo::generate("iSideload", "Mac17,7");
+    let service = identity.identifier().to_string();
+    let txt: serde_json::Map<String, serde_json::Value> = info
+        .mdns_txt_records(&service)
+        .into_iter()
+        .map(|(k, v)| (k, serde_json::Value::String(v)))
+        .collect();
+    ui.event(serde_json::json!({"advertise": {"port": port, "name": service, "txt": txt}}));
+    ui.progress("Mở Cài đặt › Quyền riêng tư & Bảo mật › Chế độ nhà phát triển › Thiết bị khác, chọn iSideload", None);
+
+    let (stream, _) = tokio::time::timeout(Duration::from_secs(300), listener.accept())
+        .await
+        .map_err(|_| "Hết 5 phút mà iPhone chưa kết nối. Thử lại và chọn iSideload trong Thiết bị khác.".to_string())?
+        .map_err(|e| e.to_string())?;
+    let mut host = PairableHost::new(RpPairingSocket::new_device(stream), info);
+    let peer = tokio::time::timeout(
+        Duration::from_secs(300),
+        host.accept(&mut identity, |pin: String| async move {
+            ui.event(serde_json::json!({"pin": pin}));
+        }),
+    )
+    .await
+    .map_err(|_| "Hết thời gian nhập mã trên iPhone.".to_string())?
+    .map_err(|e| format!("Ghép nối thất bại: {e}"))?;
+    identity
+        .write_to_file(out_path)
+        .await
+        .map_err(|e| format!("Không lưu được file ghép nối: {e}"))?;
+    Ok(peer.remotepairing_udid)
+}

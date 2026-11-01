@@ -29,6 +29,14 @@ impl Ui {
         }
     }
 
+    /// Structured event (e.g. {"advertise":..} or {"pin":..}) on the same channel.
+    pub fn event(&self, value: serde_json::Value) {
+        let Some(f) = self.event else { return };
+        if let Ok(c) = CString::new(value.to_string()) {
+            unsafe { f(self.ctx as *mut c_void, c.as_ptr()) }
+        }
+    }
+
     /// Asks the app a question and blocks this thread until it answers. None = cancelled.
     pub fn ask_blocking(&self, question: serde_json::Value) -> Option<String> {
         let f = self.prompt?;

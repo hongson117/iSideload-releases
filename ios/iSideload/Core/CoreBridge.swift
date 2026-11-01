@@ -9,6 +9,8 @@ struct CorePrompt: Identifiable {
 
 /// Thin wrapper around the C FFI of the Rust core (`isl_call`).
 final class CoreCall {
+    /// Receives structured core events (pairing advertise / PIN).
+    nonisolated(unsafe) static var structured: (([String: Any]) -> Void)?
     typealias Event = (_ stage: String, _ progress: Double) -> Void
     /// Return nil to cancel. Called off the main thread; may block.
     typealias Prompt = (CorePrompt) -> String?
@@ -36,6 +38,7 @@ final class CoreCall {
             guard let ctx, let json else { return }
             let me = Unmanaged<CoreCall>.fromOpaque(ctx).takeUnretainedValue()
             let obj = (try? JSONSerialization.jsonObject(with: Data(String(cString: json).utf8))) as? [String: Any] ?? [:]
+            if obj["stage"] == nil { CoreCall.structured?(obj); return }
             me.onEvent(obj["stage"] as? String ?? "", obj["progress"] as? Double ?? 0)
         }
         let pr: isl_prompt_cb = { ctx, json, out, cap in
