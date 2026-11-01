@@ -1557,6 +1557,7 @@ dependencies = [
  "idevice",
  "isideload",
  "plist",
+ "ring",
  "rootcause",
  "rustls",
  "serde",

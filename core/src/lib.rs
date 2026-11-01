@@ -6,6 +6,7 @@
 
 mod bridge;
 mod device;
+mod license;
 mod ops;
 
 use std::ffi::{c_char, c_void, CStr, CString};

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 @MainActor
 final class Engine: ObservableObject {
@@ -40,7 +41,16 @@ final class Engine: ObservableObject {
 
     private func base(_ op: String) -> [String: Any] {
         ["op": op, "apple_id": appleID, "password": Keychain.load(appleID) ?? "", "anisette_url": anisetteURL,
-         "storage_dir": Self.storage.path, "pairing_path": Self.pairingURL.path, "target": vpnTarget]
+         "storage_dir": Self.storage.path, "pairing_path": Self.pairingURL.path, "target": vpnTarget,
+         "license": Keychain.load(Self.licenseAccount) ?? "",
+         "device_id": UIDevice.current.identifierForVendor?.uuidString ?? "",
+         "build_sha": Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? ""]
+    }
+
+    /// Keychain account holding the signed activation token from the license server.
+    /// LicenseKit (when integrated) should store its token via `Engine.storeLicense(_:)`.
+    static let licenseAccount = "__isideload_license__"
+    static func storeLicense(_ token: String) { Keychain.save(token, for: licenseAccount)
     }
 
     // Prompt plumbing: the core thread blocks until the sheet answers.

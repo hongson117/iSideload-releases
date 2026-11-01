@@ -79,7 +79,14 @@ fn explain(context: &str, e: &Report) -> String {
 }
 
 pub async fn dispatch(req: Value, ui: Ui) -> Value {
-    let result = match s(&req, "op") {
+    let op = s(&req, "op");
+    if matches!(op, "sign_in" | "device" | "apps" | "install" | "certs" | "revoke_cert") {
+        if let Err(e) = crate::license::require(&req) {
+            return fail(e);
+        }
+    }
+    let result = match op {
+        "license_status" => Ok(crate::license::status()),
         "sign_in" => sign_in_only(&req, ui).await,
         "device" => device_info(&req).await,
         "apps" => apps(&req).await,

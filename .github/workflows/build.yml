@@ -31,6 +31,7 @@ jobs:
       - name: Build Rust core
         run: |
           export IPHONEOS_DEPLOYMENT_TARGET=17.0
+          export ISL_GIT_SHA=${GITHUB_SHA::7}
           cargo build --release --target aarch64-apple-ios --manifest-path core/Cargo.toml
           ls -la core/target/aarch64-apple-ios/release/libisl_core.a
       - name: Generate Xcode project
