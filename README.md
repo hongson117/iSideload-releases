@@ -1,6 +1,6 @@
 # iSideload
 
-**Bản IPA chính thức và hướng dẫn cài đặt.** Repository này không chứa mã nguồn ứng dụng, Git bundle, bản ghi ghép nối hay thông tin máy chủ.
+**Bản IPA, bộ cài macOS và hướng dẫn cài đặt chính thức.** Repository này không chứa mã nguồn ứng dụng, Git bundle, bản ghi ghép nối hay thông tin máy chủ.
 
 [**Tải bản phát hành mới nhất**](https://github.com/hongson117/iSideload-releases/releases/latest)
 
@@ -22,9 +22,11 @@ Máy nhận không cần RC Pair hay Tailscale cho lượt cài này. Máy hỗ 
 
 ## Cài lần đầu bằng máy tính
 
+**macOS (Apple Silicon và Intel, macOS 11+):** tải [isl-macos-universal.zip](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.1/isl-macos-universal.zip), giải nén, cắm iPhone bằng cáp và mở `Cai-iSideload.command`. Công cụ dùng dịch vụ USB của Apple có sẵn, không yêu cầu Homebrew/Xcode; đã kèm đúng IPA 1.2.1. [Xem hướng dẫn macOS từng bước](MACOS.md).
+
 Tải `iSideload.ipa` từ trang release, dùng công cụ ký/cài iOS mà bạn tin cậy với Apple ID của chính bạn để cài lên thiết bị. Mở khóa iPhone, xác nhận Tin cậy máy tính khi được hỏi; bật Chế độ nhà phát triển và tin cậy nhà phát triển trước khi mở app.
 
-Repository này chỉ phân phối IPA và thông tin kiểm chứng bản phát hành, không yêu cầu bạn gửi mật khẩu Apple ID, bản ghi ghép nối hoặc khóa ký cho người phát hành.
+Repository này chỉ phân phối bản cài nhị phân và thông tin kiểm chứng bản phát hành, không yêu cầu bạn gửi mật khẩu Apple ID, bản ghi ghép nối hoặc khóa ký cho người phát hành.
 
 ## Thiết lập trên máy vừa cài
 
