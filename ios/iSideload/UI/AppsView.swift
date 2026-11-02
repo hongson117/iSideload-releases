@@ -24,6 +24,15 @@ struct AppsView: View {
                                 if engine.canSign { Text("Ký lại bằng: \(engine.signerLabel(engine.signerOf(app)))").font(.caption2) }
                             }
                         }
+                        if !engine.signers.isEmpty {
+                            Picker("Tài khoản gia hạn", selection: Binding(
+                                get: { let current = engine.signerOf(app); return engine.signers.contains(current) ? current : "" },
+                                set: { value in if !value.isEmpty { engine.syncSelfRecord(signer: value) } }
+                            )) {
+                                Text("Chọn tài khoản ký").tag("")
+                                ForEach(engine.signers, id: \.self) { Text(engine.signerLabel($0)).tag($0) }
+                            }.disabled(engine.busy)
+                        }
                         Button {
                             Task { await engine.refreshSelf() }
                         } label: { Label("Làm mới iSideload", systemImage: "arrow.clockwise") }
