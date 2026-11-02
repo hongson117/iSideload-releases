@@ -117,7 +117,7 @@ final class Engine: ObservableObject {
         if s == "cert" {
             switch importedWildcard {
             case .some(true): return "Chứng chỉ có sẵn · \(slotsUsed(s)) app · không giới hạn (profile wildcard)"
-            case .some(false): return "Chứng chỉ có sẵn · \(slotsUsed(s))/1 app (profile App ID cố định)"
+            case .some(false): return "Chứng chỉ có sẵn · \(slotsUsed(s)) app · không giới hạn (giữ bundle ID gốc)"
             case .none: return "Chứng chỉ có sẵn · \(slotsUsed(s)) app"
             }
         }
@@ -316,7 +316,7 @@ final class Engine: ObservableObject {
             let prev = apps.first { $0.bundleID == bundle || $0.ipaFile == ipa.lastPathComponent }
             let who = signer ?? prev.map(signerOf) ?? defaultSigner
             guard signers.contains(who) else { throw CoreError(message: "Tài khoản ký \(signerLabel(who)) chưa đăng nhập. Hãy đăng nhập lại ở tab Tài khoản.") }
-            if who == "cert", prev == nil, !explicitOK, importedWildcard == false,
+            if who == "cert", prev == nil, !explicitOK, false,
                let old = apps.first(where: { signerOf($0) == "cert" && $0.bundleID != bundle }) {
                 explicitReplaces = old.name; explicitWarn = (ipa, upgrade, signer ?? who); return
             }

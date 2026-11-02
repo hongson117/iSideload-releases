@@ -283,6 +283,10 @@ pub fn clear(req: &Value) -> Result<Value, String> {
 /// Profile entitlements made concrete for one bundle id.
 fn entitlements_for(p: &Prof, bundle_id: &str) -> Dictionary {
     let mut e = p.parsed.entitlements().clone();
+    if match_score(&p.app_id, bundle_id) == 0 {
+        // Explicit profile for another ID: keep its entitlements verbatim (that is what installd checks).
+        return e;
+    }
     let prefix = e.get("application-identifier").and_then(PV::as_string).and_then(|x| x.split_once('.')).map(|x| x.0.to_string()).unwrap_or_else(|| p.team.clone());
     let full = format!("{prefix}.{bundle_id}");
     e.insert("application-identifier".into(), PV::String(full.clone()));
@@ -389,60 +393,21 @@ pub async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     let original = app.main_bundle_id().map_err(|e| explain("IPA không có bundle ID", &e))?;
     let mut notes = Vec::<String>::new();
 
-    // Main bundle: exact App ID > wildcard; otherwise re-map onto a profile's ID.
-    let main_id = match pick(&usable, &original) {
-        Some(_) => original.clone(),
-        None => {
-            // Prefer a wildcard profile: every app keeps a unique ID (prefix.<original>), so apps never replace each other.
-            let wild = usable.iter().filter(|p| wildcard(&p.app_id)).max_by_key(|p| p.expires);
-            let target = match wild {
-                Some(p) => {
-                    let prefix = p.app_id.trim_end_matches('*').trim_end_matches('.');
-                    if prefix.is_empty() { original.clone() } else { format!("{prefix}.{original}") }
-                }
-                None => {
-                    let p = usable.iter().max_by_key(|p| p.expires).unwrap();
-                    notes.push("Profile chỉ cho 1 app (App ID cố định) — app cũ cùng ID sẽ bị thay.".into());
-                    p.app_id.clone()
-                }
-            };
-            notes.push(format!("Đổi bundle ID {original} → {target} cho khớp profile."));
-            target
-        }
-    };
-    if main_id != original {
-        // Extensions that aren't children of the main id would make update_bundle_id fail; drop them.
-        let bad: Vec<PathBuf> = app
-            .bundle
-            .app_extensions()
-            .iter()
-            .filter(|e| e.bundle_identifier().map(|i| !(i.starts_with(&original) && i.len() > original.len())).unwrap_or(true))
-            .map(|e| e.bundle_dir.clone())
-            .collect();
-        if !bad.is_empty() {
-            for b in &bad {
-                let _ = std::fs::remove_dir_all(b);
-            }
-            let dirp = app.bundle.bundle_dir.clone();
-            app = Application::new(dirp).map_err(|e| explain("IPA không hợp lệ", &e))?;
-        }
-        app.update_bundle_id(&original, &main_id).map_err(|e| explain("Không đổi được bundle ID", &e))?;
+    // KSign/ESign behaviour: never touch CFBundleIdentifier. installd validates the *entitlements* against the
+    // profile, not Info.plist, so every app keeps its own bundle ID and they all coexist — even with a
+    // single explicit App ID profile. Matching profile (exact > wildcard) wins; otherwise the newest usable one.
+    let best = |id: &str| pick(&usable, id).or_else(|| usable.iter().copied().max_by_key(|p| (wildcard(&p.app_id), p.expires)));
+    let main_id = original.clone();
+    let main_prof = best(&main_id).ok_or("Không chọn được profile cho app chính.")?;
+    if match_score(&main_prof.app_id, &main_id) == 0 {
+        notes.push(format!("Giữ bundle ID {original}; ký bằng profile {} (App ID {}).", main_prof.name, main_prof.app_id));
     }
-    let main_prof = pick(&usable, &main_id).ok_or("Không chọn được profile cho app chính.")?;
-
-    // Extensions: need their own matching profile (or a covering wildcard); else removed.
     let mut ext_settings: Vec<(String, &Prof)> = Vec::new();
-    let mut drop_dirs = Vec::new();
     for ext in app.bundle.app_extensions() {
         let eid = ext.bundle_identifier().unwrap_or("").to_string();
-        match pick(&usable, &eid) {
-            Some(p) => ext_settings.push((eid, p)),
-            None => {
-                notes.push(format!("Bỏ extension {eid} (không có profile khớp)."));
-                drop_dirs.push(ext.bundle_dir.clone());
-            }
-        }
+        if let Some(p) = best(&eid) { ext_settings.push((eid, p)); }
     }
+    let drop_dirs: Vec<PathBuf> = Vec::new();
     app.bundle.write_info().map_err(|e| explain("Ghi Info.plist lỗi", &e))?;
     for ext in app.bundle.app_extensions_mut() {
         ext.write_info().map_err(|e| explain("Ghi Info.plist lỗi", &e))?;
