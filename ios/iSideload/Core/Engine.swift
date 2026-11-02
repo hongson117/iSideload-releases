@@ -280,7 +280,8 @@ final class Engine: ObservableObject {
             errorText = "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN."; return
         }
         await guarded {
-            let info = try await run(["op": "inspect", "ipa_path": ipa.path])
+            let tmpIcon = IconCache.dir.appendingPathComponent("_pending.png")
+            let info = try await run(["op": "inspect", "ipa_path": ipa.path, "icon_out": tmpIcon.path])
             if info["is_tvos"] as? Bool == true { throw CoreError(message: "Đây là app Apple TV, không cài được lên iPhone/iPad.") }
             let bundle = info["bundle_id"] as? String ?? ""
             let prev = apps.first { $0.bundleID == bundle || $0.ipaFile == ipa.lastPathComponent }
@@ -304,6 +305,7 @@ final class Engine: ObservableObject {
             if let c = r["lc_cert"] as? [String: Any] { lastLCCert = c }
             apps.removeAll { $0.bundleID == bid || ($0.bundleID == bundle && prev != nil) }
             apps.append(rec); save()
+            if info["icon_path"] != nil { IconCache.adopt(tmpIcon, for: bid) }
             infoText = Self.doneLine(rec.name, exp) + (notes.isEmpty ? "" : "\n" + notes.joined(separator: " "))
         }
     }
@@ -424,14 +426,26 @@ final class Engine: ObservableObject {
         return failed.isEmpty
     }
 
-    func installFromSource(_ a: SourceApp, _ v: SourceVersion) async {
+    /// Lazily pull the icon out of a stored IPA for apps installed before icons existed.
+    func ensureIcon(_ app: SideloadedApp) async {
+        guard IconCache.image(app.bundleID) == nil, let f = app.ipaFile, !IconCache.tried.contains(app.bundleID) else { return }
+        IconCache.tried.insert(app.bundleID)
+        let ipa = Self.ipaDir.appendingPathComponent(f)
+        guard FileManager.default.fileExists(atPath: ipa.path) else { return }
+        let out = IconCache.dir.appendingPathComponent("_lazy-\(app.bundleID).png")
+        let r = await CoreCall.runAsync(["op": "inspect", "ipa_path": ipa.path, "icon_out": out.path], onEvent: { _, _ in })
+        if r["icon_path"] != nil { IconCache.adopt(out, for: app.bundleID); objectWillChange.send() }
+    }
+
+    func installFromSource(_ a: SourceApp, _ v: SourceVersion, signer: String? = nil) async {
         guard canSign else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
         busy = true; stage = "Đang tải \(a.name) \(v.version)…"
         let ipa: URL
         do { ipa = try await SourceStore.download(v, name: a.name) } catch { busy = false; errorText = "Tải thất bại: \(error.localizedDescription)"; return }
         busy = false
-        if !vpnActive { pendingVPNAction = .install(ipa, apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) }, nil); LoopbackVPN.turnOn(); return }
-        await install(ipa: ipa, upgrade: apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) })
+        if let u = a.icon { IconCache.remember(u, for: a.bundleIdentifier) }
+        if !vpnActive { pendingVPNAction = .install(ipa, apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) }, signer); LoopbackVPN.turnOn(); return }
+        await install(ipa: ipa, upgrade: apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) }, signer: signer)
         vpnJobDone()
     }
 

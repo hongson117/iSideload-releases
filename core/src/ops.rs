@@ -492,7 +492,54 @@ fn pack_self(req: &Value) -> Result<Value, String> {
 }
 
 fn inspect(req: &Value) -> Result<Value, String> {
-    inspect_ipa(std::path::Path::new(s(req, "ipa_path")))
+    let path = std::path::Path::new(s(req, "ipa_path"));
+    let mut v = inspect_ipa(path)?;
+    let out = s(req, "icon_out");
+    if !out.is_empty() {
+        if let Some(bytes) = extract_icon(path) {
+            if std::fs::write(out, bytes).is_ok() { v["icon_path"] = json!(out); }
+        }
+    }
+    Ok(v)
+}
+
+/// Largest top-level icon PNG of Payload/*.app (CFBundleIcons / CFBundleIconFiles / AppIcon*).
+/// Bytes may be CgBI-crushed; UIImage decodes those natively on iOS.
+fn extract_icon(path: &std::path::Path) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
+    let names: Vec<String> = (0..zip.len()).filter_map(|i| zip.by_index(i).ok().map(|f| f.name().to_string())).collect();
+    let info = names.iter().find(|n| { let p: Vec<&str> = n.split('/').collect(); p.len() == 3 && p[0] == "Payload" && p[1].ends_with(".app") && p[2] == "Info.plist" })?.clone();
+    let app_dir = info.trim_end_matches("Info.plist").to_string();
+    let mut data = Vec::new();
+    zip.by_name(&info).ok()?.read_to_end(&mut data).ok()?;
+    let dict: plist::Dictionary = plist::from_bytes(&data).ok()?;
+    let mut prefixes: Vec<String> = Vec::new();
+    for key in ["CFBundleIcons", "CFBundleIcons~ipad"] {
+        if let Some(files) = dict.get(key).and_then(|v| v.as_dictionary()).and_then(|d| d.get("CFBundlePrimaryIcon"))
+            .and_then(|v| v.as_dictionary()).and_then(|d| d.get("CFBundleIconFiles")).and_then(|v| v.as_array()) {
+            prefixes.extend(files.iter().filter_map(|x| x.as_string().map(|s| s.trim_end_matches(".png").to_string())));
+        }
+    }
+    if let Some(files) = dict.get("CFBundleIconFiles").and_then(|v| v.as_array()) {
+        prefixes.extend(files.iter().filter_map(|x| x.as_string().map(|s| s.trim_end_matches(".png").to_string())));
+    }
+    if let Some(f) = dict.get("CFBundleIconFile").and_then(|v| v.as_string()) { prefixes.push(f.trim_end_matches(".png").to_string()); }
+    prefixes.push("AppIcon".into()); prefixes.push("Icon".into());
+    let mut best: Option<(u64, String)> = None;
+    for i in 0..zip.len() {
+        let Ok(f) = zip.by_index(i) else { continue };
+        let n = f.name().to_string();
+        let Some(rest) = n.strip_prefix(&app_dir) else { continue };
+        if rest.contains('/') || !rest.to_lowercase().ends_with(".png") { continue }
+        if !prefixes.iter().any(|p| !p.is_empty() && rest.starts_with(p.as_str())) { continue }
+        let sz = f.size();
+        if best.as_ref().map_or(true, |b| sz > b.0) { best = Some((sz, n)); }
+    }
+    let (_, n) = best?;
+    let mut out = Vec::new();
+    zip.by_name(&n).ok()?.read_to_end(&mut out).ok()?;
+    Some(out)
 }
 
 #[cfg(test)]

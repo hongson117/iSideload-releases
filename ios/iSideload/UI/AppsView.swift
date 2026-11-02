@@ -65,8 +65,8 @@ struct AppsView: View {
 
     @ViewBuilder func row(_ app: SideloadedApp, _ sg: String) -> some View {
         HStack {
-            RoundedRectangle(cornerRadius: 10).fill(Theme.color(for: app.bundleID)).frame(width: 44, height: 44)
-                .overlay(Text(String(app.name.prefix(1))).font(.title2.bold()).foregroundStyle(.white))
+            AppIconView(bundleID: app.bundleID, name: app.name, size: 44)
+                .task { await engine.ensureIcon(app) }
             VStack(alignment: .leading) {
                 Text(app.name).font(.headline)
                 Text(app.bundleID).font(.caption2).foregroundStyle(.secondary)
