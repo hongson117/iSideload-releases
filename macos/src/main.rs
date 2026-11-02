@@ -66,15 +66,22 @@ async fn login(storage: &Path, id: &str, password: &str) -> Result<AppleAccount,
 
 fn revoke_prompt(certs: Vec<DevelopmentCertificate>) -> MaxCertsCallbackFuture {
     Box::pin(async move {
+        let certs: Vec<_> = certs.into_iter().filter(|cert| cert.serial_number.as_deref().is_some_and(|serial| !serial.is_empty())).collect();
+        if certs.is_empty() {
+            eprintln!("Apple không trả về chứng chỉ có serial hợp lệ để chọn; chưa thu hồi chứng chỉ nào.");
+            return Ok(None);
+        }
         println!("\nApple báo hết chỗ cấp chứng chỉ phát triển.");
         for (index, cert) in certs.iter().enumerate() {
-            println!("  {}. {} — {}", index + 1, cert.machine_name, cert.serial_number);
+            println!("  {}. {} — {}", index + 1,
+                     cert.machine_name.as_deref().or(cert.name.as_deref()).unwrap_or("Không rõ thiết bị"),
+                     cert.serial_number.as_deref().unwrap_or(""));
         }
         println!("Thu hồi chứng chỉ có thể khiến các app đã ký bằng nó ngừng mở.");
         let answer = prompt("Chọn đúng MỘT số để thu hồi; Enter để hủy mà không thay đổi: ");
         let Some(index) = selection(&answer, certs.len()) else { return Ok(None); };
         if prompt("Xác nhận thu hồi chứng chỉ đã chọn? Gõ THU HOI: ") != "THU HOI" { return Ok(None); }
-        Ok(Some(vec![certs[index].serial_number.clone()]))
+        Ok(certs[index].serial_number.clone().map(|serial| vec![serial]))
     })
 }
 
