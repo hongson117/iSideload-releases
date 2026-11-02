@@ -75,7 +75,7 @@ struct AppsView: View {
                 let short = nm.range(of: #"\(([A-Z0-9]+)\)"#, options: .regularExpression).map { String(nm[$0].dropFirst().dropLast()) } ?? nm
                 let ex = engine.importedExpiry.map { $0.formatted(.dateTime.day().month(.defaultDigits).year()) } ?? "?"
                 Label("Chứng chỉ: \(short) · hết \(ex)", systemImage: "doc.badge.gearshape").lineLimit(1)
-                Text("Team \(engine.team(of: sg)) · " + (engine.importedWildcard == false ? "slots: \(list.count)/1 (App ID cố định \(engine.importedSingleAppID ?? ""))" : engine.importedWildcard == true ? "\(list.count) app · không giới hạn" : "\(list.count) app")).font(.caption2)
+                Text("Team \(engine.team(of: sg)) · " + "\(list.count) app · không giới hạn").font(.caption2)
             } else {
                 let e = String(sg.dropFirst(6))
                 Label(e, systemImage: "person.crop.circle")

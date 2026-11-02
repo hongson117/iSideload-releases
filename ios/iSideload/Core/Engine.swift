@@ -41,6 +41,7 @@ final class Engine: ObservableObject {
         signedIn = !appleID.isEmpty && Keychain.load(appleID) != nil
         if !appleID.isEmpty && !accounts.contains(appleID) { accountsRaw = ([appleID] + accounts).joined(separator: "\n") }
         hasImportedCert = FileManager.default.fileExists(atPath: Self.storage.appendingPathComponent("imported_cert/cert.p12").path)
+        checkSelfUpdate()
     }
 
     // MARK: Signers (multiple Apple IDs + imported certificate)
@@ -384,7 +385,37 @@ final class Engine: ObservableObject {
         // iOS usually kills the app when the install finishes: the push happens on next launch.
         markLCCertPending()
         let me = apps.first { $0.bundleID.hasPrefix(isideloadBundleID) }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "selfUpdatePending")
         await install(ipa: out, upgrade: true, signer: me.map(signerOf))
+        // iOS replaces (and kills) the running app; the connection often drops right after the upload.
+        if let e = errorText?.lowercased(), ["socket", "io failed", "broken pipe", "connection", "reset", "eof"].contains(where: { e.contains($0) }) {
+            errorText = nil
+            infoText = "Đã gửi bản ký lại. iOS đang thay iSideload — mở lại app để xác nhận."
+        } else if errorText != nil {
+            UserDefaults.standard.removeObject(forKey: "selfUpdatePending")
+        }
+    }
+
+    /// On launch after a self re-sign: confirm via the new embedded.mobileprovision (written by the install).
+    func checkSelfUpdate() {
+        let t = UserDefaults.standard.double(forKey: "selfUpdatePending")
+        guard t > 0 else { return }
+        UserDefaults.standard.removeObject(forKey: "selfUpdatePending")
+        let prov = Bundle.main.bundleURL.appendingPathComponent("embedded.mobileprovision")
+        guard let m = (try? FileManager.default.attributesOfItem(atPath: prov.path))?[.modificationDate] as? Date,
+              m.timeIntervalSince1970 >= t - 120 else { return }
+        var exp: Date?
+        if let d = try? Data(contentsOf: prov), let s = String(data: d, encoding: .isoLatin1),
+           let r = s.range(of: "<key>ExpirationDate</key>"), let a = s.range(of: "<date>", range: r.upperBound..<s.endIndex),
+           let b = s.range(of: "</date>", range: a.upperBound..<s.endIndex) {
+            exp = ISO8601DateFormatter().date(from: String(s[a.upperBound..<b.lowerBound]))
+        }
+        if let i = apps.firstIndex(where: { $0.bundleID.hasPrefix(isideloadBundleID) }) {
+            if let exp { apps[i].expires = exp }
+            apps[i].installedAt = Date()
+            save()
+        }
+        infoText = "Đã ký lại iSideload ✓" + (exp.map { " · hết hạn " + $0.formatted(date: .abbreviated, time: .omitted) } ?? "")
     }
 
     // MARK: In-app pairing (iOS 27)
