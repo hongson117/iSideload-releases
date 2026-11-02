@@ -34,6 +34,8 @@ final class Engine: ObservableObject {
     private static let appsURL = storage.appendingPathComponent("apps.json")
 
     init() {
+        // Migration: older builds never wrote vpnAutoOff; make the auto-VPN default explicit ON.
+        if !UserDefaults.standard.bool(forKey: "migVPN2") { UserDefaults.standard.set(true, forKey: "vpnAutoOff"); UserDefaults.standard.set(true, forKey: "migVPN2") }
         for d in [Self.storage, Self.ipaDir] { try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
         if let d = try? Data(contentsOf: Self.appsURL), let a = try? JSONDecoder().decode([SideloadedApp].self, from: d) { apps = a }
         signedIn = !appleID.isEmpty && Keychain.load(appleID) != nil
@@ -105,7 +107,9 @@ final class Engine: ObservableObject {
     }
 
     var hasPairing: Bool { FileManager.default.fileExists(atPath: Self.pairingURL.path) }
-    var vpnActive: Bool { LoopbackVPN.isActive(target: vpnTarget.isEmpty ? LoopbackVPN.defaultTarget : vpnTarget) }
+    var vpnInterfaceUp: Bool { LoopbackVPN.isActive(target: vpnTarget.isEmpty ? LoopbackVPN.defaultTarget : vpnTarget) }
+    /// Real check (TCP probe, ~1 s) used before every job.
+    var vpnActive: Bool { LoopbackVPN.reachable(target: vpnTarget.isEmpty ? LoopbackVPN.defaultTarget : vpnTarget) }
 
     private func save() { if let d = try? JSONEncoder().encode(apps) { try? d.write(to: Self.appsURL) }; AutoRefresh.scheduleExpiryReminders(apps) }
 
@@ -252,6 +256,13 @@ final class Engine: ObservableObject {
     func install(ipa: URL, upgrade: Bool = false, signer: String? = nil) async {
         guard canSign else { errorText = "Hãy đăng nhập Apple ID hoặc nhập chứng chỉ trước (tab Tài khoản)."; return }
         guard hasPairing else { errorText = "Hãy nhập file ghép nối trước (tab Thiết bị)."; return }
+        // Every job checks real reachability first (~1 s). If down and app is in foreground, hand off to LocalDevVPN.
+        if !vpnActive {
+            if UIApplication.shared.applicationState == .active && (UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true) {
+                pendingVPNAction = .install(ipa, upgrade, signer); LoopbackVPN.turnOn(); return
+            }
+            errorText = "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN."; return
+        }
         await guarded {
             let info = try await run(["op": "inspect", "ipa_path": ipa.path])
             if info["is_tvos"] as? Bool == true { throw CoreError(message: "Đây là app Apple TV, không cài được lên iPhone/iPad.") }
@@ -401,7 +412,7 @@ final class Engine: ObservableObject {
         let ipa: URL
         do { ipa = try await SourceStore.download(v, name: a.name) } catch { busy = false; errorText = "Tải thất bại: \(error.localizedDescription)"; return }
         busy = false
-        if !vpnActive { pendingVPNAction = .install(ipa); LoopbackVPN.turnOn(); return }
+        if !vpnActive { pendingVPNAction = .install(ipa, apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) }, nil); LoopbackVPN.turnOn(); return }
         await install(ipa: ipa, upgrade: apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) })
         vpnJobDone()
     }
@@ -421,16 +432,17 @@ final class Engine: ObservableObject {
     func installNow(_ ipa: URL, signer: String) async { await install(ipa: ipa, signer: signer); vpnJobDone() }
 
     // MARK: LocalDevVPN hand-off: remember the action, open LocalDevVPN, resume when it bounces back.
-    enum VPNAction { case refreshAll(includeSelf: Bool), install(URL) }
+    enum VPNAction { case refreshAll(includeSelf: Bool), install(URL, Bool, String?) }
     var pendingVPNAction: VPNAction?
     func resumeAfterVPN() async {
         guard let a = pendingVPNAction else { return }
-        for _ in 0..<16 where !vpnActive { try? await Task.sleep(nanoseconds: 500_000_000) }
-        guard vpnActive else { return }
+        var ok = false
+        for _ in 0..<10 { if vpnActive { ok = true; break }; try? await Task.sleep(nanoseconds: 1_000_000_000) }   // poll ≤ ~10 s
+        guard ok else { pendingVPNAction = nil; errorText = "Không kết nối được tới thiết bị qua LocalDevVPN (10.7.0.1) sau 10 giây. Mở LocalDevVPN, bấm Connect rồi thử lại."; return }
         pendingVPNAction = nil
         switch a {
         case .refreshAll(let s): await refreshAll(includeSelf: s, onlyDue: false, background: false)
-        case .install(let u): await install(ipa: u, upgrade: true)
+        case .install(let u, let up, let sg): await install(ipa: u, upgrade: up, signer: sg)
         }
         vpnJobDone()
     }

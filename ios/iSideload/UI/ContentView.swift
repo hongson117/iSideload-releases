@@ -23,6 +23,9 @@ struct ContentView: View {
         }
         .sheet(item: $engine.prompt) { PromptSheet(prompt: $0).interactiveDismissDisabled() }
         .alert("Lỗi", isPresented: Binding(get: { engine.errorText != nil }, set: { if !$0 { engine.errorText = nil } })) {
+            if (engine.errorText ?? "").contains("LocalDevVPN") || (engine.errorText ?? "").contains("10.7.0.1") {
+                Button("Mở LocalDevVPN") { engine.errorText = nil; LoopbackVPN.turnOn() }
+            }
             Button("Sao chép") { UIPasteboard.general.string = engine.errorText; engine.errorText = nil }
             Button("OK", role: .cancel) { engine.errorText = nil }
         } message: { Text(engine.errorText ?? "") }

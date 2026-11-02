@@ -28,9 +28,9 @@ struct DeviceView: View {
                     Text("Tạo một lần trên máy tính (hoặc VPS qua Tailscale): cắm iPhone, tin cậy máy tính, rồi dùng idevice_pair / iloader / Jitterbug pair để xuất file. Gửi file qua AirDrop/Files rồi nhập ở đây.")
                 }
                 Section {
-                    Label(engine.vpnActive ? "VPN loopback đang bật" : "VPN loopback đang tắt",
-                          systemImage: engine.vpnActive ? "network" : "network.slash")
-                        .foregroundStyle(engine.vpnActive ? .green : .orange).id(tick)
+                    Label(engine.vpnInterfaceUp ? "VPN loopback đang bật" : "VPN loopback đang tắt",
+                          systemImage: engine.vpnInterfaceUp ? "network" : "network.slash")
+                        .foregroundStyle(engine.vpnInterfaceUp ? .green : .orange).id(tick)
                     Button(LoopbackVPN.helperInstalled ? "Bật VPN trong LocalDevVPN" : "Tải LocalDevVPN (App Store)") { LoopbackVPN.turnOn() }
                 } header: { Text("2. VPN loopback") } footer: {
                     Text("VPN chuyển gói tin tới 10.7.0.1 quay ngược lại chính máy, để iSideload nói chuyện với lockdownd như một máy tính. Apple ID miễn phí không ký được Network Extension nên iSideload dùng app LocalDevVPN miễn phí trên App Store.")
