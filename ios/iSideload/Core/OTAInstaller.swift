@@ -29,7 +29,7 @@ final class OTAInstaller {
         file = ipa; served = false; sentBytes = 0
         total = ((try? FileManager.default.attributesOfItem(atPath: ipa.path)[.size]) as? NSNumber)?.int64Value ?? 0
         let port = try await start()
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "ota") { [weak self] in self?.stop() }
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "ota") { Task { @MainActor in OTAInstaller.shared.stop() } }
         defer { stop() }
 
         var c = URLComponents(string: Self.relay)!
@@ -68,12 +68,13 @@ final class OTAInstaller {
         listener = l
         l.newConnectionHandler = { [weak self] conn in Task { @MainActor in self?.handle(conn) } }
         return try await withCheckedThrowingContinuation { cont in
-            var done = false
+            final class Once: @unchecked Sendable { var done = false }
+            let once = Once()
             l.stateUpdateHandler = { st in
-                guard !done else { return }
+                guard !once.done else { return }
                 switch st {
-                case .ready: done = true; cont.resume(returning: l.port?.rawValue ?? 0)
-                case .failed(let e): done = true; cont.resume(throwing: e)
+                case .ready: once.done = true; cont.resume(returning: l.port?.rawValue ?? 0)
+                case .failed(let e): once.done = true; cont.resume(throwing: e)
                 default: break
                 }
             }

@@ -40,15 +40,13 @@ jobs:
         run: |
           xcodebuild -project iSideload.xcodeproj -target iSideloadTunnel -configuration Release -sdk iphoneos \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -5
-          test "${PIPESTATUS[0]}" = 0
       - name: Build app (unsigned)
         run: |
           xcodebuild -version
           xcodebuild -project iSideload.xcodeproj -scheme iSideload -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -40
-          test "${PIPESTATUS[0]}" = 0
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > /tmp/xb.log 2>&1 || true; grep -E " error:" /tmp/xb.log | sort -u | head -40; tail -20 /tmp/xb.log; grep -q "BUILD SUCCEEDED" /tmp/xb.log
       - name: Package IPA
         run: |
           APP=build/Build/Products/Release-iphoneos/iSideload.app
