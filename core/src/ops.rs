@@ -29,9 +29,9 @@ const DEFAULT_ANISETTE: &[&str] = &[
     "https://ani.npeg.us",
     "https://ani.sidestore.io",
 ];
-const HOST_NAME: &str = "iSideload";
+pub(crate) const HOST_NAME: &str = "iSideload";
 
-fn s<'a>(req: &'a Value, key: &str) -> &'a str {
+pub(crate) fn s<'a>(req: &'a Value, key: &str) -> &'a str {
     req.get(key).and_then(Value::as_str).unwrap_or("")
 }
 
@@ -66,7 +66,7 @@ pub fn hint_vi(m: &str) -> String {
 }
 
 /// Turns a rootcause report into one readable line.
-fn explain(context: &str, e: &Report) -> String {
+pub(crate) fn explain(context: &str, e: &Report) -> String {
     let text = format!("{e}");
     // Drop source-location lines (e.g. "vendor/…/x.rs:206") and tree glyphs so the
     // real root cause (GrandSlam code, anisette error, …) reaches the UI.
@@ -92,7 +92,11 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "install" => install(&req, ui).await,
         "certs" => certs(&req, ui).await,
         "revoke_cert" => revoke(&req, ui).await,
+        "export_cert" if req.get("use_imported_cert").and_then(Value::as_bool).unwrap_or(false) => crate::imported::lc_cert(&req),
         "export_cert" => export_cert(&req, ui).await,
+        "import_cert" => crate::imported::import(&req),
+        "imported_cert" => crate::imported::info(&req),
+        "clear_imported_cert" => crate::imported::clear(&req),
         "inspect" => inspect(&req),
         "pack_self" => pack_self(&req),
         "pair_host" => device::host_pairing(s(&req, "pairing_path"), ui)
@@ -183,7 +187,7 @@ fn host_of(url: &str) -> String {
         .replace(':', "_")
 }
 
-fn storage(req: &Value) -> FsStorage {
+pub(crate) fn storage(req: &Value) -> FsStorage {
     FsStorage::new(PathBuf::from(s(req, "storage_dir")))
 }
 
@@ -294,7 +298,7 @@ async fn export_cert(req: &Value, ui: Ui) -> Result<Value, String> {
 // ---- Install / refresh ----
 
 /// Reads ExpirationDate from the signed bundle's embedded.mobileprovision.
-fn profile_expiry(app: &std::path::Path) -> Option<u64> {
+pub(crate) fn profile_expiry(app: &std::path::Path) -> Option<u64> {
     let bytes = std::fs::read(app.join("embedded.mobileprovision")).ok()?;
     let start = bytes.windows(6).position(|w| w == b"<?xml ")?;
     let end = bytes.windows(8).rposition(|w| w == b"</plist>")? + 8;
@@ -303,7 +307,7 @@ fn profile_expiry(app: &std::path::Path) -> Option<u64> {
     std::time::SystemTime::from(date).duration_since(std::time::UNIX_EPOCH).ok().map(|d| d.as_secs())
 }
 
-fn bundle_info(app: &std::path::Path) -> (String, String, String) {
+pub(crate) fn bundle_info(app: &std::path::Path) -> (String, String, String) {
     let dict: Option<plist::Dictionary> = plist::from_file(app.join("Info.plist")).ok();
     let get = |k: &str| dict.as_ref().and_then(|d| d.get(k)).and_then(|v| v.as_string()).unwrap_or("").to_string();
     let name = [get("CFBundleDisplayName"), get("CFBundleName")].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
@@ -316,6 +320,9 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
         return Err("The IPA file is missing.".into());
     }
     let upgrade = req.get("upgrade").and_then(Value::as_bool).unwrap_or(false);
+    if req.get("use_imported_cert").and_then(Value::as_bool).unwrap_or(false) {
+        return crate::imported::install(req, ui).await;
+    }
 
     // 1. Reach this device through the loopback VPN first.
     let rp = device::is_rp_pairing(s(req, "pairing_path"));

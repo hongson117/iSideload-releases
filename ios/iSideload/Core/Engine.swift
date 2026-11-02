@@ -9,6 +9,9 @@ final class Engine: ObservableObject {
     @AppStorage("appleID") var appleID = ""
     @AppStorage("anisetteURL") var anisetteURL = ""
     @AppStorage("vpnTarget") var vpnTarget = ""
+    @AppStorage("accounts") private var accountsRaw = ""          // extra Apple IDs, newline-separated
+    @AppStorage("installSigner") var installSigner = ""           // default signer for new installs
+    @Published var importedCert: [String: Any]?
     @Published var signedIn = false
     @Published var teamName = ""
     @Published var apps: [SideloadedApp] = []
@@ -34,6 +37,38 @@ final class Engine: ObservableObject {
         for d in [Self.storage, Self.ipaDir] { try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true) }
         if let d = try? Data(contentsOf: Self.appsURL), let a = try? JSONDecoder().decode([SideloadedApp].self, from: d) { apps = a }
         signedIn = !appleID.isEmpty && Keychain.load(appleID) != nil
+        if !appleID.isEmpty && !accounts.contains(appleID) { accountsRaw = ([appleID] + accounts).joined(separator: "\n") }
+        hasImportedCert = FileManager.default.fileExists(atPath: Self.storage.appendingPathComponent("imported_cert/cert.p12").path)
+    }
+
+    // MARK: Signers (multiple Apple IDs + imported certificate)
+    @Published var hasImportedCert = false
+    var accounts: [String] { accountsRaw.split(separator: "\n").map(String.init).filter { !$0.isEmpty } }
+    var signedAccounts: [String] { accounts.filter { Keychain.load($0) != nil } }
+    /// All usable signers: "apple:<email>" for each signed-in Apple ID, plus "cert".
+    var signers: [String] { signedAccounts.map { "apple:" + $0 } + (hasImportedCert ? ["cert"] : []) }
+    var canSign: Bool { !signers.isEmpty }
+    func signerLabel(_ s: String) -> String { s == "cert" ? "Chứng chỉ có sẵn" : String(s.dropFirst(6)) }
+    func signerOf(_ app: SideloadedApp) -> String { app.signer ?? "apple:" + appleID }
+    var defaultSigner: String { signers.contains(installSigner) ? installSigner : (signers.first ?? "") }
+    /// Apps signed by this signer that occupy a free-account slot (3 per Apple ID per device).
+    func slotsUsed(_ s: String) -> Int { apps.filter { signerOf($0) == s }.count }
+    /// App IDs created in the last 7 days by this Apple ID (counted locally, approximate).
+    func appIDsUsed(_ email: String) -> Int {
+        let log = UserDefaults.standard.dictionary(forKey: "appIDLog") as? [String: [Double]] ?? [:]
+        let cut = Date().addingTimeInterval(-7 * 86400).timeIntervalSince1970
+        return (log[email] ?? []).filter { $0 > cut }.count
+    }
+    private func logAppIDs(_ email: String, count: Int) {
+        var log = UserDefaults.standard.dictionary(forKey: "appIDLog") as? [String: [Double]] ?? [:]
+        let cut = Date().addingTimeInterval(-7 * 86400).timeIntervalSince1970
+        log[email] = (log[email] ?? []).filter { $0 > cut } + Array(repeating: Date().timeIntervalSince1970, count: count)
+        UserDefaults.standard.set(log, forKey: "appIDLog")
+    }
+    func signerSummary(_ s: String) -> String {
+        if s == "cert" { return "Chứng chỉ có sẵn · \(slotsUsed(s)) app (không giới hạn 3 app nếu là tài khoản trả phí)" }
+        let e = String(s.dropFirst(6))
+        return "\(e) · \(slotsUsed(s))/3 app · App ID \(appIDsUsed(e))/10 trong 7 ngày"
     }
 
     var hasPairing: Bool { FileManager.default.fileExists(atPath: Self.pairingURL.path) }
@@ -41,12 +76,15 @@ final class Engine: ObservableObject {
 
     private func save() { if let d = try? JSONEncoder().encode(apps) { try? d.write(to: Self.appsURL) }; AutoRefresh.scheduleExpiryReminders(apps) }
 
-    private func base(_ op: String) -> [String: Any] {
-        ["op": op, "apple_id": appleID, "password": Keychain.load(appleID) ?? "", "anisette_url": anisetteURL,
+    private func base(_ op: String, signer: String? = nil) -> [String: Any] {
+        let id = signer.flatMap { $0.hasPrefix("apple:") ? String($0.dropFirst(6)) : nil } ?? appleID
+        var r: [String: Any] = ["op": op, "apple_id": id, "password": Keychain.load(id) ?? "", "anisette_url": anisetteURL,
          "storage_dir": Self.storage.path, "pairing_path": Self.pairingURL.path, "target": vpnTarget,
          "license": LicenseManager.shared.license ?? "",
          "device_id": LicenseManager.deviceID,
          "build_sha": Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? ""]
+        if signer == "cert" { r["use_imported_cert"] = true }
+        return r
     }
 
     // Prompt plumbing: the core thread blocks until the sheet answers.
@@ -71,18 +109,59 @@ final class Engine: ObservableObject {
     }
 
     // MARK: Account
+    /// Signs in an Apple ID and adds it to the account list (the first one becomes the main account).
     func signIn(email: String, password: String) async {
-        appleID = email.trimmingCharacters(in: .whitespaces)
-        Keychain.save(password, for: appleID)
+        let id = email.trimmingCharacters(in: .whitespaces)
+        Keychain.save(password, for: id)
         await guarded {
             do {
-                let r = try await run(base("sign_in"))
-                teamName = r["team_name"] as? String ?? (r["team"] as? String ?? "")
+                let r = try await run(base("sign_in", signer: "apple:" + id))
+                if appleID.isEmpty || Keychain.load(appleID) == nil { appleID = id }
+                if !accounts.contains(id) { accountsRaw = (accounts + [id]).joined(separator: "\n") }
+                if id == appleID { teamName = r["team_name"] as? String ?? (r["team"] as? String ?? "") }
                 signedIn = true
-            } catch { Keychain.delete(appleID); signedIn = false; throw error }
+                infoText = "Đã thêm tài khoản \(id)."
+            } catch { Keychain.delete(id); throw error }
         }
     }
-    func signOut() { Keychain.delete(appleID); signedIn = false; teamName = "" }
+    func signOut() { signOut(appleID) }
+    func signOut(_ id: String) {
+        Keychain.delete(id)
+        accountsRaw = accounts.filter { $0 != id }.joined(separator: "\n")
+        if id == appleID { appleID = signedAccounts.first ?? ""; teamName = "" }
+        signedIn = !appleID.isEmpty && Keychain.load(appleID) != nil
+        objectWillChange.send()
+    }
+    func makeMain(_ id: String) { appleID = id; teamName = ""; signedIn = Keychain.load(id) != nil }
+
+    // MARK: Imported certificate (.p12 + .mobileprovision)
+    func importCert(p12: URL?, password: String, profiles: [URL], replaceProfiles: Bool = false) async {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+        func copy(_ u: URL) -> String {
+            let sc = u.startAccessingSecurityScopedResource(); defer { if sc { u.stopAccessingSecurityScopedResource() } }
+            let d = tmp.appendingPathComponent(u.lastPathComponent); try? FileManager.default.copyItem(at: u, to: d); return d.path
+        }
+        await guarded {
+            var r = base("import_cert")
+            if let p12 { r["p12_path"] = copy(p12); r["password"] = password }
+            r["profile_paths"] = profiles.map(copy); r["replace_profiles"] = replaceProfiles
+            r["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""
+            importedCert = try await run(r)
+            hasImportedCert = true
+            infoText = "Đã nhập chứng chỉ."
+        }
+    }
+    func loadImportedCert() async {
+        var r = base("imported_cert"); r["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""
+        if let v = try? await CoreCall.runAsync(r, onEvent: { _, _ in }, onPrompt: { _ in nil }).checked() {
+            importedCert = (v["imported"] as? Bool == true) ? v : nil; hasImportedCert = importedCert != nil
+        }
+    }
+    func clearImportedCert() async {
+        await guarded { _ = try await run(base("clear_imported_cert")); importedCert = nil; hasImportedCert = false }
+    }
 
     // MARK: Pairing / device
     func importPairing(from url: URL) {
@@ -105,6 +184,7 @@ final class Engine: ObservableObject {
         await guarded {
             let r = try await run(base("device"))
             deviceLine = "\(r["name"] as? String ?? "") · iOS \(r["ios"] as? String ?? "?")"
+            if let u = r["udid"] as? String, !u.isEmpty { UserDefaults.standard.set(u, forKey: "deviceUDID") }
         }
     }
 
@@ -133,20 +213,32 @@ final class Engine: ObservableObject {
         do { try FileManager.default.copyItem(at: url, to: dest); pendingIPA = dest } catch { errorText = "Không chép được IPA: \(error.localizedDescription)" }
     }
 
-    func install(ipa: URL, upgrade: Bool = false) async {
-        guard signedIn else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
+    /// Installs/re-signs with a signer: explicit, else the one that signed this app before, else the default.
+    func install(ipa: URL, upgrade: Bool = false, signer: String? = nil) async {
+        guard canSign else { errorText = "Hãy đăng nhập Apple ID hoặc nhập chứng chỉ trước (tab Tài khoản)."; return }
         guard hasPairing else { errorText = "Hãy nhập file ghép nối trước (tab Thiết bị)."; return }
         await guarded {
             let info = try await run(["op": "inspect", "ipa_path": ipa.path])
             if info["is_tvos"] as? Bool == true { throw CoreError(message: "Đây là app Apple TV, không cài được lên iPhone/iPad.") }
-            var req = base("install"); req["ipa_path"] = ipa.path; req["upgrade"] = upgrade
+            let bundle = info["bundle_id"] as? String ?? ""
+            let prev = apps.first { $0.bundleID == bundle || $0.ipaFile == ipa.lastPathComponent }
+            let who = signer ?? prev.map(signerOf) ?? defaultSigner
+            guard signers.contains(who) else { throw CoreError(message: "Tài khoản ký \(signerLabel(who)) chưa đăng nhập. Hãy đăng nhập lại ở tab Tài khoản.") }
+            if who.hasPrefix("apple:"), prev == nil || signerOf(prev!) != who, slotsUsed(who) >= 3 {
+                throw CoreError(message: "\(signerLabel(who)) đã dùng 3/3 app trên máy này. Chọn tài khoản khác hoặc gỡ bớt app.")
+            }
+            var req = base("install", signer: who); req["ipa_path"] = ipa.path; req["upgrade"] = upgrade
+            req["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""
             let r = try await run(req)
             let bid = r["bundle_id"] as? String ?? ""
+            if let u = r["udid"] as? String, !u.isEmpty { UserDefaults.standard.set(u, forKey: "deviceUDID") }
+            if who.hasPrefix("apple:") && prev.map(signerOf) != who { logAppIDs(String(who.dropFirst(6)), count: 1 + ((info["extensions"] as? [Any])?.count ?? 0)) }
+            if let n = r["notes"] as? [String], !n.isEmpty { infoText = n.joined(separator: " ") }
             let exp = (r["expires"] as? Double).map { Date(timeIntervalSince1970: $0) }
             let rec = SideloadedApp(bundleID: bid, name: r["name"] as? String ?? bid, version: r["version"] as? String ?? "",
-                                    expires: exp, ipaFile: ipa.lastPathComponent)
+                                    expires: exp, ipaFile: ipa.lastPathComponent, signer: who)
             if let c = r["lc_cert"] as? [String: Any] { lastLCCert = c }
-            apps.removeAll { $0.bundleID == bid }
+            apps.removeAll { $0.bundleID == bid || ($0.bundleID == bundle && prev != nil) }
             apps.append(rec); save()
             infoText = "Đã cài \(rec.name)" + (exp.map { ", hết hạn \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
         }
@@ -157,7 +249,7 @@ final class Engine: ObservableObject {
             errorText = "Không còn file IPA gốc của \(app.name). Hãy chọn lại IPA để cài đè."; return
         }
         errorText = nil
-        await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true)
+        await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true, signer: signerOf(app))
         if errorText == nil { markLCCertPending() }
     }
 
@@ -179,7 +271,8 @@ final class Engine: ObservableObject {
         infoText = "Đang ký lại iSideload — app sẽ tự đóng khi cài xong, mở lại là xong."
         // iOS usually kills the app when the install finishes: the push happens on next launch.
         markLCCertPending()
-        await install(ipa: out, upgrade: true)
+        let me = apps.first { $0.bundleID.hasPrefix(isideloadBundleID) }
+        await install(ipa: out, upgrade: true, signer: me.map(signerOf))
     }
 
     // MARK: In-app pairing (iOS 27)
@@ -267,7 +360,7 @@ final class Engine: ObservableObject {
     }
 
     func installFromSource(_ a: SourceApp, _ v: SourceVersion) async {
-        guard signedIn else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
+        guard canSign else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
         busy = true; stage = "Đang tải \(a.name) \(v.version)…"
         let ipa: URL
         do { ipa = try await SourceStore.download(v, name: a.name) } catch { busy = false; errorText = "Tải thất bại: \(error.localizedDescription)"; return }
@@ -293,7 +386,7 @@ final class Engine: ObservableObject {
     /// On open/foreground: re-sign anything expiring within 2 days (VPN needed).
     func foregroundCheck() async {
         await resumeAfterVPN()
-        guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, signedIn else { return }
+        guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, canSign else { return }
         let urgent = apps.contains { ($0.daysLeft ?? 99) < 2 }
         if urgent { if vpnActive { await refreshAll(includeSelf: true, onlyDue: true, background: false) }
                     else { pendingVPNAction = .refreshAll(includeSelf: true); LoopbackVPN.turnOn() } }
@@ -304,9 +397,9 @@ final class Engine: ObservableObject {
             stage = "Đang tải LiveContainer…"
             let r = try await LiveContainer.latest()
             let ipa = try await LiveContainer.download(r, into: Self.ipaDir)
-            let existing = apps.contains { $0.bundleID.hasPrefix(LiveContainer.bundlePrefix) }
+            let existing = liveContainerInstalled
             lastLCCert = nil
-            await install(ipa: ipa, upgrade: existing)
+            await install(ipa: ipa, upgrade: existing != nil, signer: existing.map(signerOf))
             // Right after installing, hand LiveContainer the signing certificate automatically.
             if let c = lastLCCert, errorText == nil {
                 try await Task.sleep(nanoseconds: 1_500_000_000)
@@ -329,9 +422,9 @@ final class Engine: ObservableObject {
     func pushPendingLCCert() async {
         guard UserDefaults.standard.bool(forKey: Self.lcPendingKey) else { return }
         guard liveContainerInstalled != nil else { UserDefaults.standard.set(false, forKey: Self.lcPendingKey); return }
-        guard UIApplication.shared.applicationState == .active, !busy, signedIn else { return }
+        guard UIApplication.shared.applicationState == .active, !busy, canSign else { return }
         do {
-            let r = try await run(base("export_cert"))
+            let r = try await run(base("export_cert", signer: lcSigner))
             try sendCertToLiveContainer(r)
             UserDefaults.standard.set(false, forKey: Self.lcPendingKey)
         } catch { errorText = "Chưa gửi được chứng chỉ sang LiveContainer: \(error.localizedDescription)" }
@@ -340,12 +433,12 @@ final class Engine: ObservableObject {
     /// Exports the certificate this Apple ID signs with (.p12 + password) and opens
     /// livecontainer://certificate so LiveContainer stores it for JIT-less mode.
     func exportCertToLiveContainer() async {
-        guard signedIn else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
+        guard canSign else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
         guard liveContainerInstalled != nil || UIApplication.shared.canOpenURL(URL(string: "livecontainer://")!) else {
             errorText = "Chưa cài LiveContainer. Hãy bấm Cài LiveContainer trước."; return
         }
         await guarded {
-            let r = try await run(base("export_cert"))
+            let r = try await run(base("export_cert", signer: lcSigner))
             try sendCertToLiveContainer(r)
         }
     }
@@ -375,6 +468,8 @@ final class Engine: ObservableObject {
         if let r = try? await LiveContainer.latest() { lcLatest = r.version }
     }
 
+    /// LiveContainer must get the certificate of the account that signed it.
+    var lcSigner: String { liveContainerInstalled.map(signerOf) ?? defaultSigner }
     var liveContainerInstalled: SideloadedApp? { apps.first { $0.bundleID.hasPrefix(LiveContainer.bundlePrefix) } }
 
     func handleURL(_ url: URL) {

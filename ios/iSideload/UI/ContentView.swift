@@ -29,8 +29,13 @@ struct ContentView: View {
         .alert("Xong", isPresented: Binding(get: { engine.infoText != nil }, set: { if !$0 { engine.infoText = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(engine.infoText ?? "") }
-        .confirmationDialog("Cài IPA này?", isPresented: Binding(get: { engine.pendingIPA != nil && !engine.busy }, set: { if !$0 { engine.pendingIPA = nil } })) {
-            Button("Ký và cài") { if let u = engine.pendingIPA { engine.pendingIPA = nil; Task { await engine.install(ipa: u) } } }
+        .confirmationDialog("Cài IPA này — chọn tài khoản ký", isPresented: Binding(get: { engine.pendingIPA != nil && !engine.busy }, set: { if !$0 { engine.pendingIPA = nil } })) {
+            ForEach(engine.signers, id: \.self) { sg in
+                Button("Ký bằng \(engine.signerSummary(sg))") {
+                    if let u = engine.pendingIPA { engine.pendingIPA = nil; engine.installSigner = sg; Task { await engine.install(ipa: u, signer: sg) } }
+                }
+            }
+            if engine.signers.isEmpty { Button("Ký và cài") { if let u = engine.pendingIPA { engine.pendingIPA = nil; Task { await engine.install(ipa: u) } } } }
             Button("Huỷ", role: .cancel) { engine.pendingIPA = nil }
         }
     }

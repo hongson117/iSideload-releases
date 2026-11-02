@@ -1557,16 +1557,20 @@ checksum = "a1133e156a6beed9d5e14a2b9618d52f8c2c6786326f4efbd73c7aecfcabab4c"
 name = "isl_core"
 version = "1.0.0"
 dependencies = [
+ "apple-codesign-quick",
  "base64 0.22.1",
  "idevice",
  "isideload",
+ "isideload-p12-keystore",
  "plist",
  "ring",
  "rootcause",
+ "rsa",
  "rustls",
  "serde",
  "serde_json",
  "tokio",
+ "x509-cert 0.2.5",
  "zip",
 ]
 

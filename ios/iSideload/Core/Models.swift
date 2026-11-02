@@ -8,6 +8,7 @@ struct SideloadedApp: Codable, Identifiable, Hashable {
     var expires: Date?
     var ipaFile: String?          // cached original IPA (Documents/IPAs), used by Refresh
     var installedAt: Date = Date()
+    var signer: String?           // "apple:<email>" or "cert" (imported certificate); nil = legacy (main Apple ID)
 
     var daysLeft: Int? {
         guard let e = expires else { return nil }
