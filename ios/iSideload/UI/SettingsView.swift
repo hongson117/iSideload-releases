@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("autoRefresh") private var autoRefresh = false
     @AppStorage("refreshDays") private var refreshDays = 2
     @AppStorage("fgRefresh") private var fgRefresh = true
+    @AppStorage("vpnAutoOff") private var vpnAutoOff = true
     var body: some View {
         NavigationStack {
             Form {
@@ -16,7 +17,8 @@ struct SettingsView: View {
                 }
                 Section {
                     TextField(LoopbackVPN.defaultTarget, text: $engine.vpnTarget).keyboardType(.decimalPad)
-                } header: { Text("Địa chỉ VPN loopback") } footer: { Text("Mặc định 10.7.0.1 (LocalDevVPN).") }
+                    Toggle("Chỉ bật VPN khi cài/ký lại, xong tự tắt", isOn: $vpnAutoOff)
+                } header: { Text("Địa chỉ VPN loopback") } footer: { Text("Mặc định 10.7.0.1 (LocalDevVPN). Khi bật tuỳ chọn, iSideload tự mở LocalDevVPN để bật trước mỗi lần cài/ký lại và tắt ngay khi xong (thành công hay lỗi) để không ảnh hưởng Tailscale/mạng thường. Ký lại chạy nền không bật/tắt được VPN (giới hạn iOS).") }
                 Section {
                     Toggle("Tự ký lại mỗi ngày", isOn: $autoRefresh)
                         .onChange(of: autoRefresh) { _, on in

@@ -32,7 +32,7 @@ struct ContentView: View {
         .confirmationDialog("Cài IPA này — chọn tài khoản ký", isPresented: Binding(get: { engine.pendingIPA != nil && !engine.busy }, set: { if !$0 { engine.pendingIPA = nil } })) {
             ForEach(engine.signers, id: \.self) { sg in
                 Button("Ký bằng \(engine.signerSummary(sg))") {
-                    if let u = engine.pendingIPA { engine.pendingIPA = nil; engine.installSigner = sg; Task { await engine.install(ipa: u, signer: sg) } }
+                    if let u = engine.pendingIPA { engine.pendingIPA = nil; engine.installSigner = sg; Task { await engine.installNow(u, signer: sg) } }
                 }
             }
             Button("Huỷ", role: .cancel) { engine.pendingIPA = nil }

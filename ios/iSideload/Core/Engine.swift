@@ -87,6 +87,7 @@ final class Engine: ObservableObject {
         errorText = failed.isEmpty ? nil : failed.joined(separator: "\n")
         if failed.isEmpty { infoText = "Đã ký lại nhóm \(signerLabel(s))." }
         await pushPendingLCCert()
+        vpnJobDone()
     }
     /// Move an app to another identity: re-sign with it (frees a slot on the old Apple ID).
     func move(_ app: SideloadedApp, to s: String) async {
@@ -95,6 +96,7 @@ final class Engine: ObservableObject {
         }
         await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true, signer: s)
         if errorText == nil { markLCCertPending(); await pushPendingLCCert() }
+        vpnJobDone()
     }
     func signerSummary(_ s: String) -> String {
         if s == "cert" { return "Chứng chỉ có sẵn · \(slotsUsed(s)) app (không giới hạn 3 app nếu là tài khoản trả phí)" }
@@ -290,6 +292,7 @@ final class Engine: ObservableObject {
     func refreshAndPush(_ app: SideloadedApp) async {
         await refresh(app)
         await pushPendingLCCert()
+        vpnJobDone()
     }
 
     /// Re-sign and re-install iSideload itself from its own running bundle (no PC needed).
@@ -388,7 +391,7 @@ final class Engine: ObservableObject {
             AutoRefresh.notify(failed.isEmpty ? "Ký lại xong" : "Ký lại có lỗi", summary.isEmpty ? "Không có app nào cần ký lại." : summary)
         }
         if !ok.isEmpty { markLCCertPending() }
-        if !background { await pushPendingLCCert() }
+        if !background { await pushPendingLCCert(); vpnJobDone() }
         return failed.isEmpty
     }
 
@@ -400,7 +403,22 @@ final class Engine: ObservableObject {
         busy = false
         if !vpnActive { pendingVPNAction = .install(ipa); LoopbackVPN.turnOn(); return }
         await install(ipa: ipa, upgrade: apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) })
+        vpnJobDone()
     }
+
+    // MARK: VPN only during jobs: turn LocalDevVPN off as soon as an install/refresh finishes (ok or failed).
+    private var vpnOffScheduled = false
+    func vpnJobDone() {
+        guard UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true, !vpnOffScheduled,
+              pendingVPNAction == nil, UIApplication.shared.applicationState == .active else { return }
+        vpnOffScheduled = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)   // let a LiveContainer cert hand-off open first
+            vpnOffScheduled = false
+            if !busy && vpnActive { LoopbackVPN.turnOff() }
+        }
+    }
+    func installNow(_ ipa: URL, signer: String) async { await install(ipa: ipa, signer: signer); vpnJobDone() }
 
     // MARK: LocalDevVPN hand-off: remember the action, open LocalDevVPN, resume when it bounces back.
     enum VPNAction { case refreshAll(includeSelf: Bool), install(URL) }
@@ -414,6 +432,7 @@ final class Engine: ObservableObject {
         case .refreshAll(let s): await refreshAll(includeSelf: s, onlyDue: false, background: false)
         case .install(let u): await install(ipa: u, upgrade: true)
         }
+        vpnJobDone()
     }
 
     /// On open/foreground: re-sign anything expiring within 2 days (VPN needed).
@@ -439,6 +458,7 @@ final class Engine: ObservableObject {
                 try sendCertToLiveContainer(c)
             }
         }
+        vpnJobDone()
     }
 
     // MARK: LiveContainer certificate

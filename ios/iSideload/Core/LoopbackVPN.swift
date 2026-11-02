@@ -31,5 +31,8 @@ enum LoopbackVPN {
         return false
     }
 
+    static let disableURL = URL(string: "localdevvpn://disable?scheme=isideload")!
+    /// Turn LocalDevVPN off again (foreground only — iOS can't open URLs from a background task).
+    @MainActor static func turnOff() { if helperInstalled { UIApplication.shared.open(disableURL) } }
     @MainActor static func turnOn() { UIApplication.shared.open(helperInstalled ? enableURL : appStoreURL) }
 }
