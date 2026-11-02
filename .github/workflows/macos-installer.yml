@@ -28,6 +28,7 @@ jobs:
         with:
           workspaces: macos
           key: macos-universal
+          cache-on-failure: true
       - name: Build Apple Silicon and Intel binaries
         run: |
           export ISL_GIT_SHA=${GITHUB_SHA::7}
@@ -41,7 +42,7 @@ jobs:
           lipo -create macos/target/aarch64-apple-darwin/release/isl-mac macos/target/x86_64-apple-darwin/release/isl-mac -output out/iSideload-macOS/isl-mac
           codesign --force --sign - --timestamp=none out/iSideload-macOS/isl-mac
           codesign --verify --strict out/iSideload-macOS/isl-mac
-          lipo -verify_arch arm64 x86_64 out/iSideload-macOS/isl-mac
+          lipo out/iSideload-macOS/isl-mac -verify_arch arm64 x86_64
           out/iSideload-macOS/isl-mac --self-test
           out/iSideload-macOS/isl-mac --help
           out/iSideload-macOS/isl-mac --version
