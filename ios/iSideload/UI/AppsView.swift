@@ -3,6 +3,7 @@ import SwiftUI
 struct AppsView: View {
     @EnvironmentObject var engine: Engine
     @State private var picking = false
+    @State private var confirmDelete: SideloadedApp?
     var body: some View {
         NavigationStack {
             List {
@@ -31,7 +32,11 @@ struct AppsView: View {
                     let list = engine.apps.filter { engine.signerOf($0) == sg }
                     Section {
                         if list.isEmpty { Text("Chưa có app nào ký bằng danh tính này.").font(.footnote).foregroundStyle(.secondary) }
-                        ForEach(list) { app in row(app, sg) }
+                        ForEach(list) { app in
+                            row(app, sg).swipeActions(edge: .trailing) {
+                                Button(role: .destructive) { confirmDelete = app } label: { Label("Gỡ", systemImage: "trash") }
+                            }
+                        }
                         if !list.isEmpty {
                             Button { Task { await engine.refreshGroup(sg) } } label: { Label("Ký lại tất cả", systemImage: "arrow.clockwise") }.disabled(engine.busy)
                         }
@@ -41,6 +46,19 @@ struct AppsView: View {
             .navigationTitle("iSideload")
             .refreshable { await engine.refreshList() }
             .sheet(isPresented: $picking) { DocumentPicker { engine.importIPA(from: $0) } }
+            .confirmationDialog("Gỡ \(confirmDelete?.name ?? "app")?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible) {
+                if let a = confirmDelete {
+                    Button("Gỡ khỏi máy", role: .destructive) { Task { await engine.uninstall(a) } }
+                    Button("Chỉ xoá khỏi danh sách") { engine.removeFromList(a); engine.infoText = "Đã xoá \(a.name) khỏi danh sách" }
+                }
+                Button("Huỷ", role: .cancel) {}
+            } message: { Text("Dữ liệu của app sẽ bị xoá. iSideload ngừng ký lại app này và trả lại 1 slot.") }
+            .alert("Không gỡ được trên máy", isPresented: Binding(get: { engine.uninstallFailed != nil }, set: { if !$0 { engine.uninstallFailed = nil } })) {
+                if let a = engine.uninstallFailed {
+                    Button("Xoá khỏi danh sách", role: .destructive) { engine.removeFromList(a); engine.uninstallFailed = nil }
+                }
+                Button("Để sau", role: .cancel) { engine.uninstallFailed = nil }
+            } message: { Text("Hãy tự xoá icon \(engine.uninstallFailed?.name ?? "") trên màn hình chính, rồi xoá khỏi danh sách.") }
         }
     }
 
@@ -84,6 +102,8 @@ struct AppsView: View {
                 ForEach(engine.signers.filter { $0 != sg }, id: \.self) { t in
                     Button("Chuyển sang \(engine.signerLabel(t))") { Task { await engine.move(app, to: t) } }
                 }
+                Divider()
+                Button(role: .destructive) { confirmDelete = app } label: { Label("Gỡ app", systemImage: "trash") }
             } label: { Text("Làm mới") }.buttonStyle(.bordered).disabled(engine.busy)
         }
     }

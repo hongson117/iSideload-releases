@@ -461,10 +461,33 @@ final class Engine: ObservableObject {
             if !busy && vpnActive { LoopbackVPN.turnOff() }
         }
     }
+    // MARK: Uninstall
+    @Published var uninstallFailed: SideloadedApp?
+    /// Remove from iSideload's list: stops re-signing it and frees its slot (slots are counted from this list).
+    func removeFromList(_ app: SideloadedApp) {
+        apps.removeAll { $0.bundleID == app.bundleID }; save()
+        if let f = app.ipaFile { try? FileManager.default.removeItem(at: Self.ipaDir.appendingPathComponent(f)) }
+        try? FileManager.default.removeItem(at: IconCache.file(app.bundleID))
+    }
+    /// Uninstall from the device via installation_proxy (needs LocalDevVPN like install), then drop from the list.
+    func uninstall(_ app: SideloadedApp) async {
+        guard hasPairing else { uninstallFailed = app; return }
+        if !vpnActive {
+            if UIApplication.shared.applicationState == .active { pendingVPNAction = .uninstall(app); LoopbackVPN.turnOn(); return }
+            uninstallFailed = app; return
+        }
+        var req = base("uninstall"); req["bundle_id"] = app.bundleID
+        let r = await CoreCall.runAsync(req)
+        if r["ok"] as? Bool == true {
+            removeFromList(app); infoText = "Đã gỡ \(app.name)"
+        } else { uninstallFailed = app }
+        vpnJobDone()
+    }
+
     func installNow(_ ipa: URL, signer: String) async { await install(ipa: ipa, signer: signer); vpnJobDone() }
 
     // MARK: LocalDevVPN hand-off: remember the action, open LocalDevVPN, resume when it bounces back.
-    enum VPNAction { case refreshAll(includeSelf: Bool), install(URL, Bool, String?) }
+    enum VPNAction { case refreshAll(includeSelf: Bool), install(URL, Bool, String?), uninstall(SideloadedApp) }
     var pendingVPNAction: VPNAction?
     func resumeAfterVPN() async {
         guard let a = pendingVPNAction else { return }
@@ -475,6 +498,7 @@ final class Engine: ObservableObject {
         switch a {
         case .refreshAll(let s): await refreshAll(includeSelf: s, onlyDue: false, background: false)
         case .install(let u, let up, let sg): await install(ipa: u, upgrade: up, signer: sg)
+        case .uninstall(let app): await uninstall(app)
         }
         vpnJobDone()
     }

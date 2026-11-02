@@ -89,6 +89,7 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "sign_in" => sign_in_only(&req, ui).await,
         "device" => device_info(&req).await,
         "apps" => apps(&req).await,
+        "uninstall" => uninstall(&req).await,
         "install" => install(&req, ui).await,
         "certs" => certs(&req, ui).await,
         "revoke_cert" => revoke(&req, ui).await,
@@ -117,6 +118,12 @@ async fn device_info(req: &Value) -> Result<Value, String> {
     let p = device::provider(s(req, "target"), s(req, "pairing_path"))?;
     let (name, udid, ios) = device::info(&p).await?;
     Ok(json!({"ok": true, "name": name, "udid": udid, "ios": ios}))
+}
+
+async fn uninstall(req: &Value) -> Result<Value, String> {
+    let p = device::provider(s(req, "target"), s(req, "pairing_path"))?;
+    device::uninstall(&p, s(req, "bundle_id")).await?;
+    Ok(json!({"ok": true}))
 }
 
 async fn apps(req: &Value) -> Result<Value, String> {

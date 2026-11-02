@@ -48,6 +48,13 @@ pub async fn info(p: &TcpProvider) -> Result<(String, String, String), String> {
 }
 
 /// User apps signed with a development certificate (i.e. sideloaded).
+pub async fn uninstall(p: &TcpProvider, bundle_id: &str) -> Result<(), String> {
+    let mut ip = InstallationProxyClient::connect(p)
+        .await
+        .map_err(|e| format!("Không mở được installation_proxy: {e}"))?;
+    ip.uninstall(bundle_id, None).await.map_err(|e| format!("Gỡ thất bại: {e}"))
+}
+
 pub async fn sideloaded_apps(p: &TcpProvider) -> Result<Vec<serde_json::Value>, String> {
     let mut ip = InstallationProxyClient::connect(p)
         .await
