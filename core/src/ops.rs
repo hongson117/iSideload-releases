@@ -55,6 +55,8 @@ pub fn hint_vi(m: &str) -> String {
         "Đã đủ số chứng chỉ phát triển. Thu hồi chứng chỉ cũ trong Cài đặt → Chứng chỉ."
     } else if l.contains("10.7.0.1") || l.contains("lockdownd") || l.contains("vpn") {
         "Không thấy chính thiết bị qua VPN. Mở LocalDevVPN, bật VPN, rồi quay lại iSideload."
+    } else if l.contains("socket io failed") || l.contains("broken pipe") || l.contains("connection reset") {
+        "Kết nối thiết bị bị ngắt khi truyền hoặc cài app. Vào Thiết bị › Kiểm tra kết nối thiết bị. Nếu chỉ lỗi khi tự gia hạn, mở lại iSideload và kiểm tra ngày hết hạn trước khi thử lại."
     } else if l.contains("pairing") || l.contains("ghép nối") {
         "File ghép nối không hợp lệ. Tạo lại bằng máy tính (idevice_pair / iloader / SideStore pairing) và nhập lại."
     } else if l.contains("applicationverificationfailed") || l.contains("0xe8008015") || l.contains("0xe800801c") {

@@ -16,6 +16,7 @@ final class Engine: ObservableObject {
     @Published var teamName = ""
     @Published var apps: [SideloadedApp] = []
     @Published var deviceLine = ""
+    @Published var pairingVerified = false
     @Published var busy = false
     @Published var peerBusy = false
     @Published var selectedTab = 0
@@ -138,7 +139,11 @@ final class Engine: ObservableObject {
         return "\(e) · \(slotsUsed(s))/3 app · App ID \(appIDsUsed(e))/10 trong 7 ngày"
     }
 
-    var hasPairing: Bool { FileManager.default.fileExists(atPath: Self.pairingURL.path) }
+    var pairingKind: PairingRecord.Kind? {
+        guard let data = try? Data(contentsOf: Self.pairingURL) else { return nil }
+        return (try? PairingRecord.parse(data))?.kind
+    }
+    var hasPairing: Bool { pairingKind != nil }
     var vpnInterfaceUp: Bool { LoopbackVPN.isActive(target: vpnTarget.isEmpty ? LoopbackVPN.defaultTarget : vpnTarget) }
     /// Real check (TCP probe, ~1 s) used before every job.
     var vpnActive: Bool { LoopbackVPN.reachable(target: vpnTarget.isEmpty ? LoopbackVPN.defaultTarget : vpnTarget) }
@@ -256,23 +261,21 @@ final class Engine: ObservableObject {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
-            let data = try Data(contentsOf: url)
-            guard let obj = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-                  obj["HostPrivateKey"] != nil || obj["DeviceCertificate"] != nil else {
-                throw CoreError(message: "Đây không phải file ghép nối hợp lệ (thiếu HostPrivateKey/DeviceCertificate).")
-            }
-            try? FileManager.default.removeItem(at: Self.pairingURL)
-            try data.write(to: Self.pairingURL)
-            infoText = "Đã nhập file ghép nối."
+            let record = try PairingRecord.parse(Data(contentsOf: url))
+            try record.data.write(to: Self.pairingURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            pairingVerified = false; deviceLine = ""; errorText = nil
+            infoText = "Đã nhập file \(record.kind.rawValue). Bật LocalDevVPN rồi bấm Kiểm tra kết nối thiết bị."
             objectWillChange.send()
         } catch { errorText = error.localizedDescription }
     }
 
     func checkDevice() async {
+        pairingVerified = false; deviceLine = ""; errorText = nil
         await guarded {
             let r = try await run(base("device"))
             deviceLine = "\(r["name"] as? String ?? "") · iOS \(r["ios"] as? String ?? "?")"
             if let u = r["udid"] as? String, !u.isEmpty { UserDefaults.standard.set(u, forKey: "deviceUDID") }
+            pairingVerified = true
         }
     }
 
@@ -486,6 +489,7 @@ final class Engine: ObservableObject {
             _ = try await run(req)
             try? FileManager.default.removeItem(at: Self.pairingURL)
             try FileManager.default.moveItem(at: tmp, to: Self.pairingURL)
+            pairingVerified = false; deviceLine = ""
             infoText = "Ghép nối thành công. Bật LocalDevVPN rồi bấm Kiểm tra kết nối."
         }
     }

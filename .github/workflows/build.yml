@@ -39,6 +39,10 @@ jobs:
         run: |
           swiftc -parse-as-library ios/iSideload/Core/Models.swift ios/iSideload/Core/InstalledAppState.swift tests/InstalledAppStateTests.swift -o /tmp/installed-app-state-tests
           /tmp/installed-app-state-tests
+      - name: Test pairing imports
+        run: |
+          swiftc -parse-as-library ios/iSideload/Core/PairingRecord.swift tests/PairingRecordTests.swift -o /tmp/pairing-record-tests
+          /tmp/pairing-record-tests
       - name: Generate Xcode project
         run: |
           python3 scripts/generate_notices.py

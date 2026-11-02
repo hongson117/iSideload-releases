@@ -28,7 +28,8 @@ pub async fn install_app(
 ) -> Result<(), Report> {
     let mut afc_client = AfcClient::connect(provider)
         .await
-        .map_err(Error::IdeviceError)?;
+        .map_err(Error::IdeviceError)
+        .context("Không mở được dịch vụ truyền file AFC (Lockdown)")?;
 
     let dir = format!(
         "PublicStaging/{}",
@@ -47,11 +48,12 @@ pub async fn install_app(
         &mut uploaded,
         total_size,
     )
-    .await?;
+    .await.context("Mất kết nối khi gửi dữ liệu ứng dụng (AFC/Lockdown)")?;
 
     let mut instproxy_client = InstallationProxyClient::connect(provider)
         .await
-        .map_err(Error::IdeviceError)?;
+        .map_err(Error::IdeviceError)
+        .context("Không mở được dịch vụ cài ứng dụng (Lockdown)")?;
 
     let options = plist!(dict {
         "PackageType": "Developer"
@@ -67,7 +69,8 @@ pub async fn install_app(
             (),
         )
         .await
-        .map_err(Error::IdeviceError)?;
+        .map_err(Error::IdeviceError)
+        .context("Lỗi khi chờ iOS cài ứng dụng (Lockdown)")?;
 
     Ok(())
 }
@@ -93,7 +96,8 @@ pub async fn install_app_rsd_mode(
 ) -> Result<(), Report> {
     let mut afc_client = AfcClient::connect_rsd(provider, handshake)
         .await
-        .map_err(Error::IdeviceError)?;
+        .map_err(Error::IdeviceError)
+        .context("Không mở được dịch vụ truyền file AFC (Remote Pairing)")?;
 
     let dir = format!(
         "PublicStaging/{}",
@@ -112,11 +116,12 @@ pub async fn install_app_rsd_mode(
         &mut uploaded,
         total_size,
     )
-    .await?;
+    .await.context("Mất kết nối khi gửi dữ liệu ứng dụng (AFC/Remote Pairing)")?;
 
     let mut instproxy_client = InstallationProxyClient::connect_rsd(provider, handshake)
         .await
-        .map_err(Error::IdeviceError)?;
+        .map_err(Error::IdeviceError)
+        .context("Không mở được dịch vụ cài ứng dụng (Remote Pairing)")?;
 
     let options = plist!(dict {
         "PackageType": "Developer"
@@ -129,12 +134,14 @@ pub async fn install_app_rsd_mode(
         instproxy_client
             .upgrade_with_callback(dir, Some(plist::Value::Dictionary(options)), cb, ())
             .await
-            .map_err(Error::IdeviceError)?;
+            .map_err(Error::IdeviceError)
+            .context("Lỗi khi chờ iOS cài đè ứng dụng (Remote Pairing)")?;
     } else {
         instproxy_client
             .install_with_callback(dir, Some(plist::Value::Dictionary(options)), cb, ())
             .await
-            .map_err(Error::IdeviceError)?;
+            .map_err(Error::IdeviceError)
+            .context("Lỗi khi chờ iOS cài ứng dụng (Remote Pairing)")?;
     }
 
     Ok(())

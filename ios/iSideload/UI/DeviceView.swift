@@ -18,9 +18,13 @@ struct DeviceView: View {
                     Text("Cài iSideload cho máy mới chạy iOS 27+ ở cùng Wi-Fi. Máy nhận không cần RC Pair hay máy tính.")
                 }
                 Section {
-                    Label(engine.hasPairing ? "Đã có file ghép nối" : "Chưa có file ghép nối",
-                          systemImage: engine.hasPairing ? "checkmark.seal.fill" : "exclamationmark.triangle")
-                        .foregroundStyle(engine.hasPairing ? .green : .orange)
+                    Label(engine.pairingVerified ? "Đã kiểm tra kết nối thành công" :
+                            (engine.hasPairing ? "Đã nhập file · chưa kiểm tra kết nối" : "Chưa có file ghép nối"),
+                          systemImage: engine.pairingVerified ? "checkmark.seal.fill" : "exclamationmark.triangle")
+                        .foregroundStyle(engine.pairingVerified ? .green : .orange)
+                    if let kind = engine.pairingKind {
+                        Text("Loại bản ghi: \(kind.rawValue)").font(.footnote).foregroundStyle(.secondary)
+                    }
                     Button(engine.pairingActive ? "Đang chờ iPhone…" : "Ghép nối ngay trên máy (iOS 27+)") {
                         Task { await engine.pairOnDevice() }
                     }.disabled(engine.pairingActive)
@@ -35,7 +39,7 @@ struct DeviceView: View {
                     }
                     Button("Nhập file ghép nối (.plist / .rppair.plist)") { picking = true }
                 } header: { Text("1. File ghép nối") } footer: {
-                    Text("iOS 27+: bấm Ghép nối ngay trên máy rồi làm theo hướng dẫn trong Cài đặt. Máy vừa nhận iSideload từ máy khác vẫn cần bước này để tự gia hạn. Với iOS cũ, nhập bản ghi đã tạo từ máy tính.")
+                    Text("iOS 27+: có thể ghép nối ngay trên máy. iOS 26: tạo bản ghi bằng idevice_pair trên máy tính, chọn Remote pairing rồi xuất file và nhập ở đây. Đặc biệt với iOS 26.4+, bản ghi Lockdown cũ có thể không dùng được qua VPN. Nhập file xong cần bấm Kiểm tra kết nối thiết bị.")
                 }
                 Section {
                     Label(engine.vpnInterfaceUp ? "VPN loopback đang bật" : "VPN loopback đang tắt",
