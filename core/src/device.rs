@@ -96,19 +96,54 @@ pub fn is_rp_pairing(path: &str) -> bool {
     }
 }
 
+/// RemotePairing's port is dynamic (49152 is only the usual first pick). Try the cached port, 49152,
+/// then scan 49152–65535 on the loopback target. Refused = VPN fine, wrong port.
+async fn rp_connect(ip: IpAddr, cache: &str) -> Result<tokio::net::TcpStream, String> {
+    use tokio::net::TcpStream;
+    let try_port = |p: u16| async move {
+        tokio::time::timeout(Duration::from_millis(800), TcpStream::connect(std::net::SocketAddr::new(ip, p))).await.ok()?.ok()
+    };
+    let mut first: Vec<u16> = std::fs::read_to_string(cache).ok().and_then(|x| x.trim().parse().ok()).into_iter().collect();
+    if !first.contains(&RP_PORT) { first.push(RP_PORT); }
+    for p in first {
+        if let Some(s) = try_port(p).await { return Ok(s); }
+    }
+    // lockdownd must answer (or refuse) on 62078, otherwise the VPN is really down.
+    let lockdown = tokio::time::timeout(Duration::from_millis(1500), TcpStream::connect(std::net::SocketAddr::new(ip, 62078))).await;
+    if lockdown.is_err() { return Err(format!("Không tới được {ip} (VPN chưa chạy). Bật LocalDevVPN rồi thử lại.")); }
+    let mut found = None;
+    let mut port: u32 = 49153;
+    while port <= 65535 && found.is_none() {
+        let mut set = tokio::task::JoinSet::new();
+        for p in port..(port + 1024).min(65536) {
+            let p = p as u16;
+            if p == 62078 { continue; }
+            set.spawn(async move {
+                tokio::time::timeout(Duration::from_millis(400), TcpStream::connect(std::net::SocketAddr::new(ip, p))).await
+                    .ok().and_then(|r| r.ok()).map(|s| (p, s))
+            });
+        }
+        while let Some(r) = set.join_next().await {
+            if let Ok(Some((p, s))) = r { if found.is_none() { found = Some((p, s)); } }
+        }
+        port += 1024;
+    }
+    let (p, s) = found.ok_or_else(|| format!("VPN chạy nhưng không thấy cổng RemotePairing trên {ip}. Mở lại iSideload hoặc ghép nối lại."))?;
+    let _ = std::fs::write(cache, p.to_string());
+    Ok(s)
+}
+
 pub async fn rp_tunnel(target: &str, pairing_path: &str) -> Result<(AdapterHandle, RsdHandshake), String> {
     let target = if target.trim().is_empty() { DEFAULT_TARGET } else { target.trim() };
     let ip: IpAddr = target.parse().map_err(|_| format!("Địa chỉ VPN không hợp lệ: {target}"))?;
     let mut rpf = RpPairingFile::read_from_file(pairing_path)
         .await
         .map_err(|e| format!("Không đọc được file RPPairing: {e}"))?;
+    let cache = format!("{pairing_path}.rpport");
     let fut = async {
-        let addr = std::net::SocketAddr::new(ip, RP_PORT);
-        let stream = tokio::net::TcpStream::connect(addr)
-            .await
-            .map_err(|e| format!("Không tới được {addr} ({e}). Bật LocalDevVPN rồi thử lại."))?;
+        let stream = rp_connect(ip, &cache).await?;
         let mut rpc = RemotePairingClient::new(RpPairingSocket::new(stream), "iSideload");
-        rpc.attempt_pair_verify().await.map_err(|e| format!("pair-verify lỗi: {e}"))?;
+        if let Err(e) = rpc.attempt_pair_verify().await { let _ = std::fs::remove_file(&cache); return Err(format!("pair-verify lỗi: {e}")); }
         rpc.validate_pairing(&mut rpf)
             .await
             .map_err(|_| "iPhone không còn chấp nhận file ghép nối này — ghép nối lại (RC Pair / StikPair).".to_string())?;
@@ -130,9 +165,9 @@ pub async fn rp_tunnel(target: &str, pairing_path: &str) -> Result<(AdapterHandl
         let hs = RsdHandshake::new(rsd).await.map_err(|e| format!("RSD handshake: {e}"))?;
         Ok::<_, String>((adapter, hs))
     };
-    tokio::time::timeout(Duration::from_secs(25), fut)
+    tokio::time::timeout(Duration::from_secs(60), fut)
         .await
-        .map_err(|_| "Hết thời gian chờ tunnel tới 10.7.0.1:49152. LocalDevVPN chưa bật?".to_string())?
+        .map_err(|_| "Hết thời gian chờ tunnel RemotePairing. Thử lại.".to_string())?
 }
 
 pub fn rsd_prop(hs: &RsdHandshake, key: &str) -> String {

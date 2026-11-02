@@ -521,8 +521,8 @@ final class Engine: ObservableObject {
     func resumeAfterVPN() async {
         guard let a = pendingVPNAction else { return }
         var ok = false
-        for _ in 0..<10 { if vpnActive { ok = true; break }; try? await Task.sleep(nanoseconds: 1_000_000_000) }   // poll ≤ ~10 s
-        guard ok else { pendingVPNAction = nil; errorText = "Không kết nối được tới thiết bị qua LocalDevVPN (10.7.0.1) sau 10 giây. Mở LocalDevVPN, bấm Connect rồi thử lại."; return }
+        for _ in 0..<8 { if vpnActive { ok = true; break }; try? await Task.sleep(nanoseconds: 600_000_000) }   // retry 62078 ~5 s
+        guard ok else { pendingVPNAction = nil; errorText = "Không kết nối được tới thiết bị qua LocalDevVPN (10.7.0.1) sau ~5 giây. Mở LocalDevVPN, bấm Connect rồi thử lại."; return }
         pendingVPNAction = nil
         switch a {
         case .refreshAll(let s): await refreshAll(includeSelf: s, onlyDue: false, background: false)

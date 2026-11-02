@@ -35,8 +35,9 @@ enum LoopbackVPN {
     /// ~1 s timeout. ECONNREFUSED still means packets went through the VPN, so it counts as reachable.
     /// (A stale utun with 10.7.x can survive after LocalDevVPN is switched off, so the interface check alone lies.)
     static func reachable(target: String = defaultTarget, timeout: Double = 1.0) -> Bool {
-        guard isActive(target: target) else { return false }
-        for port in [UInt16(62078), 49152] where probe(target, port, timeout) { return true }
+        // lockdownd 62078 decides: connected or refused both mean packets go through the VPN.
+        // (The utun interface check is skipped; it misses some LocalDevVPN setups.)
+        if probe(target, 62078, timeout) { return true }
         return false
     }
     private static func probe(_ host: String, _ port: UInt16, _ timeout: Double) -> Bool {
