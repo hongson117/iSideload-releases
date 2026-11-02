@@ -12,3 +12,4 @@ out/
 windows/target/
 __pycache__/
 *.pyc
+ios/iSideload/Resources/ThirdPartyNotices.txt

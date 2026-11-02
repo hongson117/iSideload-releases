@@ -54,7 +54,7 @@ struct PeerInstallView: View {
                         confirmInstall = true
                     }.disabled(installer.active || !engine.signedAccounts.contains(account))
                 } header: { Text("2. Xác nhận máy nhận và cài") } footer: {
-                    Text("Dùng Apple ID đang đăng nhập trên máy hỗ trợ để ký bản cài đầu tiên. App mới không được thêm vào danh sách ứng dụng của máy hỗ trợ. Máy nhận có thể đăng nhập tài khoản riêng sau khi cài.")
+                    Text("Chọn Apple ID sẽ dùng lâu dài để gia hạn trên máy nhận. Nếu người nhận dùng tài khoản riêng, hãy thêm tài khoản đó ở tab Tài khoản trước khi cài. App mới không được thêm vào danh sách của máy hỗ trợ.")
                 }
             }
 

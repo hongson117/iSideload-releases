@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage("fgRefresh") private var fgRefresh = true
     @AppStorage("vpnAutoOff") private var vpnAutoOff = true
     @AppStorage("otaRelay") private var otaRelay = ""
+    @State private var notices = false
     var body: some View {
         NavigationStack {
             Form {
@@ -42,9 +43,20 @@ struct SettingsView: View {
                 }
                 Section("Phiên bản") {
                     Text("iSideload \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") · core \(CoreCall.version) · \(Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? "")")
+                    Button("Giấy phép phần mềm nguồn mở") { notices = true }
                 }
             }
             .navigationTitle("Cài đặt")
+            .sheet(isPresented: $notices) {
+                NavigationStack {
+                    ScrollView {
+                        Text((Bundle.main.url(forResource: "ThirdPartyNotices", withExtension: "txt")
+                            .flatMap { try? String(contentsOf: $0, encoding: .utf8) }) ?? "Xem thông tin giấy phép trong bản phát hành chính thức.")
+                            .font(.caption).frame(maxWidth: .infinity, alignment: .leading).padding()
+                    }.navigationTitle("Giấy phép")
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Xong") { notices = false } } }
+                }
+            }
         }
     }
 }

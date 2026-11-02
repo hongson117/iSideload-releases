@@ -40,7 +40,9 @@ jobs:
           swiftc -parse-as-library ios/iSideload/Core/Models.swift ios/iSideload/Core/InstalledAppState.swift tests/InstalledAppStateTests.swift -o /tmp/installed-app-state-tests
           /tmp/installed-app-state-tests
       - name: Generate Xcode project
-        run: brew install xcodegen && xcodegen generate
+        run: |
+          python3 scripts/generate_notices.py
+          brew install xcodegen && xcodegen generate
       - name: Build tunnel extension (compile check only, not shipped)
         run: |
           xcodebuild -project iSideload.xcodeproj -target iSideloadTunnel -configuration Release -sdk iphoneos \
