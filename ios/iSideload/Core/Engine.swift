@@ -100,6 +100,19 @@ final class Engine: ObservableObject {
         if errorText == nil { markLCCertPending(); await pushPendingLCCert() }
         vpnJobDone()
     }
+    /// min(cert notAfter, earliest profile ExpirationDate) of the imported certificate.
+    var importedExpiry: Date? {
+        let c = (importedCert?["certificate"] as? [String: Any])?["expires"] as? Double
+        let p = (importedCert?["profiles"] as? [[String: Any]] ?? []).compactMap { $0["expires"] as? Double }.min()
+        return [c, p].compactMap { $0 }.min().map { Date(timeIntervalSince1970: $0) }
+    }
+    /// One short line: "Đã ký <App> · còn N ngày".
+    static func doneLine(_ name: String, _ exp: Date?) -> String {
+        let n = name.count > 24 ? String(name.prefix(23)) + "…" : name
+        guard let e = exp else { return "Đã ký \(n)" }
+        let d = Int(floor(e.timeIntervalSinceNow / 86400))
+        return "Đã ký \(n) · còn \(max(0, d)) ngày"
+    }
     func signerSummary(_ s: String) -> String {
         if s == "cert" { return "Chứng chỉ có sẵn · \(slotsUsed(s)) app (không giới hạn 3 app nếu là tài khoản trả phí)" }
         let e = String(s.dropFirst(6))
@@ -196,6 +209,9 @@ final class Engine: ObservableObject {
         var r = base("imported_cert"); r["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""
         if let v = try? await CoreCall.runAsync(r, onEvent: { _, _ in }, onPrompt: { _ in nil }).checked() {
             importedCert = (v["imported"] as? Bool == true) ? v : nil; hasImportedCert = importedCert != nil
+            if let e = importedExpiry, apps.contains(where: { signerOf($0) == "cert" && $0.expires != e }) {
+                for i in apps.indices where signerOf(apps[i]) == "cert" { apps[i].expires = e }; save()
+            }
         }
     }
     func clearImportedCert() async {
@@ -279,14 +295,16 @@ final class Engine: ObservableObject {
             let bid = r["bundle_id"] as? String ?? ""
             if let u = r["udid"] as? String, !u.isEmpty { UserDefaults.standard.set(u, forKey: "deviceUDID") }
             if who.hasPrefix("apple:") && prev.map(signerOf) != who { logAppIDs(String(who.dropFirst(6)), count: 1 + ((info["extensions"] as? [Any])?.count ?? 0)) }
-            if let n = r["notes"] as? [String], !n.isEmpty { infoText = n.joined(separator: " ") }
-            let exp = (r["expires"] as? Double).map { Date(timeIntervalSince1970: $0) }
+            let notes = (r["notes"] as? [String]) ?? []
+            var exp = (r["expires"] as? Double).map { Date(timeIntervalSince1970: $0) }
+            // Imported cert: real expiry = min(cert notAfter, profile ExpirationDate) — never the 7-day free-account window.
+            if who == "cert" { exp = [exp, importedExpiry].compactMap { $0 }.min() }
             let rec = SideloadedApp(bundleID: bid, name: r["name"] as? String ?? bid, version: r["version"] as? String ?? "",
                                     expires: exp, ipaFile: ipa.lastPathComponent, signer: who)
             if let c = r["lc_cert"] as? [String: Any] { lastLCCert = c }
             apps.removeAll { $0.bundleID == bid || ($0.bundleID == bundle && prev != nil) }
             apps.append(rec); save()
-            infoText = "Đã cài \(rec.name)" + (exp.map { ", hết hạn \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "")
+            infoText = Self.doneLine(rec.name, exp) + (notes.isEmpty ? "" : "\n" + notes.joined(separator: " "))
         }
     }
 
@@ -387,12 +405,12 @@ final class Engine: ObservableObject {
             for app in apps where app.bundleID != isideloadBundleID && !app.bundleID.hasPrefix(isideloadBundleID + ".") && due(app) {
                 errorText = nil
                 await refresh(app)
-                if errorText == nil { ok.append(app.name) } else { failed.append("\(app.name): \(errorText ?? "")") }
+                if errorText == nil { ok.append(Self.doneLine(app.name, apps.first { $0.name == app.name }?.expires).replacingOccurrences(of: "Đã ký ", with: "")) } else { failed.append("\(app.name): \(errorText ?? "")") }
             }
         }
         UserDefaults.standard.set(Date(), forKey: "lastRefresh")
         let selfDue = apps.first(where: { $0.bundleID.hasPrefix(isideloadBundleID) }).map(due) ?? true
-        let summary = (ok.isEmpty ? "" : "Đã ký lại: " + ok.joined(separator: ", ") + ". ")
+        let summary = (ok.isEmpty ? "" : "Đã ký " + ok.joined(separator: "; ") + ". ")
             + (failed.isEmpty ? "" : "Lỗi: " + failed.joined(separator: "; "))
         if includeSelf && selfDue {
             AutoRefresh.notify("iSideload đang tự ký lại", summary + " iSideload sẽ tự thoát khi cài xong.")

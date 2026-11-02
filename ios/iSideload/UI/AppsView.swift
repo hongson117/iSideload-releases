@@ -49,8 +49,11 @@ struct AppsView: View {
         VStack(alignment: .leading, spacing: 2) {
             if sg == "cert" {
                 let c = engine.importedCert?["certificate"] as? [String: Any] ?? [:]
-                Label("Chứng chỉ có sẵn: \(c["name"] as? String ?? "")", systemImage: "doc.badge.gearshape")
-                Text("Team \(engine.team(of: sg)) · cert hết hạn " + ((c["expires"] as? Double).map { Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .omitted) } ?? "?")).font(.caption2)
+                let nm = c["name"] as? String ?? ""
+                let short = nm.range(of: #"\(([A-Z0-9]+)\)"#, options: .regularExpression).map { String(nm[$0].dropFirst().dropLast()) } ?? nm
+                let ex = engine.importedExpiry.map { $0.formatted(.dateTime.day().month(.defaultDigits).year()) } ?? "?"
+                Label("Chứng chỉ: \(short) · hết \(ex)", systemImage: "doc.badge.gearshape").lineLimit(1)
+                Text("Team \(engine.team(of: sg))").font(.caption2)
             } else {
                 let e = String(sg.dropFirst(6))
                 Label(e, systemImage: "person.crop.circle")
