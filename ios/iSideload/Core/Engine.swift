@@ -79,7 +79,7 @@ final class Engine: ObservableObject {
     }
     /// Re-sign every app in one identity's group.
     func refreshGroup(_ s: String) async {
-        guard vpnActive else { pendingVPNAction = .refreshAll(includeSelf: false); LoopbackVPN.turnOn(); return }
+        if s != "cert" && !vpnActive { pendingVPNAction = .refreshAll(includeSelf: false); LoopbackVPN.turnOn(); return }
         var failed: [String] = []
         for app in apps where signerOf(app) == s && !app.bundleID.hasPrefix(isideloadBundleID) {
             errorText = nil; await refresh(app)
@@ -296,13 +296,17 @@ final class Engine: ObservableObject {
 
     func install(ipa: URL, upgrade: Bool = false, signer: String? = nil) async {
         guard canSign else { errorText = "Hãy đăng nhập Apple ID hoặc nhập chứng chỉ trước (tab Tài khoản)."; return }
-        guard hasPairing else { errorText = "Hãy nhập file ghép nối trước (tab Thiết bị)."; return }
-        // Every job checks real reachability first (~1 s). If down and app is in foreground, hand off to LocalDevVPN.
-        if !vpnActive {
-            if UIApplication.shared.applicationState == .active && (UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true) {
-                pendingVPNAction = .install(ipa, upgrade, signer); LoopbackVPN.turnOn(); return
+        // Imported certificate = KSign-style OTA install, never VPN. Only Apple ID signing needs pairing + LocalDevVPN.
+        let early = signer ?? apps.first { $0.ipaFile == ipa.lastPathComponent }.map(signerOf) ?? defaultSigner
+        if early != "cert" {
+            guard hasPairing else { errorText = "Hãy nhập file ghép nối trước (tab Thiết bị)."; return }
+            // Real reachability first (62078 connect/refused ≈ 1 s). Only hand off to LocalDevVPN when it's really down.
+            if !vpnActive {
+                if UIApplication.shared.applicationState == .active && (UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true) {
+                    pendingVPNAction = .install(ipa, upgrade, signer); LoopbackVPN.turnOn(); return
+                }
+                errorText = "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN."; return
             }
-            errorText = "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN."; return
         }
         await guarded {
             let tmpIcon = IconCache.dir.appendingPathComponent("_pending.png")
@@ -321,7 +325,19 @@ final class Engine: ObservableObject {
             }
             var req = base("install", signer: who); req["ipa_path"] = ipa.path; req["upgrade"] = upgrade
             req["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""
+            let otaIPA = FileManager.default.temporaryDirectory.appendingPathComponent("ota-\(UUID().uuidString).ipa")
+            if who != "cert" && !vpnActive { throw CoreError(message: "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN.") }
+            if who == "cert" && UIApplication.shared.applicationState != .active {
+                throw CoreError(message: "App ký bằng chứng chỉ cần mở iSideload để cài lại (iOS hiện hộp thoại Cài đặt).")
+            }
+            if who == "cert" { req["ota"] = true; req["ipa_out"] = otaIPA.path }
+            defer { try? FileManager.default.removeItem(at: otaIPA) }
             let r = try await run(req)
+            if who == "cert" {
+                busy = true; defer { busy = false }
+                try await OTAInstaller.shared.install(ipa: otaIPA, bundleID: r["bundle_id"] as? String ?? "", name: r["name"] as? String ?? "App",
+                                                     version: r["version"] as? String ?? "1.0") { [weak self] st, p in self?.stage = st; self?.progress = p }
+            }
             let bid = r["bundle_id"] as? String ?? ""
             if let u = r["udid"] as? String, !u.isEmpty { UserDefaults.standard.set(u, forKey: "deviceUDID") }
             if who.hasPrefix("apple:") && prev.map(signerOf) != who { logAppIDs(String(who.dropFirst(6)), count: 1 + ((info["extensions"] as? [Any])?.count ?? 0)) }
@@ -425,7 +441,9 @@ final class Engine: ObservableObject {
     @discardableResult
     func refreshAll(includeSelf: Bool, onlyDue: Bool, background: Bool, onlySelf: Bool = false) async -> Bool {
         guard !busy else { return false }
-        guard vpnActive else {
+        let dueAny: (SideloadedApp) -> Bool = { !onlyDue || ($0.daysLeft ?? 0) < AutoRefresh.thresholdDays }
+        let needVPN = apps.contains { dueAny($0) && signerOf($0) != "cert" && (!onlySelf || $0.bundleID.hasPrefix(isideloadBundleID)) }
+        if needVPN && !vpnActive {
             if !background { pendingVPNAction = .refreshAll(includeSelf: includeSelf && !onlySelf); LoopbackVPN.turnOn(); return false }
             AutoRefresh.notify("iSideload chưa ký lại", "LocalDevVPN chưa bật. Bật VPN rồi chạy lại.")
             return false
@@ -473,7 +491,8 @@ final class Engine: ObservableObject {
         do { ipa = try await SourceStore.download(v, name: a.name) } catch { busy = false; errorText = "Tải thất bại: \(error.localizedDescription)"; return }
         busy = false
         if let u = a.icon { IconCache.remember(u, for: a.bundleIdentifier) }
-        if !vpnActive { pendingVPNAction = .install(ipa, apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) }, signer); LoopbackVPN.turnOn(); return }
+        let who = signer ?? apps.first { $0.bundleID.hasPrefix(a.bundleIdentifier) }.map(signerOf) ?? defaultSigner
+        if who != "cert" && !vpnActive { pendingVPNAction = .install(ipa, apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) }, signer); LoopbackVPN.turnOn(); return }
         await install(ipa: ipa, upgrade: apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) }, signer: signer)
         vpnJobDone()
     }
@@ -538,7 +557,8 @@ final class Engine: ObservableObject {
         guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, canSign else { return }
         let urgent = apps.contains { ($0.daysLeft ?? 99) < 2 }
         if urgent { if vpnActive { await refreshAll(includeSelf: true, onlyDue: true, background: false) }
-                    else { pendingVPNAction = .refreshAll(includeSelf: true); LoopbackVPN.turnOn() } }
+                    else if apps.contains(where: { ($0.daysLeft ?? 99) < 2 && signerOf($0) != "cert" }) { pendingVPNAction = .refreshAll(includeSelf: true); LoopbackVPN.turnOn() }
+                    else { await refreshAll(includeSelf: true, onlyDue: true, background: false) } }
     }
 
     func installLiveContainer() async {

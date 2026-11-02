@@ -306,6 +306,43 @@ fn pick<'a>(usable: &'a [&'a Prof], bundle: &str) -> Option<&'a Prof> {
         .max_by_key(|p| (match_score(&p.app_id, bundle), p.expires))
 }
 
+/// Pack a signed .app into Payload/<name>.app inside a stored-deflate IPA, keeping unix modes and symlinks.
+fn zip_payload(app_dir: &std::path::Path, out: &std::path::Path) -> Result<(), String> {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    let f = std::fs::File::create(out).map_err(|e| format!("Không tạo được IPA: {e}"))?;
+    let mut z = zip::ZipWriter::new(f);
+    let base = app_dir.parent().unwrap_or(app_dir);
+    let root = format!("Payload/{}", app_dir.file_name().unwrap().to_string_lossy());
+    let mut stack = vec![app_dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let rel = d.strip_prefix(base).unwrap().to_string_lossy().to_string();
+        let rel = format!("Payload/{}", rel).replace(&format!("Payload/{}", app_dir.file_name().unwrap().to_string_lossy()), &root);
+        z.add_directory(format!("{rel}/"), zip::write::SimpleFileOptions::default().unix_permissions(0o755)).map_err(|e| e.to_string())?;
+        for ent in std::fs::read_dir(&d).map_err(|e| e.to_string())? {
+            let ent = ent.map_err(|e| e.to_string())?;
+            let p = ent.path();
+            let name = format!("{rel}/{}", ent.file_name().to_string_lossy());
+            let md = std::fs::symlink_metadata(&p).map_err(|e| e.to_string())?;
+            if md.file_type().is_symlink() {
+                let t = std::fs::read_link(&p).map_err(|e| e.to_string())?;
+                z.add_symlink(name, t.to_string_lossy(), zip::write::SimpleFileOptions::default()).map_err(|e| e.to_string())?;
+            } else if md.is_dir() {
+                stack.push(p);
+            } else {
+                let opts = zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Deflated)
+                    .unix_permissions(md.permissions().mode() & 0o777)
+                    .large_file(md.len() > 0xFFFF_0000);
+                z.start_file(name, opts).map_err(|e| e.to_string())?;
+                z.write_all(&std::fs::read(&p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    z.finish().map_err(|e| format!("Đóng gói IPA lỗi: {e}"))?;
+    Ok(())
+}
+
 pub async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     let ipa = PathBuf::from(s(req, "ipa_path"));
     if !ipa.exists() {
@@ -318,9 +355,13 @@ pub async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
         return Err("Chứng chỉ có sẵn đã hết hạn.".into());
     }
 
+    // OTA mode (KSign-like): no VPN/device connection; sign, pack an IPA and let the app serve it via itms-services.
+    let ota = req.get("ota").and_then(Value::as_bool).unwrap_or(false);
     let rp = device::is_rp_pairing(s(req, "pairing_path"));
-    ui.progress("Đang kết nối thiết bị qua VPN…", None);
-    let (provider, mut tunnel, tv_name, udid) = if rp {
+    if !ota { ui.progress("Đang kết nối thiết bị qua VPN…", None); }
+    let (provider, mut tunnel, tv_name, udid) = if ota {
+        (None, None, "iPhone".to_string(), s(req, "udid").to_string())
+    } else if rp {
         let (a, hs) = device::rp_tunnel(s(req, "target"), s(req, "pairing_path")).await?;
         let udid = device::rsd_prop(&hs, "UniqueDeviceID");
         if udid.is_empty() { return Err("Thiết bị không trả về UDID qua RSD.".into()); }
@@ -334,7 +375,7 @@ pub async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     ui.progress("Kiểm tra chứng chỉ & profile…", None);
     let usable: Vec<&Prof> = profs
         .iter()
-        .filter(|p| p.certs.contains(&id.der) && p.expires > now() && udid_ok(p, &udid))
+        .filter(|p| p.certs.contains(&id.der) && p.expires > now() && (udid.is_empty() || udid_ok(p, &udid)))
         .collect();
     if usable.is_empty() {
         let why = summary(&id, &profs, &udid)["warnings"].clone();
@@ -434,6 +475,18 @@ pub async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
 
     let (bundle_id, name, version) = bundle_info(&signed);
     let expires = profile_expiry(&signed).map(|e| e.min(id.expires));
+    if ota {
+        let out = PathBuf::from(s(req, "ipa_out"));
+        ui.progress("Đang đóng gói IPA…", Some(0.8));
+        zip_payload(&signed, &out)?;
+        let _ = std::fs::remove_dir_all(&signed);
+        return Ok(json!({
+            "ok": true, "ota": true, "ipa_out": out.to_string_lossy(),
+            "bundle_id": bundle_id, "original_bundle_id": original, "name": name, "version": version,
+            "team_id": main_prof.team, "expires": expires, "udid": udid, "device_name": tv_name,
+            "imported_cert": true, "profile": main_prof.name, "notes": notes,
+        }));
+    }
     let label = if upgrade { "Đang làm mới app…" } else { "Đang cài app…" };
     ui.progress(label, Some(0.0));
     let cb = move |p: u64| ui.progress(label, Some((p as f64 / 100.0).clamp(0.0, 1.0)));

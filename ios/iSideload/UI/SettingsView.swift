@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage("refreshDays") private var refreshDays = 2
     @AppStorage("fgRefresh") private var fgRefresh = true
     @AppStorage("vpnAutoOff") private var vpnAutoOff = true
+    @AppStorage("otaRelay") private var otaRelay = ""
     var body: some View {
         NavigationStack {
             Form {
@@ -32,6 +33,12 @@ struct SettingsView: View {
                     Button("Ký lại tất cả ngay") { Task { await engine.refreshAll(includeSelf: true, onlyDue: false, background: false) } }
                 } header: { Text("Tự ký lại") } footer: {
                     Text("iOS chỉ chạy nền khi nó muốn (BGAppRefresh + BGProcessing, thường lúc sạc/đêm) và chỉ ký lại được nếu LocalDevVPN đang bật — app nền không thể tự bật VPN. Chắc chắn nhất: Phím tắt › Tự động hóa › Hằng ngày › Chạy ngay: \"Ký lại tất cả app\" (iSideload tự mở LocalDevVPN nếu VPN tắt rồi tự ký tiếp khi quay lại). Sắp hết hạn mà chưa ký được sẽ có thông báo nhắc.")
+                }
+                Section {
+                    TextField("https://api.palera.in/genPlist", text: $otaRelay)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                } header: { Text("Relay manifest (chứng chỉ)") } footer: {
+                    Text("App ký bằng chứng chỉ có sẵn cài kiểu KSign: không cần VPN. IPA phát từ chính iSideload (127.0.0.1), chỉ manifest đi qua relay HTTPS này. Để trống = mặc định; tự host: thư mục relay/ trong repo.")
                 }
                 Section("Phiên bản") {
                     Text("iSideload \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") · core \(CoreCall.version) · \(Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? "")")
