@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   macos:
-    runs-on: macos-15
+    runs-on: macos-26
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
       IPA_SHA256: 80f879da89f5efb80f56d9d75b9e498102d9a78596cba1662deb3bf47374cbc5
