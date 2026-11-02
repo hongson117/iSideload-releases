@@ -1,0 +1,9 @@
+*.ipa
+*.zip
+*.bundle
+*.p12
+*.pfx
+*.plist
+.env
+*secret*
+*token*
