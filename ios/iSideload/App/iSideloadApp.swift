@@ -21,7 +21,7 @@ struct iSideloadApp: App {
         }
         .onChange(of: phase) { _, p in
             if p == .background { AutoRefresh.schedule() }
-            if p == .active { Task { try? await Task.sleep(nanoseconds: 1_000_000_000); await engine.pushPendingLCCert() } }
+            if p == .active { Task { try? await Task.sleep(nanoseconds: 1_000_000_000); await engine.pushPendingLCCert(); await engine.foregroundCheck(); await SourceStore.shared.reload() } }
         }
     }
 }

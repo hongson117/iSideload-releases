@@ -5,6 +5,7 @@ struct ContentView: View {
     var body: some View {
         TabView {
             AppsView().tabItem { Label("Ứng dụng", systemImage: "square.grid.2x2") }
+            SourcesView().tabItem { Label("Nguồn", systemImage: "tray.full") }
             DeviceView().tabItem { Label("Thiết bị", systemImage: "iphone") }
             AccountView().tabItem { Label("Tài khoản", systemImage: "person.crop.circle") }
             SettingsView().tabItem { Label("Cài đặt", systemImage: "gear") }

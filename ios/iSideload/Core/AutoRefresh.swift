@@ -10,11 +10,20 @@ import UserNotifications
 /// because replacing itself terminates the process.
 enum AutoRefresh {
     static let taskID = "com.hongson117.isideload.refresh"
+    static let procID = "com.hongson117.isideload.resign"
     static var enabled: Bool { UserDefaults.standard.bool(forKey: "autoRefresh") }
-    static var thresholdDays: Int { max(0, UserDefaults.standard.object(forKey: "refreshDays") as? Int ?? 6) }
+    static var thresholdDays: Int { max(0, UserDefaults.standard.object(forKey: "refreshDays") as? Int ?? 2) }
     static var lastRun: Date? { UserDefaults.standard.object(forKey: "lastRefresh") as? Date }
 
     static func register() {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: procID, using: nil) { task in
+            schedule()
+            let work = Task { @MainActor in
+                let ok = await Engine.shared.refreshAll(includeSelf: false, onlyDue: true, background: true)
+                task.setTaskCompleted(success: ok)
+            }
+            task.expirationHandler = { work.cancel() }
+        }
         BGTaskScheduler.shared.register(forTaskWithIdentifier: taskID, using: nil) { task in
             schedule()
             let work = Task { @MainActor in
@@ -30,6 +39,26 @@ enum AutoRefresh {
         let r = BGAppRefreshTaskRequest(identifier: taskID)
         r.earliestBeginDate = Date(timeIntervalSinceNow: 12 * 3600)
         try? BGTaskScheduler.shared.submit(r)
+        let p = BGProcessingTaskRequest(identifier: procID)
+        p.requiresNetworkConnectivity = true; p.requiresExternalPower = false
+        p.earliestBeginDate = Date(timeIntervalSinceNow: 6 * 3600)
+        try? BGTaskScheduler.shared.submit(p)
+    }
+
+    /// Local reminders 1 day and 3 hours before the earliest expiry (re-planned on every save).
+    static func scheduleExpiryReminders(_ apps: [SideloadedApp]) {
+        let c = UNUserNotificationCenter.current()
+        c.removePendingNotificationRequests(withIdentifiers: ["isl-exp-1d", "isl-exp-3h"])
+        guard let e = apps.compactMap(\.expires).min() else { return }
+        for (id, before, text) in [("isl-exp-1d", 86400.0, "còn 1 ngày"), ("isl-exp-3h", 10800.0, "còn 3 giờ")] {
+            let t = e.timeIntervalSinceNow - before
+            guard t > 60 else { continue }
+            let n = UNMutableNotificationContent()
+            n.title = "App sideload sắp hết hạn (\(text))"
+            n.body = "Mở iSideload để ký lại (cần LocalDevVPN). Nếu tự ký lại nền đã chạy, bỏ qua thông báo này."
+            n.sound = .default
+            c.add(UNNotificationRequest(identifier: id, content: n, trigger: UNTimeIntervalNotificationTrigger(timeInterval: t, repeats: false)))
+        }
     }
 
     static func notify(_ title: String, _ body: String) {

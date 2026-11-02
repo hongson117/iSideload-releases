@@ -40,6 +40,9 @@ struct AppsView: View {
                                 } else { Text("Không rõ hạn").font(.caption).foregroundStyle(.secondary) }
                             }
                             Spacer()
+                            if let (sa, v) = SourceStore.shared.update(for: app) {
+                                Button("Cập nhật \(v.version)") { Task { await engine.installFromSource(sa, v) } }.buttonStyle(.borderedProminent).tint(.orange).disabled(engine.busy)
+                            }
                             Button("Làm mới") { Task { await engine.refreshAndPush(app) } }.buttonStyle(.bordered).disabled(engine.busy)
                         }
                     }

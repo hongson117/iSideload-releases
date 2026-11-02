@@ -39,7 +39,7 @@ final class Engine: ObservableObject {
     var hasPairing: Bool { FileManager.default.fileExists(atPath: Self.pairingURL.path) }
     var vpnActive: Bool { LoopbackVPN.isActive(target: vpnTarget.isEmpty ? LoopbackVPN.defaultTarget : vpnTarget) }
 
-    private func save() { if let d = try? JSONEncoder().encode(apps) { try? d.write(to: Self.appsURL) } }
+    private func save() { if let d = try? JSONEncoder().encode(apps) { try? d.write(to: Self.appsURL) }; AutoRefresh.scheduleExpiryReminders(apps) }
 
     private func base(_ op: String) -> [String: Any] {
         ["op": op, "apple_id": appleID, "password": Keychain.load(appleID) ?? "", "anisette_url": anisetteURL,
@@ -237,7 +237,7 @@ final class Engine: ObservableObject {
     func refreshAll(includeSelf: Bool, onlyDue: Bool, background: Bool, onlySelf: Bool = false) async -> Bool {
         guard !busy else { return false }
         guard vpnActive else {
-            if !background { LoopbackVPN.turnOn() }
+            if !background { pendingVPNAction = .refreshAll(includeSelf: includeSelf && !onlySelf); LoopbackVPN.turnOn(); return false }
             AutoRefresh.notify("iSideload chưa ký lại", "LocalDevVPN chưa bật. Bật VPN rồi chạy lại.")
             return false
         }
@@ -264,6 +264,39 @@ final class Engine: ObservableObject {
         if !ok.isEmpty { markLCCertPending() }
         if !background { await pushPendingLCCert() }
         return failed.isEmpty
+    }
+
+    func installFromSource(_ a: SourceApp, _ v: SourceVersion) async {
+        guard signedIn else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
+        busy = true; stage = "Đang tải \(a.name) \(v.version)…"
+        let ipa: URL
+        do { ipa = try await SourceStore.download(v, name: a.name) } catch { busy = false; errorText = "Tải thất bại: \(error.localizedDescription)"; return }
+        busy = false
+        if !vpnActive { pendingVPNAction = .install(ipa); LoopbackVPN.turnOn(); return }
+        await install(ipa: ipa, upgrade: apps.contains { $0.bundleID.hasPrefix(a.bundleIdentifier) })
+    }
+
+    // MARK: LocalDevVPN hand-off: remember the action, open LocalDevVPN, resume when it bounces back.
+    enum VPNAction { case refreshAll(includeSelf: Bool), install(URL) }
+    var pendingVPNAction: VPNAction?
+    func resumeAfterVPN() async {
+        guard let a = pendingVPNAction else { return }
+        for _ in 0..<16 where !vpnActive { try? await Task.sleep(nanoseconds: 500_000_000) }
+        guard vpnActive else { return }
+        pendingVPNAction = nil
+        switch a {
+        case .refreshAll(let s): await refreshAll(includeSelf: s, onlyDue: false, background: false)
+        case .install(let u): await install(ipa: u, upgrade: true)
+        }
+    }
+
+    /// On open/foreground: re-sign anything expiring within 2 days (VPN needed).
+    func foregroundCheck() async {
+        await resumeAfterVPN()
+        guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, signedIn else { return }
+        let urgent = apps.contains { ($0.daysLeft ?? 99) < 2 }
+        if urgent { if vpnActive { await refreshAll(includeSelf: true, onlyDue: true, background: false) }
+                    else { pendingVPNAction = .refreshAll(includeSelf: true); LoopbackVPN.turnOn() } }
     }
 
     func installLiveContainer() async {
@@ -346,6 +379,7 @@ final class Engine: ObservableObject {
 
     func handleURL(_ url: URL) {
         if url.scheme == "isideload" {
+            if url.host == "vpn-ready" || url.host == nil || url.host == "" { Task { await resumeAfterVPN() }; return }
             if url.host == "refresh" { Task { await refreshAll(includeSelf: true, onlyDue: false, background: false) } }
             else if url.host == "refresh-apps" { Task { await refreshAll(includeSelf: false, onlyDue: false, background: false) } }
             return
