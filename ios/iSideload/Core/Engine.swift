@@ -114,7 +114,13 @@ final class Engine: ObservableObject {
         return "Đã ký \(n) · còn \(max(0, d)) ngày"
     }
     func signerSummary(_ s: String) -> String {
-        if s == "cert" { return "Chứng chỉ có sẵn · \(slotsUsed(s)) app (không giới hạn 3 app nếu là tài khoản trả phí)" }
+        if s == "cert" {
+            switch importedWildcard {
+            case .some(true): return "Chứng chỉ có sẵn · \(slotsUsed(s)) app · không giới hạn (profile wildcard)"
+            case .some(false): return "Chứng chỉ có sẵn · \(slotsUsed(s))/1 app (profile App ID cố định)"
+            case .none: return "Chứng chỉ có sẵn · \(slotsUsed(s)) app"
+            }
+        }
         let e = String(s.dropFirst(6))
         return "\(e) · \(slotsUsed(s))/3 app · App ID \(appIDsUsed(e))/10 trong 7 ngày"
     }
@@ -269,6 +275,25 @@ final class Engine: ObservableObject {
     }
 
     /// Installs/re-signs with a signer: explicit, else the one that signed this app before, else the default.
+    /// nil = unknown; true = some usable profile has a wildcard App ID (unlimited apps); false = explicit only (1 app).
+    var importedWildcard: Bool? {
+        guard let ps = importedCert?["profiles"] as? [[String: Any]], !ps.isEmpty else { return nil }
+        let live = ps.filter { ($0["expired"] as? Bool) != true }
+        return (live.isEmpty ? ps : live).contains { $0["wildcard"] as? Bool == true }
+    }
+    var importedSingleAppID: String? {
+        guard importedWildcard == false else { return nil }
+        return (importedCert?["profiles"] as? [[String: Any]])?.first?["app_id"] as? String
+    }
+    @Published var explicitWarn: (URL, Bool, String?)?
+    var explicitReplaces = ""
+    private var explicitOK = false
+    func confirmExplicit() async {
+        guard let (u, up, sg) = explicitWarn else { return }
+        explicitWarn = nil; explicitOK = true
+        await install(ipa: u, upgrade: up, signer: sg); explicitOK = false; vpnJobDone()
+    }
+
     func install(ipa: URL, upgrade: Bool = false, signer: String? = nil) async {
         guard canSign else { errorText = "Hãy đăng nhập Apple ID hoặc nhập chứng chỉ trước (tab Tài khoản)."; return }
         guard hasPairing else { errorText = "Hãy nhập file ghép nối trước (tab Thiết bị)."; return }
@@ -287,6 +312,10 @@ final class Engine: ObservableObject {
             let prev = apps.first { $0.bundleID == bundle || $0.ipaFile == ipa.lastPathComponent }
             let who = signer ?? prev.map(signerOf) ?? defaultSigner
             guard signers.contains(who) else { throw CoreError(message: "Tài khoản ký \(signerLabel(who)) chưa đăng nhập. Hãy đăng nhập lại ở tab Tài khoản.") }
+            if who == "cert", prev == nil, !explicitOK, importedWildcard == false,
+               let old = apps.first(where: { signerOf($0) == "cert" && $0.bundleID != bundle }) {
+                explicitReplaces = old.name; explicitWarn = (ipa, upgrade, signer ?? who); return
+            }
             if who.hasPrefix("apple:"), prev == nil || signerOf(prev!) != who, slotsUsed(who) >= 3 {
                 throw CoreError(message: "\(signerLabel(who)) đã dùng 3/3 app trên máy này. Chọn tài khoản khác hoặc gỡ bớt app.")
             }

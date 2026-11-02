@@ -347,14 +347,17 @@ pub async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     let main_id = match pick(&usable, &original) {
         Some(_) => original.clone(),
         None => {
-            let explicit = usable.iter().filter(|p| !wildcard(&p.app_id)).max_by_key(|p| p.expires);
-            let target = match explicit {
-                Some(p) => p.app_id.clone(),
+            // Prefer a wildcard profile: every app keeps a unique ID (prefix.<original>), so apps never replace each other.
+            let wild = usable.iter().filter(|p| wildcard(&p.app_id)).max_by_key(|p| p.expires);
+            let target = match wild {
+                Some(p) => {
+                    let prefix = p.app_id.trim_end_matches('*').trim_end_matches('.');
+                    if prefix.is_empty() { original.clone() } else { format!("{prefix}.{original}") }
+                }
                 None => {
                     let p = usable.iter().max_by_key(|p| p.expires).unwrap();
-                    let prefix = p.app_id.trim_end_matches('*').trim_end_matches('.');
-                    let last = original.rsplit('.').next().unwrap_or("app");
-                    if prefix.is_empty() { original.clone() } else { format!("{prefix}.{last}") }
+                    notes.push("Profile chỉ cho 1 app (App ID cố định) — app cũ cùng ID sẽ bị thay.".into());
+                    p.app_id.clone()
                 }
             };
             notes.push(format!("Đổi bundle ID {original} → {target} cho khớp profile."));

@@ -53,6 +53,10 @@ struct AppsView: View {
                 }
                 Button("Huỷ", role: .cancel) {}
             } message: { Text("Dữ liệu của app sẽ bị xoá. iSideload ngừng ký lại app này và trả lại 1 slot.") }
+            .alert("Profile chỉ cho 1 app", isPresented: Binding(get: { engine.explicitWarn != nil }, set: { if !$0 { engine.explicitWarn = nil } })) {
+                Button("Vẫn cài (thay app cũ)", role: .destructive) { Task { await engine.confirmExplicit() } }
+                Button("Huỷ", role: .cancel) { engine.explicitWarn = nil }
+            } message: { Text("App ID cố định \(engine.importedSingleAppID ?? ""): \(engine.explicitReplaces) sẽ bị thay. Dùng profile wildcard (TEAM.*) để cài nhiều app.") }
             .alert("Không gỡ được trên máy", isPresented: Binding(get: { engine.uninstallFailed != nil }, set: { if !$0 { engine.uninstallFailed = nil } })) {
                 if let a = engine.uninstallFailed {
                     Button("Xoá khỏi danh sách", role: .destructive) { engine.removeFromList(a); engine.uninstallFailed = nil }
@@ -71,7 +75,7 @@ struct AppsView: View {
                 let short = nm.range(of: #"\(([A-Z0-9]+)\)"#, options: .regularExpression).map { String(nm[$0].dropFirst().dropLast()) } ?? nm
                 let ex = engine.importedExpiry.map { $0.formatted(.dateTime.day().month(.defaultDigits).year()) } ?? "?"
                 Label("Chứng chỉ: \(short) · hết \(ex)", systemImage: "doc.badge.gearshape").lineLimit(1)
-                Text("Team \(engine.team(of: sg))").font(.caption2)
+                Text("Team \(engine.team(of: sg)) · " + (engine.importedWildcard == false ? "slots: \(list.count)/1 (App ID cố định \(engine.importedSingleAppID ?? ""))" : engine.importedWildcard == true ? "\(list.count) app · không giới hạn" : "\(list.count) app")).font(.caption2)
             } else {
                 let e = String(sg.dropFirst(6))
                 Label(e, systemImage: "person.crop.circle")
