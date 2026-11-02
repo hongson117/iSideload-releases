@@ -336,7 +336,7 @@ final class Engine: ObservableObject {
             if who == "cert" {
                 busy = true; defer { busy = false }
                 try await OTAInstaller.shared.install(ipa: otaIPA, bundleID: r["bundle_id"] as? String ?? "", name: r["name"] as? String ?? "App",
-                                                     version: r["version"] as? String ?? "1.0") { [weak self] st, p in self?.stage = st; self?.progress = p }
+                                                     version: r["version"] as? String ?? "1.0") { [weak self] st, p in self?.stage = st; self?.progress = p ?? 0 }
             }
             let bid = r["bundle_id"] as? String ?? ""
             if let u = r["udid"] as? String, !u.isEmpty { UserDefaults.standard.set(u, forKey: "deviceUDID") }
