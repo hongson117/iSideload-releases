@@ -65,6 +65,37 @@ final class Engine: ObservableObject {
         log[email] = (log[email] ?? []).filter { $0 > cut } + Array(repeating: Date().timeIntervalSince1970, count: count)
         UserDefaults.standard.set(log, forKey: "appIDLog")
     }
+    func team(of s: String) -> String {
+        if s == "cert" { return ((importedCert?["certificate"] as? [String: Any])?["team_id"] as? String) ?? "" }
+        return (UserDefaults.standard.dictionary(forKey: "teams") as? [String: String])?[String(s.dropFirst(6))] ?? ""
+    }
+    /// Groups for the Apps list: every signer (even empty) plus signers of apps no longer signed in.
+    var signerGroups: [String] {
+        var g = signers
+        for a in apps where !g.contains(signerOf(a)) { g.append(signerOf(a)) }
+        return g
+    }
+    /// Re-sign every app in one identity's group.
+    func refreshGroup(_ s: String) async {
+        guard vpnActive else { pendingVPNAction = .refreshAll(includeSelf: false); LoopbackVPN.turnOn(); return }
+        var failed: [String] = []
+        for app in apps where signerOf(app) == s && !app.bundleID.hasPrefix(isideloadBundleID) {
+            errorText = nil; await refresh(app)
+            if let e = errorText { failed.append("\(app.name): \(e)") }
+        }
+        if let me = apps.first(where: { $0.bundleID.hasPrefix(isideloadBundleID) && signerOf($0) == s }) { _ = me; await refreshSelf() }
+        errorText = failed.isEmpty ? nil : failed.joined(separator: "\n")
+        if failed.isEmpty { infoText = "Đã ký lại nhóm \(signerLabel(s))." }
+        await pushPendingLCCert()
+    }
+    /// Move an app to another identity: re-sign with it (frees a slot on the old Apple ID).
+    func move(_ app: SideloadedApp, to s: String) async {
+        guard let f = app.ipaFile, FileManager.default.fileExists(atPath: Self.ipaDir.appendingPathComponent(f).path) else {
+            errorText = "Không còn file IPA gốc của \(app.name)."; return
+        }
+        await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true, signer: s)
+        if errorText == nil { markLCCertPending(); await pushPendingLCCert() }
+    }
     func signerSummary(_ s: String) -> String {
         if s == "cert" { return "Chứng chỉ có sẵn · \(slotsUsed(s)) app (không giới hạn 3 app nếu là tài khoản trả phí)" }
         let e = String(s.dropFirst(6))
@@ -118,6 +149,8 @@ final class Engine: ObservableObject {
                 let r = try await run(base("sign_in", signer: "apple:" + id))
                 if appleID.isEmpty || Keychain.load(appleID) == nil { appleID = id }
                 if !accounts.contains(id) { accountsRaw = (accounts + [id]).joined(separator: "\n") }
+                var t = UserDefaults.standard.dictionary(forKey: "teams") as? [String: String] ?? [:]
+                t[id] = r["team_name"] as? String ?? (r["team"] as? String ?? ""); UserDefaults.standard.set(t, forKey: "teams")
                 if id == appleID { teamName = r["team_name"] as? String ?? (r["team"] as? String ?? "") }
                 signedIn = true
                 infoText = "Đã thêm tài khoản \(id)."

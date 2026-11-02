@@ -35,7 +35,6 @@ struct ContentView: View {
                     if let u = engine.pendingIPA { engine.pendingIPA = nil; engine.installSigner = sg; Task { await engine.install(ipa: u, signer: sg) } }
                 }
             }
-            if engine.signers.isEmpty { Button("Ký và cài") { if let u = engine.pendingIPA { engine.pendingIPA = nil; Task { await engine.install(ipa: u) } } } }
             Button("Huỷ", role: .cancel) { engine.pendingIPA = nil }
         }
     }
