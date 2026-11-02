@@ -38,7 +38,7 @@ struct AccountView: View {
                         Button { email = ""; adding = true } label: { Label("Thêm Apple ID", systemImage: "person.badge.plus") }
                     }
                 } header: { Text("Apple ID") } footer: {
-                    Text("Mỗi Apple ID miễn phí: 3 app trên mỗi máy, 10 App ID mỗi 7 ngày — 2 tài khoản = 6 app. Mỗi app nhớ tài khoản đã ký nó; làm mới tự dùng đúng tài khoản. Vuốt để đăng xuất / đặt làm chính. Mật khẩu chỉ lưu trong Keychain.")
+                    Text("Apple ID miễn phí: iOS giới hạn 3 app tự ký trên mỗi máy (tính cả iSideload); mỗi Apple ID có 10 App ID mỗi 7 ngày. Thêm tài khoản không bảo đảm tăng số app trên máy. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
                 }
 
                 Section {
@@ -63,7 +63,7 @@ struct AccountView: View {
                             .buttonStyle(GradientButtonStyle()).disabled(p12 == nil || profiles.isEmpty || engine.busy)
                     }
                 } header: { Text("Chứng chỉ có sẵn") } footer: {
-                    Text("Ký bằng chứng chỉ của bạn (.p12 + profile) thay cho Apple ID. Kiểm tra: profile chứa chứng chỉ, đúng team, còn hạn, có UDID máy này. Profile explicit sẽ tự đổi bundle ID của app cho khớp. Chọn \"Chứng chỉ có sẵn\" khi cài; LiveContainer nhận đúng chứng chỉ này nếu nó ký LiveContainer.")
+                    Text("Ký bằng chứng chỉ của bạn (.p12 + profile) thay cho Apple ID. Profile cần khớp chứng chỉ, còn hạn và cho phép thiết bị này. App giữ bundle ID gốc; LiveContainer nhận chứng chỉ đã dùng ký nó.")
                 }
 
                 Section("Chứng chỉ phát triển (tài khoản chính)") {

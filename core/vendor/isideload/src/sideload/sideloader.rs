@@ -25,6 +25,14 @@ use plist::Dictionary;
 use rootcause::{option_ext::OptionExt, prelude::*};
 use tracing::info;
 
+/// Signing an already-signed bundle must not accumulate the same team suffix.
+/// Self refresh preserves the installed ID verbatim to update its existing container.
+pub fn signing_bundle_id(original: &str, team: &str, preserve: bool) -> String {
+    let suffix = format!(".{team}");
+    if preserve || original.ends_with(&suffix) { original.to_string() }
+    else { format!("{original}{suffix}") }
+}
+
 pub struct Sideloader<C: MaxCertsCallback> {
     team_selection: TeamSelection,
     storage: Box<dyn SideloadingStorage>,
@@ -38,12 +46,18 @@ pub struct Sideloader<C: MaxCertsCallback> {
     /// TVSideload patch: developer-services platform for device registration and
     /// provisioning profiles (`None` = iOS). Set to `Tvos` to sign for Apple TV.
     device_type: Option<DeveloperDeviceType>,
+    preserve_bundle_id: bool,
 }
 
 impl<C: MaxCertsCallback> Sideloader<C> {
     /// TVSideload patch: choose the platform profiles are issued for.
     pub fn set_device_type(&mut self, device_type: Option<DeveloperDeviceType>) {
         self.device_type = device_type;
+    }
+
+    /// Keep the installed identity for in-place self refreshes.
+    pub fn set_preserve_bundle_id(&mut self, preserve: bool) {
+        self.preserve_bundle_id = preserve;
     }
 
     /// Construct a new `Sideloader` instance with the provided configuration
@@ -70,6 +84,7 @@ impl<C: MaxCertsCallback> Sideloader<C> {
             delete_app_after_install,
             team: None,
             device_type: None,
+            preserve_bundle_id: false,
         }
     }
 
@@ -114,7 +129,7 @@ impl<C: MaxCertsCallback> Sideloader<C> {
 
         let main_bundle_id = app.main_bundle_id()?;
         let main_app_name = app.main_app_name()?;
-        let main_app_id_str = format!("{}.{}", main_bundle_id, team.team_id);
+        let main_app_id_str = signing_bundle_id(&main_bundle_id, &team.team_id, self.preserve_bundle_id);
         app.update_bundle_id(&main_bundle_id, &main_app_id_str)?;
         let mut app_ids = app
             .register_app_ids(

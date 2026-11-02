@@ -3,12 +3,12 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var engine: Engine
     var body: some View {
-        TabView {
-            AppsView().tabItem { Label("Ứng dụng", systemImage: "square.grid.2x2") }
-            SourcesView().tabItem { Label("Nguồn", systemImage: "tray.full") }
-            DeviceView().tabItem { Label("Thiết bị", systemImage: "iphone") }
-            AccountView().tabItem { Label("Tài khoản", systemImage: "person.crop.circle") }
-            SettingsView().tabItem { Label("Cài đặt", systemImage: "gear") }
+        TabView(selection: $engine.selectedTab) {
+            AppsView().tabItem { Label("Ứng dụng", systemImage: "square.grid.2x2") }.tag(0)
+            SourcesView().tabItem { Label("Nguồn", systemImage: "tray.full") }.tag(1)
+            DeviceView().tabItem { Label("Thiết bị", systemImage: "iphone") }.tag(2)
+            AccountView().tabItem { Label("Tài khoản", systemImage: "person.crop.circle") }.tag(3)
+            SettingsView().tabItem { Label("Cài đặt", systemImage: "gear") }.tag(4)
         }
         .tint(Theme.accent)
         .overlay {

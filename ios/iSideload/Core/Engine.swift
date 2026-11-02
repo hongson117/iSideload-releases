@@ -18,6 +18,7 @@ final class Engine: ObservableObject {
     @Published var deviceLine = ""
     @Published var busy = false
     @Published var peerBusy = false
+    @Published var selectedTab = 0
     @Published var stage = ""
     @Published var progress: Double = 0
     @Published var prompt: CorePrompt?
@@ -42,6 +43,7 @@ final class Engine: ObservableObject {
         signedIn = !appleID.isEmpty && Keychain.load(appleID) != nil
         if !appleID.isEmpty && !accounts.contains(appleID) { accountsRaw = ([appleID] + accounts).joined(separator: "\n") }
         hasImportedCert = FileManager.default.fileExists(atPath: Self.storage.appendingPathComponent("imported_cert/cert.p12").path)
+        syncSelfRecord()
         checkSelfUpdate()
         if hasImportedCert { Task { await loadImportedCert() } }
     }
@@ -53,8 +55,25 @@ final class Engine: ObservableObject {
     /// All usable signers: "apple:<email>" for each signed-in Apple ID, plus "cert".
     var signers: [String] { signedAccounts.map { "apple:" + $0 } + (hasImportedCert ? ["cert"] : []) }
     var canSign: Bool { !signers.isEmpty }
-    func signerLabel(_ s: String) -> String { s == "cert" ? "Chứng chỉ có sẵn" : String(s.dropFirst(6)) }
-    func signerOf(_ app: SideloadedApp) -> String { app.signer ?? "apple:" + appleID }
+    func signerLabel(_ s: String) -> String {
+        if s == "self" { return "Chưa chọn tài khoản ký" }
+        return s == "cert" ? "Chứng chỉ có sẵn" : String(s.dropFirst(6))
+    }
+    func signerOf(_ app: SideloadedApp) -> String {
+        if let signer = app.signer { return signer }
+        if isSelf(app) { return defaultSigner.isEmpty ? "self" : defaultSigner }
+        return "apple:" + appleID
+    }
+    func isSelf(_ app: SideloadedApp) -> Bool { app.bundleID == isideloadBundleID }
+    var selfApp: SideloadedApp? { apps.first(where: isSelf) }
+
+    /// Register a fresh installation without needing VPN or a device browse first.
+    func syncSelfRecord(signer: String? = nil) {
+        guard let state = InstalledAppState.read(bundleURL: Bundle.main.bundleURL) else { return }
+        apps = state.reconcile(apps, signer: signer)
+        if let udid = state.udid { UserDefaults.standard.set(udid, forKey: "deviceUDID") }
+        save()
+    }
     var defaultSigner: String { signers.contains(installSigner) ? installSigner : (signers.first ?? "") }
     /// Apps signed by this signer that occupy a free-account slot (3 per Apple ID per device).
     func slotsUsed(_ s: String) -> Int { apps.filter { signerOf($0) == s }.count }
@@ -77,25 +96,16 @@ final class Engine: ObservableObject {
     /// Groups for the Apps list: every signer (even empty) plus signers of apps no longer signed in.
     var signerGroups: [String] {
         var g = signers
-        for a in apps where !g.contains(signerOf(a)) { g.append(signerOf(a)) }
+        for a in apps where !isSelf(a) && !g.contains(signerOf(a)) { g.append(signerOf(a)) }
         return g
     }
     /// Re-sign every app in one identity's group.
     func refreshGroup(_ s: String) async {
-        if s != "cert" && !vpnActive { pendingVPNAction = .refreshAll(includeSelf: false); LoopbackVPN.turnOn(); return }
-        var failed: [String] = []
-        for app in apps where signerOf(app) == s && !app.bundleID.hasPrefix(isideloadBundleID) {
-            errorText = nil; await refresh(app)
-            if let e = errorText { failed.append("\(app.name): \(e)") }
-        }
-        if let me = apps.first(where: { $0.bundleID.hasPrefix(isideloadBundleID) && signerOf($0) == s }) { _ = me; await refreshSelf() }
-        errorText = failed.isEmpty ? nil : failed.joined(separator: "\n")
-        if failed.isEmpty { infoText = "Đã ký lại nhóm \(signerLabel(s))." }
-        await pushPendingLCCert()
-        vpnJobDone()
+        await refreshAll(includeSelf: true, onlyDue: false, background: false, signerFilter: s)
     }
     /// Move an app to another identity: re-sign with it (frees a slot on the old Apple ID).
     func move(_ app: SideloadedApp, to s: String) async {
+        if isSelf(app) { await refreshSelf(signer: s); return }
         guard let f = app.ipaFile, FileManager.default.fileExists(atPath: Self.ipaDir.appendingPathComponent(f).path) else {
             errorText = "Không còn file IPA gốc của \(app.name)."; return
         }
@@ -194,6 +204,7 @@ final class Engine: ObservableObject {
                 t[id] = r["team_name"] as? String ?? (r["team"] as? String ?? ""); UserDefaults.standard.set(t, forKey: "teams")
                 if id == appleID { teamName = r["team_name"] as? String ?? (r["team"] as? String ?? "") }
                 signedIn = true
+                if selfApp?.signer == nil { syncSelfRecord(signer: "apple:" + id) }
                 infoText = "Đã thêm tài khoản \(id)."
             } catch { Keychain.delete(id); throw error }
         }
@@ -270,14 +281,14 @@ final class Engine: ObservableObject {
             let r = try await run(base("apps"))
             let live = (r["apps"] as? [[String: Any]]) ?? []
             let ids = Set(live.compactMap { $0["bundle_id"] as? String })
-            apps.removeAll { !ids.contains($0.bundleID) }
+            apps.removeAll { !isSelf($0) && !ids.contains($0.bundleID) }
             for a in live {
                 let bid = a["bundle_id"] as? String ?? ""
                 if !apps.contains(where: { $0.bundleID == bid }) {
                     apps.append(SideloadedApp(bundleID: bid, name: a["name"] as? String ?? bid, version: a["version"] as? String ?? "", expires: nil, ipaFile: nil))
                 }
             }
-            save()
+            syncSelfRecord()
         }
     }
 
@@ -310,7 +321,7 @@ final class Engine: ObservableObject {
         await install(ipa: u, upgrade: up, signer: sg); explicitOK = false; vpnJobDone()
     }
 
-    func install(ipa: URL, upgrade: Bool = false, signer: String? = nil) async {
+    func install(ipa: URL, upgrade: Bool = false, signer: String? = nil, selfRefresh: Bool = false) async {
         guard canSign else { errorText = "Hãy đăng nhập Apple ID hoặc nhập chứng chỉ trước (tab Tài khoản)."; return }
         // Imported certificate = KSign-style OTA install, never VPN. Only Apple ID signing needs pairing + LocalDevVPN.
         let early = signer ?? apps.first { $0.ipaFile == ipa.lastPathComponent }.map(signerOf) ?? defaultSigner
@@ -319,7 +330,9 @@ final class Engine: ObservableObject {
             // Real reachability first (62078 connect/refused ≈ 1 s). Only hand off to LocalDevVPN when it's really down.
             if !vpnActive {
                 if UIApplication.shared.applicationState == .active && (UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true) {
-                    pendingVPNAction = .install(ipa, upgrade, signer); LoopbackVPN.turnOn(); return
+                    if selfRefresh { pendingVPNAction = .refreshSelf(signer) }
+                    else { pendingVPNAction = .install(ipa, upgrade, signer) }
+                    LoopbackVPN.turnOn(); return
                 }
                 errorText = "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN."; return
             }
@@ -340,6 +353,7 @@ final class Engine: ObservableObject {
                 throw CoreError(message: "\(signerLabel(who)) đã dùng 3/3 app trên máy này. Chọn tài khoản khác hoặc gỡ bớt app.")
             }
             var req = base("install", signer: who); req["ipa_path"] = ipa.path; req["upgrade"] = upgrade
+            if selfRefresh { req["self_refresh"] = true; req["installed_bundle_id"] = isideloadBundleID }
             req["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""
             let otaIPA = FileManager.default.temporaryDirectory.appendingPathComponent("ota-\(UUID().uuidString).ipa")
             if who != "cert" && !vpnActive { throw CoreError(message: "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN.") }
@@ -372,6 +386,7 @@ final class Engine: ObservableObject {
     }
 
     func refresh(_ app: SideloadedApp) async {
+        if isSelf(app) { await refreshSelf(); return }
         guard let f = app.ipaFile, FileManager.default.fileExists(atPath: Self.ipaDir.appendingPathComponent(f).path) else {
             errorText = "Không còn file IPA gốc của \(app.name). Hãy chọn lại IPA để cài đè."; return
         }
@@ -389,21 +404,32 @@ final class Engine: ObservableObject {
 
     /// Re-sign and re-install iSideload itself from its own running bundle (no PC needed).
     /// iOS terminates the app while installation_proxy replaces it; reopen afterwards.
-    func refreshSelf() async {
+    func refreshSelf(signer: String? = nil) async {
+        guard !busy else { return }
+        errorText = nil
+        let who = signer ?? selfApp.map(signerOf) ?? defaultSigner
+        guard signers.contains(who) else {
+            errorText = "Chọn tài khoản ký cho iSideload: đăng nhập Apple ID trong tab Tài khoản, hoặc nhập chứng chỉ của bạn."; return
+        }
+        if who != "cert" {
+            guard hasPairing else { errorText = "Máy này chưa tự ghép nối. Vào Thiết bị › Ghép nối ngay trên máy, rồi thử Làm mới iSideload."; return }
+            if !vpnActive { pendingVPNAction = .refreshSelf(who); LoopbackVPN.turnOn(); return }
+        }
+        syncSelfRecord(signer: who)
         let out = Self.ipaDir.appendingPathComponent("iSideload-self.ipa")
         try? FileManager.default.createDirectory(at: Self.ipaDir, withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: out)
         do {
             _ = try await run(["op": "pack_self", "app_path": Bundle.main.bundleURL.path, "out_path": out.path])
         } catch { errorText = "Không đóng gói được iSideload: \(error)"; return }
-        infoText = "Đang ký lại iSideload — app sẽ tự đóng khi cài xong, mở lại là xong."
+        infoText = nil
         // iOS usually kills the app when the install finishes: the push happens on next launch.
         markLCCertPending()
-        let me = apps.first { $0.bundleID.hasPrefix(isideloadBundleID) }
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "selfUpdatePending")
-        await install(ipa: out, upgrade: true, signer: me.map(signerOf))
+        UserDefaults.standard.set(selfApp?.expires?.timeIntervalSince1970 ?? 0, forKey: "selfPreviousExpiry")
+        await install(ipa: out, upgrade: true, signer: who, selfRefresh: true)
         // iOS replaces (and kills) the running app; the connection often drops right after the upload.
-        if let e = errorText?.lowercased(), ["socket", "io failed", "broken pipe", "connection", "reset", "eof"].contains(where: { e.contains($0) }) {
+        if progress >= 0.7, let e = errorText?.lowercased(), ["socket", "io failed", "broken pipe", "connection", "reset", "eof"].contains(where: { e.contains($0) }) {
             errorText = nil
             infoText = "Đã gửi bản ký lại. iOS đang thay iSideload — mở lại app để xác nhận."
         } else if errorText != nil {
@@ -416,21 +442,17 @@ final class Engine: ObservableObject {
         let t = UserDefaults.standard.double(forKey: "selfUpdatePending")
         guard t > 0 else { return }
         UserDefaults.standard.removeObject(forKey: "selfUpdatePending")
-        let prov = Bundle.main.bundleURL.appendingPathComponent("embedded.mobileprovision")
-        guard let m = (try? FileManager.default.attributesOfItem(atPath: prov.path))?[.modificationDate] as? Date,
-              m.timeIntervalSince1970 >= t - 120 else { return }
-        var exp: Date?
-        if let d = try? Data(contentsOf: prov), let s = String(data: d, encoding: .isoLatin1),
-           let r = s.range(of: "<key>ExpirationDate</key>"), let a = s.range(of: "<date>", range: r.upperBound..<s.endIndex),
-           let b = s.range(of: "</date>", range: a.upperBound..<s.endIndex) {
-            exp = ISO8601DateFormatter().date(from: String(s[a.upperBound..<b.lowerBound]))
+        let previousExpiry = UserDefaults.standard.double(forKey: "selfPreviousExpiry")
+        UserDefaults.standard.removeObject(forKey: "selfPreviousExpiry")
+        guard let state = InstalledAppState.read(bundleURL: Bundle.main.bundleURL), let expiry = state.expires,
+              expiry > Date(), let created = state.createdAt,
+              created.timeIntervalSince1970 >= t - 120,
+              previousExpiry == 0 || expiry.timeIntervalSince1970 > previousExpiry else {
+            infoText = "Chưa xác nhận được hạn ký mới của iSideload. Hãy kiểm tra ngày hết hạn trong tab Ứng dụng và thử lại nếu cần."
+            return
         }
-        if let i = apps.firstIndex(where: { $0.bundleID.hasPrefix(isideloadBundleID) }) {
-            if let exp { apps[i].expires = exp }
-            apps[i].installedAt = Date()
-            save()
-        }
-        infoText = "Đã ký lại iSideload ✓" + (exp.map { " · hết hạn " + $0.formatted(date: .abbreviated, time: .omitted) } ?? "")
+        syncSelfRecord()
+        infoText = "Đã ký lại iSideload ✓ · hết hạn " + expiry.formatted(date: .abbreviated, time: .omitted)
     }
 
     // MARK: In-app pairing (iOS 27)
@@ -485,26 +507,29 @@ final class Engine: ObservableObject {
 
     /// Re-signs due apps from stored IPAs (others first, iSideload itself last). Returns success.
     @discardableResult
-    func refreshAll(includeSelf: Bool, onlyDue: Bool, background: Bool, onlySelf: Bool = false) async -> Bool {
+    func refreshAll(includeSelf: Bool, onlyDue: Bool, background: Bool, onlySelf: Bool = false, signerFilter: String? = nil) async -> Bool {
         guard !busy else { return false }
+        errorText = nil
+        syncSelfRecord()
         let dueAny: (SideloadedApp) -> Bool = { !onlyDue || ($0.daysLeft ?? 0) < AutoRefresh.thresholdDays }
-        let needVPN = apps.contains { dueAny($0) && signerOf($0) != "cert" && (!onlySelf || $0.bundleID.hasPrefix(isideloadBundleID)) }
+        let requested = apps.filter { dueAny($0) && (isSelf($0) ? includeSelf : !onlySelf)
+            && (signerFilter == nil || signerOf($0) == signerFilter) }
+        let needVPN = requested.contains { signerOf($0) != "cert" }
         if needVPN && !vpnActive {
-            if !background { pendingVPNAction = .refreshAll(includeSelf: includeSelf && !onlySelf); LoopbackVPN.turnOn(); return false }
+            if !background { pendingVPNAction = .refreshAll(includeSelf: includeSelf, onlyDue: onlyDue, onlySelf: onlySelf, signer: signerFilter); LoopbackVPN.turnOn(); return false }
             AutoRefresh.notify("iSideload chưa ký lại", "LocalDevVPN chưa bật. Bật VPN rồi chạy lại.")
             return false
         }
-        let due: (SideloadedApp) -> Bool = { !onlyDue || ($0.daysLeft ?? 0) < AutoRefresh.thresholdDays }
         var ok: [String] = [], failed: [String] = []
         if !onlySelf {
-            for app in apps where app.bundleID != isideloadBundleID && !app.bundleID.hasPrefix(isideloadBundleID + ".") && due(app) {
+            for app in requested where !isSelf(app) {
                 errorText = nil
                 await refresh(app)
                 if errorText == nil { ok.append(Self.doneLine(app.name, apps.first { $0.name == app.name }?.expires).replacingOccurrences(of: "Đã ký ", with: "")) } else { failed.append("\(app.name): \(errorText ?? "")") }
             }
         }
         UserDefaults.standard.set(Date(), forKey: "lastRefresh")
-        let selfDue = apps.first(where: { $0.bundleID.hasPrefix(isideloadBundleID) }).map(due) ?? true
+        let selfDue = requested.contains(where: isSelf)
         let summary = (ok.isEmpty ? "" : "Đã ký " + ok.joined(separator: "; ") + ". ")
             + (failed.isEmpty ? "" : "Lỗi: " + failed.joined(separator: "; "))
         if includeSelf && selfDue {
@@ -559,12 +584,14 @@ final class Engine: ObservableObject {
     @Published var uninstallFailed: SideloadedApp?
     /// Remove from iSideload's list: stops re-signing it and frees its slot (slots are counted from this list).
     func removeFromList(_ app: SideloadedApp) {
+        guard !isSelf(app) else { return }
         apps.removeAll { $0.bundleID == app.bundleID }; save()
         if let f = app.ipaFile { try? FileManager.default.removeItem(at: Self.ipaDir.appendingPathComponent(f)) }
         try? FileManager.default.removeItem(at: IconCache.file(app.bundleID))
     }
     /// Uninstall from the device via installation_proxy (needs LocalDevVPN like install), then drop from the list.
     func uninstall(_ app: SideloadedApp) async {
+        guard !isSelf(app) else { errorText = "iSideload quản lý việc gia hạn cho chính nó. Muốn gỡ hoàn toàn, hãy gỡ từ màn hình chính của iOS."; return }
         guard hasPairing else { uninstallFailed = app; return }
         if !vpnActive {
             if UIApplication.shared.applicationState == .active { pendingVPNAction = .uninstall(app); LoopbackVPN.turnOn(); return }
@@ -581,7 +608,12 @@ final class Engine: ObservableObject {
     func installNow(_ ipa: URL, signer: String) async { await install(ipa: ipa, signer: signer); vpnJobDone() }
 
     // MARK: LocalDevVPN hand-off: remember the action, open LocalDevVPN, resume when it bounces back.
-    enum VPNAction { case refreshAll(includeSelf: Bool), install(URL, Bool, String?), uninstall(SideloadedApp) }
+    enum VPNAction {
+        case refreshAll(includeSelf: Bool, onlyDue: Bool = false, onlySelf: Bool = false, signer: String? = nil)
+        case refreshSelf(String?)
+        case install(URL, Bool, String?)
+        case uninstall(SideloadedApp)
+    }
     var pendingVPNAction: VPNAction?
     func resumeAfterVPN() async {
         guard let a = pendingVPNAction else { return }
@@ -590,7 +622,9 @@ final class Engine: ObservableObject {
         guard ok else { pendingVPNAction = nil; errorText = "Không kết nối được tới thiết bị qua LocalDevVPN (10.7.0.1) sau ~5 giây. Mở LocalDevVPN, bấm Connect rồi thử lại."; return }
         pendingVPNAction = nil
         switch a {
-        case .refreshAll(let s): await refreshAll(includeSelf: s, onlyDue: false, background: false)
+        case .refreshAll(let s, let due, let own, let signer):
+            await refreshAll(includeSelf: s, onlyDue: due, background: false, onlySelf: own, signerFilter: signer)
+        case .refreshSelf(let signer): await refreshSelf(signer: signer)
         case .install(let u, let up, let sg): await install(ipa: u, upgrade: up, signer: sg)
         case .uninstall(let app): await uninstall(app)
         }
@@ -601,7 +635,8 @@ final class Engine: ObservableObject {
     func foregroundCheck() async {
         guard !peerBusy else { return }
         await resumeAfterVPN()
-        guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, canSign else { return }
+        guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, canSign,
+              hasPairing || defaultSigner == "cert" else { return }
         let urgent = apps.contains { ($0.daysLeft ?? 99) < 2 }
         if urgent { if vpnActive { await refreshAll(includeSelf: true, onlyDue: true, background: false) }
                     else if apps.contains(where: { ($0.daysLeft ?? 99) < 2 && signerOf($0) != "cert" }) { pendingVPNAction = .refreshAll(includeSelf: true); LoopbackVPN.turnOn() }

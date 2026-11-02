@@ -333,6 +333,15 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
         return Err("The IPA file is missing.".into());
     }
     let upgrade = req.get("upgrade").and_then(Value::as_bool).unwrap_or(false);
+    let self_refresh = req.get("self_refresh").and_then(Value::as_bool).unwrap_or(false);
+    if self_refresh {
+        let installed_id = s(req, "installed_bundle_id");
+        let actual = inspect_ipa(&ipa)?;
+        if !(installed_id == "com.hongson117.isideload" || installed_id.starts_with("com.hongson117.isideload."))
+            || actual["bundle_id"].as_str() != Some(installed_id) {
+            return Err("Bản đóng gói không khớp iSideload đang chạy. Hãy mở lại app rồi thử làm mới.".into());
+        }
+    }
     if req.get("use_imported_cert").and_then(Value::as_bool).unwrap_or(false) {
         return crate::imported::install(req, ui).await;
     }
@@ -373,6 +382,7 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
         .max_certs_behavior(MaxCertsBehavior::Prompt(revoke_prompt))
         .build();
     sideloader.set_device_type(Some(DeveloperDeviceType::Ios));
+    sideloader.set_preserve_bundle_id(self_refresh);
 
     // 3. Register this iPhone/iPad as a development device.
     ui.progress("Đang đăng ký thiết bị…", None);
@@ -617,6 +627,17 @@ mod tests {
     #[test]
     fn team_suffix() {
         assert_eq!(team_id_of("com.example.tv.ABCDE12345"), "ABCDE12345");
+    }
+
+    #[test]
+    fn repeated_signing_keeps_a_stable_bundle_identity() {
+        use isideload::sideload::sideloader::signing_bundle_id;
+        let original = "com.hongson117.isideload";
+        let signed = signing_bundle_id(original, "ABCDE12345", false);
+        assert_eq!(signed, "com.hongson117.isideload.ABCDE12345");
+        assert_eq!(signing_bundle_id(&signed, "ABCDE12345", false), signed);
+        assert_eq!(signing_bundle_id(&signed, "NEWTEAM123", true), signed);
+        assert_eq!(signing_bundle_id(&signed, "ABCDE12345", true), signed);
     }
 
     #[test]

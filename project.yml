@@ -5,7 +5,7 @@ options:
     iOS: "17.0"
 settings:
   base:
-    MARKETING_VERSION: "1.2.0"
+    MARKETING_VERSION: "1.2.1"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
 targets:
@@ -35,6 +35,11 @@ targets:
         COPY_PHASE_STRIP: YES
         DEBUG_INFORMATION_FORMAT: dwarf
         GCC_SYMBOLS_PRIVATE_EXTERN: YES
+        SWIFT_COMPILATION_MODE: wholemodule
+        SWIFT_OPTIMIZATION_LEVEL: -O
+        ENABLE_TESTABILITY: NO
+        SWIFT_SERIALIZE_DEBUGGING_OPTIONS: NO
+        STRIP_SWIFT_SYMBOLS: YES
   # Optional, NOT embedded in the app: free Apple IDs cannot sign Network Extensions.
   iSideloadTunnel:
     type: app-extension

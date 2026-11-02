@@ -35,7 +35,7 @@ struct DeviceView: View {
                     }
                     Button("Nhập file ghép nối (.plist / .rppair.plist)") { picking = true }
                 } header: { Text("1. File ghép nối") } footer: {
-                    Text("Tạo một lần trên máy tính (hoặc VPS qua Tailscale): cắm iPhone, tin cậy máy tính, rồi dùng idevice_pair / iloader / Jitterbug pair để xuất file. Gửi file qua AirDrop/Files rồi nhập ở đây.")
+                    Text("iOS 27+: bấm Ghép nối ngay trên máy rồi làm theo hướng dẫn trong Cài đặt. Máy vừa nhận iSideload từ máy khác vẫn cần bước này để tự gia hạn. Với iOS cũ, nhập bản ghi đã tạo từ máy tính.")
                 }
                 Section {
                     Label(engine.vpnInterfaceUp ? "VPN loopback đang bật" : "VPN loopback đang tắt",
@@ -50,9 +50,9 @@ struct DeviceView: View {
                     if !engine.deviceLine.isEmpty { Text(engine.deviceLine) }
                 }
                 Section {
-                    Button("Tự ký lại iSideload (gia hạn 7 ngày)") { Task { await engine.refreshSelf() } }
+                    Button("Làm mới iSideload") { Task { await engine.refreshSelf() } }.disabled(engine.busy || !engine.canSign)
                 } header: { Text("4. Gia hạn chính iSideload") } footer: {
-                    Text("Cần: đã đăng nhập Apple ID, có file ghép nối và VPN loopback đang bật. App sẽ tự thoát khi cài đè xong — mở lại là dùng tiếp 7 ngày mới.")
+                    Text("Cùng chức năng với nút Làm mới ở tab Ứng dụng. Khi dùng Apple ID cần đã tự ghép nối; iSideload sẽ mở LocalDevVPN nếu cần. Sau khi cài đè, mở lại app để kiểm tra ngày hết hạn.")
                 }
             }
             .navigationTitle("Thiết bị")

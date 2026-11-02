@@ -7,6 +7,34 @@ struct AppsView: View {
     var body: some View {
         NavigationStack {
             List {
+                SetupChecklistView()
+                if let app = engine.selfApp {
+                    Section {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "iphone.and.arrow.forward").font(.title).foregroundStyle(Theme.accent)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("iSideload · máy này").font(.headline)
+                                Text("Phiên bản \(app.version)").font(.caption).foregroundStyle(.secondary)
+                                if let expiry = app.expires {
+                                    Text("Hết hạn: " + expiry.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption).foregroundStyle(expiry <= Date().addingTimeInterval(86400) ? .red : .secondary)
+                                } else {
+                                    Text("Chưa đọc được hạn ký từ iOS").font(.caption).foregroundStyle(.secondary)
+                                }
+                                if engine.canSign { Text("Ký lại bằng: \(engine.signerLabel(engine.signerOf(app)))").font(.caption2) }
+                            }
+                        }
+                        Button {
+                            Task { await engine.refreshSelf() }
+                        } label: { Label("Làm mới iSideload", systemImage: "arrow.clockwise") }
+                        .disabled(engine.busy || !engine.canSign)
+                        Button("Ký lại tất cả app (iSideload sau cùng)") {
+                            Task { await engine.refreshAll(includeSelf: true, onlyDue: false, background: false) }
+                        }.disabled(engine.busy || !engine.canSign)
+                    } header: { Text("Gia hạn iSideload") } footer: {
+                        Text("Không cần giữ IPA gốc. iSideload đóng gói chính bản đang chạy để làm mới; app có thể tự đóng khi iOS cài đè. Mở lại và kiểm tra hạn ký mới.")
+                    }
+                }
                 Section {
                     Button { picking = true } label: { Label("Chọn file IPA để cài", systemImage: "plus.app") }
                         .buttonStyle(GradientButtonStyle()).listRowBackground(Color.clear)
@@ -29,7 +57,7 @@ struct AppsView: View {
                 .task { await engine.checkLiveContainer() }
                 if engine.apps.isEmpty && engine.signerGroups.isEmpty { Section("Đã sideload") { Text("Chưa có app nào.").foregroundStyle(.secondary) } }
                 ForEach(engine.signerGroups, id: \.self) { sg in
-                    let list = engine.apps.filter { engine.signerOf($0) == sg }
+                    let list = engine.apps.filter { !engine.isSelf($0) && engine.signerOf($0) == sg }
                     Section {
                         if list.isEmpty { Text("Chưa có app nào ký bằng danh tính này.").font(.footnote).foregroundStyle(.secondary) }
                         ForEach(list) { app in
@@ -44,6 +72,7 @@ struct AppsView: View {
                 }
             }
             .navigationTitle("iSideload")
+            .onAppear { engine.syncSelfRecord() }
             .refreshable { await engine.refreshList() }
             .sheet(isPresented: $picking) { DocumentPicker { engine.importIPA(from: $0) } }
             .confirmationDialog("Gỡ \(confirmDelete?.name ?? "app")?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible) {

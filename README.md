@@ -1,5 +1,15 @@
 # iSideload
 
+## Phát hành 1.2.1
+
+Mã nguồn được giữ trong repository private. Bản IPA công khai và hướng dẫn cài đặt nằm tại https://github.com/hongson117/iSideload-releases/releases/latest . Không đưa Git bundle, source ZIP, pairing file hay thông tin VPS/MCP lên repository phát hành.
+
+- iSideload tự xuất hiện trong tab Ứng dụng ngay sau lần mở đầu, đọc hạn ký thật từ profile và giữ bản ghi qua các lần mở/làm mới danh sách.
+- Thiết lập lần đầu có các nút tới Tài khoản, LocalDevVPN và Ghép nối máy này. Máy hỗ trợ vẫn cài được cho máy mới qua Wi-Fi mà không cần tự ghép nối.
+- Làm mới iSideload đóng gói bản đang chạy, giữ nguyên bundle ID để cài đè thay vì nối lặp Team ID. Ký lại tất cả xử lý iSideload cuối cùng; thao tác tiếp tục sau khi bật VPN giữ nguyên phạm vi đã chọn.
+- CI chạy Rust tests, Swift lifecycle tests và kiểm tra IPA không chứa source/khóa riêng/DWARF/local symbols trước khi tạo artifact. Các giới hạn bảo vệ được ghi trong `docs/RELEASE-HARDENING.md`.
+- Người dùng đã xác nhận cài thành công từ máy hỗ trợ sang máy mới với bản 1.2.0 build 31. Luồng tự gia hạn mới của 1.2.1 cần tiếp tục xác nhận trên thiết bị thật; kết quả CI không thay cho kiểm thử phần cứng.
+
 Clean-room iPhone/iPad sideloader: sign IPAs with a **free Apple ID** and install them on the **same device**, no computer after a one-time pairing file.
 
 - `core/` — Rust core (C ABI `isl_call`): Apple ID + 2FA (isideload, vendored with anisette cookie/headers/failover fixes from TVSideload), free-team signing with bundle-ID team suffix, install via lockdown → AFC → installation_proxy (idevice `TcpProvider` at 10.7.0.1 with the imported pairing file).

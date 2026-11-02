@@ -10,3 +10,5 @@ build/
 out/
 *.ipa
 windows/target/
+__pycache__/
+*.pyc

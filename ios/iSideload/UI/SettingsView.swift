@@ -32,7 +32,7 @@ struct SettingsView: View {
                         .font(.footnote)
                     Button("Ký lại tất cả ngay") { Task { await engine.refreshAll(includeSelf: true, onlyDue: false, background: false) } }
                 } header: { Text("Tự ký lại") } footer: {
-                    Text("iOS chỉ chạy nền khi nó muốn (BGAppRefresh + BGProcessing, thường lúc sạc/đêm) và chỉ ký lại được nếu LocalDevVPN đang bật — app nền không thể tự bật VPN. Chắc chắn nhất: Phím tắt › Tự động hóa › Hằng ngày › Chạy ngay: \"Ký lại tất cả app\" (iSideload tự mở LocalDevVPN nếu VPN tắt rồi tự ký tiếp khi quay lại). Sắp hết hạn mà chưa ký được sẽ có thông báo nhắc.")
+                    Text("iOS tự quyết định lúc chạy nền; tác vụ nền chỉ gia hạn các app khác khi LocalDevVPN đang bật. Để gia hạn cả iSideload: mở app và bấm Ký lại tất cả, hoặc dùng Phím tắt › Tự động hóa › Hằng ngày › Chạy ngay: Ký lại tất cả app. iSideload mở LocalDevVPN nếu cần và tự ký chính nó sau cùng; app có thể tự đóng khi iOS cài đè.")
                 }
                 Section {
                     TextField("https://api.palera.in/genPlist", text: $otaRelay)

@@ -8,3 +8,4 @@ Upstream: https://github.com/nab138/isideload — unmodified 0.4.6 plus
   `addDevice` and `downloadTeamProvisioningProfile`.
 - `Sideloader::set_device_type` selects the platform used for profiles.
 - `install_app_rsd_mode(.., upgrade)` uses installation_proxy `Upgrade` (keeps app data).
+- iSideload: signing is idempotent for an existing team suffix; `set_preserve_bundle_id(true)` preserves the installed identity for self refresh.

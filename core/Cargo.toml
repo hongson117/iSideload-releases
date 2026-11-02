@@ -33,6 +33,7 @@ idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "d32c8189c51c
 isideload = { path = "vendor/isideload" }
 
 [profile.release]
+debug = 0
 opt-level = 3
 lto = "thin"
 strip = true
