@@ -73,9 +73,10 @@ struct AppsView: View {
                 let c = engine.importedCert?["certificate"] as? [String: Any] ?? [:]
                 let nm = c["name"] as? String ?? ""
                 let short = nm.range(of: #"\(([A-Z0-9]+)\)"#, options: .regularExpression).map { String(nm[$0].dropFirst().dropLast()) } ?? nm
-                let ex = engine.importedExpiry.map { $0.formatted(.dateTime.day().month(.defaultDigits).year()) } ?? "?"
-                Label("Chứng chỉ: \(short) · hết \(ex)", systemImage: "doc.badge.gearshape").lineLimit(1)
-                Text("Team \(engine.team(of: sg)) · " + "\(list.count) app · không giới hạn").font(.caption2)
+                let ex = (engine.importedExpiry ?? exp).map { $0.formatted(.dateTime.day().month(.defaultDigits).year()) } ?? "…"
+                Label(short.isEmpty ? "Chứng chỉ có sẵn · hết \(ex)" : "Chứng chỉ: \(short) · hết \(ex)", systemImage: "doc.badge.gearshape").lineLimit(1)
+                Text((engine.team(of: sg).isEmpty ? "" : "Team \(engine.team(of: sg)) · ") + "\(list.count) app · không giới hạn").font(.caption2)
+                    .task { if engine.importedCert == nil { await engine.loadImportedCert() } }
             } else {
                 let e = String(sg.dropFirst(6))
                 Label(e, systemImage: "person.crop.circle")

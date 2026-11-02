@@ -42,6 +42,7 @@ final class Engine: ObservableObject {
         if !appleID.isEmpty && !accounts.contains(appleID) { accountsRaw = ([appleID] + accounts).joined(separator: "\n") }
         hasImportedCert = FileManager.default.fileExists(atPath: Self.storage.appendingPathComponent("imported_cert/cert.p12").path)
         checkSelfUpdate()
+        if hasImportedCert { Task { await loadImportedCert() } }
     }
 
     // MARK: Signers (multiple Apple IDs + imported certificate)
