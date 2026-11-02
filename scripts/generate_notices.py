@@ -1,11 +1,18 @@
 """Bundle dependency license/notice documents from Cargo's resolved metadata."""
 import json
+import argparse
 from pathlib import Path
 import subprocess
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--manifest-path", default="core/Cargo.toml")
+parser.add_argument("--platform", default="aarch64-apple-ios")
+parser.add_argument("--output", default="ios/iSideload/Resources/ThirdPartyNotices.txt")
+args = parser.parse_args()
+
 metadata = json.loads(subprocess.check_output([
     "cargo", "metadata", "--locked", "--format-version", "1",
-    "--manifest-path", "core/Cargo.toml", "--filter-platform", "aarch64-apple-ios",
+    "--manifest-path", args.manifest_path, "--filter-platform", args.platform,
 ], text=True))
 parts = ["iSideload - Third-party software notices\n\n"
          "The following open-source components retain their respective copyrights and licenses.\n"
@@ -28,7 +35,7 @@ for package in sorted(metadata["packages"], key=lambda item: (item["name"], item
     for document in sorted(documents):
         if document.stat().st_size <= 2_000_000:
             parts.append("\n" + document.name + "\n" + document.read_text(encoding="utf-8", errors="replace") + "\n")
-output = Path("ios/iSideload/Resources/ThirdPartyNotices.txt")
+output = Path(args.output)
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_text("".join(parts), encoding="utf-8")
 print(f"Bundled notices for {len(metadata['packages'])} resolved packages ({output.stat().st_size} bytes)")

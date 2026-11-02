@@ -4,6 +4,12 @@
 
 Mã nguồn được giữ trong repository private. Bản IPA công khai và hướng dẫn cài đặt nằm tại https://github.com/hongson117/iSideload-releases/releases/latest . Không đưa Git bundle, source ZIP, pairing file hay thông tin VPS/MCP lên repository phát hành.
 
+## Cài lần đầu từ macOS
+
+Tải `isl-macos-universal.zip` tại trang release, giải nén và mở `Cai-iSideload.command`. Gói có công cụ native Universal cho Apple Silicon + Intel (macOS 11+), kèm IPA 1.2.1. Dùng dịch vụ USB có sẵn của Apple; không cần Homebrew/Xcode. Cắm cáp dữ liệu, mở Finder và xác nhận Trust trên cả hai máy, rồi nhập Apple ID/2FA trong Terminal.
+
+Hướng dẫn đầy đủ và xử lý Gatekeeper: `macos/README-VI.txt`. Công cụ chưa có Developer ID/notarization; không hướng dẫn tắt Gatekeeper toàn hệ thống. Build kiểm tra CLI/binary/checksum, chưa thay cho cài USB với iPhone thật.
+
 - iSideload tự xuất hiện trong tab Ứng dụng ngay sau lần mở đầu, đọc hạn ký thật từ profile và giữ bản ghi qua các lần mở/làm mới danh sách.
 - Thiết lập lần đầu có các nút tới Tài khoản, LocalDevVPN và Ghép nối máy này. Máy hỗ trợ vẫn cài được cho máy mới qua Wi-Fi mà không cần tự ghép nối.
 - Làm mới iSideload đóng gói bản đang chạy, giữ nguyên bundle ID để cài đè thay vì nối lặp Team ID. Ký lại tất cả xử lý iSideload cuối cùng; thao tác tiếp tục sau khi bật VPN giữ nguyên phạm vi đã chọn.

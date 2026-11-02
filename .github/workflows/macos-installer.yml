@@ -1,0 +1,67 @@
+name: Build macOS installer
+
+on:
+  push:
+    branches: [main, feature/macos-installer]
+    paths:
+      - 'macos/**'
+      - 'scripts/generate_notices.py'
+      - 'core/vendor/isideload/**'
+      - '.github/workflows/macos-installer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+      IPA_SHA256: 80f879da89f5efb80f56d9d75b9e498102d9a78596cba1662deb3bf47374cbc5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: macos
+          key: macos-universal
+      - name: Build Apple Silicon and Intel binaries
+        run: |
+          export ISL_GIT_SHA=${GITHUB_SHA::7}
+          export RUSTFLAGS="--remap-path-prefix=${GITHUB_WORKSPACE}=/src --remap-path-prefix=${HOME}/.cargo=/deps/cargo"
+          cargo build --locked --release --manifest-path macos/Cargo.toml --target aarch64-apple-darwin
+          cargo build --locked --release --manifest-path macos/Cargo.toml --target x86_64-apple-darwin
+      - name: Package and test Universal installer
+        run: |
+          set -euo pipefail
+          mkdir -p out/iSideload-macOS
+          lipo -create macos/target/aarch64-apple-darwin/release/isl-mac macos/target/x86_64-apple-darwin/release/isl-mac -output out/iSideload-macOS/isl-mac
+          codesign --force --sign - --timestamp=none out/iSideload-macOS/isl-mac
+          codesign --verify --strict out/iSideload-macOS/isl-mac
+          lipo -verify_arch arm64 x86_64 out/iSideload-macOS/isl-mac
+          out/iSideload-macOS/isl-mac --self-test
+          out/iSideload-macOS/isl-mac --help
+          out/iSideload-macOS/isl-mac --version
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            arch -x86_64 out/iSideload-macOS/isl-mac --self-test
+          else
+            echo 'Intel execution unavailable on this runner; both slices verified by lipo.'
+          fi
+          cp macos/Cai-iSideload.command macos/README-VI.txt out/iSideload-macOS/
+          chmod 755 out/iSideload-macOS/Cai-iSideload.command out/iSideload-macOS/isl-mac
+          bash -n out/iSideload-macOS/Cai-iSideload.command
+          curl --fail --location --retry 3 https://github.com/hongson117/iSideload-releases/releases/download/v1.2.1/iSideload.ipa -o out/iSideload-macOS/iSideload.ipa
+          echo "$IPA_SHA256  out/iSideload-macOS/iSideload.ipa" | shasum -a 256 -c -
+          python3 scripts/generate_notices.py --manifest-path macos/Cargo.toml --platform aarch64-apple-darwin --output out/iSideload-macOS/ThirdPartyNotices.txt
+          (cd out/iSideload-macOS && shasum -a 256 isl-mac iSideload.ipa Cai-iSideload.command README-VI.txt ThirdPartyNotices.txt > SHA256SUMS.txt && shasum -a 256 -c SHA256SUMS.txt)
+          ditto -c -k --keepParent out/iSideload-macOS isl-macos-universal.zip
+          shasum -a 256 isl-macos-universal.zip > SHA256SUMS-macos.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isl-macos-universal
+          path: |
+            isl-macos-universal.zip
+            SHA256SUMS-macos.txt
