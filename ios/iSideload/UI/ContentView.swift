@@ -12,7 +12,7 @@ struct ContentView: View {
         }
         .tint(Theme.accent)
         .overlay {
-            if engine.busy {
+            if engine.busy && !engine.peerBusy {
                 VStack(spacing: 12) {
                     ProgressView(value: engine.progress > 0 ? engine.progress : nil)
                     Text(engine.stage.isEmpty ? "Đang xử lý…" : engine.stage).font(.callout)

@@ -26,6 +26,21 @@ iSideload is **free and needs no activation code** — the ISL- license gate was
 ## Hardening
 - Release: Rust `strip = true`, `panic = "abort"`; Xcode strips all symbols.
 
+## Cài cho iPhone khác (bản thử nghiệm)
+
+Máy hỗ trợ đã cài iSideload có thể ghép nối và cài iSideload cho iPhone/iPad mới chạy iOS/iPadOS 27+ ở cùng mạng Wi-Fi. Máy nhận không cần RC Pair, Tailscale hoặc máy tính cho lượt cài trực tiếp này.
+
+1. Trên máy hỗ trợ, đăng nhập Apple ID tại tab **Tài khoản**.
+2. Cả hai máy bật Wi-Fi, cùng mạng không cách ly thiết bị. Máy nhận bật **Chế độ nhà phát triển**, mở khóa. Giữ iSideload trên máy hỗ trợ ở phía trước; tắt VPN nếu nó chặn mạng cục bộ.
+3. Máy hỗ trợ: **Thiết bị → Cài cho iPhone khác → Ghép nối iPhone mới**.
+4. Máy nhận: **Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển → Thiết bị khác**, chọn tên `iSideload - Cai may khac …`, nhập mã 6 số đang hiện trên máy hỗ trợ.
+5. Trên máy hỗ trợ, kiểm tra tên/IP/UDID máy nhận, chọn Apple ID ký và xác nhận **Cài iSideload lên máy này**. Hoàn tất 2FA nếu Apple yêu cầu. Giữ cả hai máy mở khóa đến khi báo thành công.
+6. Máy nhận: tin cậy nhà phát triển ở **Cài đặt → Cài đặt chung → VPN & Quản lý thiết bị**, mở iSideload và đăng nhập Apple ID riêng. Muốn tự ký lại trên máy nhận thì cài LocalDevVPN và ghép nối ngay trong iSideload như thông thường.
+
+Bản ghi máy nhận lưu riêng trong `Storage/peer-pairings/`, với danh tính ghép nối riêng, không ghi đè `Storage/pairing.plist` của máy hỗ trợ. Danh sách app của máy hỗ trợ không ghi nhận các app cài lên máy nhận. Có thể xuất bản ghi của máy nhận qua nút chia sẻ; chỉ gửi cho máy chủ/người quản trị tin cậy. Chưa tích hợp tự động đăng ký bản ghi với VPS.
+
+Đây là bản thử nghiệm cần kiểm tra trên **hai thiết bị thật**. CI kiểm tra biên dịch và các quy tắc tách bản ghi, hủy ghép nối, giới hạn địa chỉ máy nhận, đóng gói IPA; CI không xác nhận việc ghép nối/cài trên phần cứng. Nếu máy nhận đổi IP Wi-Fi, hãy ghép nối lại. Chế độ này chưa hỗ trợ hai máy ở hai mạng khác nhau.
+
 
 ## Cài lần đầu từ Windows / First install from Windows
 Tải `isl-windows.zip` ở [Release mới nhất](https://github.com/hongson117/iSideload/releases/latest), giải nén, chạy `Cai-iSideload.bat`. Hướng dẫn từng bước (VI + EN): [windows/README.md](windows/README.md).

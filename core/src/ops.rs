@@ -91,6 +91,12 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "apps" => apps(&req).await,
         "uninstall" => uninstall(&req).await,
         "install" => install(&req, ui).await,
+        "peer_pair" => crate::peer::pair(&req, ui).await,
+        "peer_cancel" => crate::peer::cancel(&req),
+        "peer_install" => match crate::peer::install_request(&req) {
+            Ok(r) => install(&r, ui).await,
+            Err(e) => Err(e),
+        },
         "certs" => certs(&req, ui).await,
         "revoke_cert" => revoke(&req, ui).await,
         "export_cert" if req.get("use_imported_cert").and_then(Value::as_bool).unwrap_or(false) => crate::imported::lc_cert(&req),
@@ -345,6 +351,11 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
         (Some(p), None, n, u)
     };
 
+    let expected = s(req, "expected_udid");
+    if !expected.is_empty() && !expected.eq_ignore_ascii_case(&udid) {
+        return Err("Địa chỉ Wi-Fi hiện thuộc máy khác. Hãy ghép nối lại đúng máy nhận trước khi cài.".into());
+    }
+
     // 2. Apple ID + developer session; certificate is reused from storage when valid.
     let (_account, dev) = sign_in(req, ui).await?;
     let revoke_prompt = move |certs: Vec<DevelopmentCertificate>| -> MaxCertsCallbackFuture {
@@ -490,7 +501,19 @@ fn pack_self(req: &Value) -> Result<Value, String> {
                     e.metadata().map(|m| m.permissions().mode()).unwrap_or(0o644)
                 };
                 z.start_file(entry, opt.unix_permissions(mode)).map_err(|e| e.to_string())?;
-                z.write_all(&std::fs::read(&path).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+                let mut data = std::fs::read(&path).map_err(|e| e.to_string())?;
+                if rel == "Info.plist" && req.get("peer_bootstrap").and_then(Value::as_bool).unwrap_or(false) {
+                    let mut info: plist::Dictionary = plist::from_bytes(&data).map_err(|e| e.to_string())?;
+                    let old = info.get("CFBundleIdentifier").and_then(plist::Value::as_string).unwrap_or("");
+                    if old != "com.hongson117.isideload" && !old.starts_with("com.hongson117.isideload.") {
+                        return Err("Chỉ đóng gói iSideload để cài cho máy khác.".into());
+                    }
+                    // Drop the source phone's team suffix before signing for the receiving phone.
+                    info.insert("CFBundleIdentifier".into(), plist::Value::String("com.hongson117.isideload".into()));
+                    data.clear();
+                    plist::to_writer_xml(&mut data, &info).map_err(|e| e.to_string())?;
+                }
+                z.write_all(&data).map_err(|e| e.to_string())?;
             }
         }
     }
@@ -594,6 +617,30 @@ mod tests {
     #[test]
     fn team_suffix() {
         assert_eq!(team_id_of("com.example.tv.ABCDE12345"), "ABCDE12345");
+    }
+
+    #[test]
+    fn peer_bootstrap_normalizes_only_exported_bundle_and_never_packs_account_data() {
+        use std::io::Read;
+        let root = temp("peer-pack");
+        let app = root.join("iSideload.app");
+        std::fs::create_dir(&app).unwrap();
+        let mut info = plist::Dictionary::new();
+        info.insert("CFBundleIdentifier".into(), "com.hongson117.isideload.OLDTEAM123.OLDTEAM123".into());
+        info.insert("CFBundleVersion".into(), "42".into());
+        plist::to_file_xml(app.join("Info.plist"), &info).unwrap();
+        std::fs::write(root.join("private-account-data"), b"must not travel").unwrap();
+        let original = std::fs::read(app.join("Info.plist")).unwrap();
+        let out = root.join("peer.ipa");
+        pack_self(&json!({"app_path": app, "out_path": out, "peer_bootstrap": true})).unwrap();
+        assert_eq!(std::fs::read(app.join("Info.plist")).unwrap(), original);
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(out).unwrap()).unwrap();
+        assert_eq!(zip.len(), 1);
+        let mut bytes = Vec::new();
+        zip.by_name("Payload/iSideload.app/Info.plist").unwrap().read_to_end(&mut bytes).unwrap();
+        let exported: plist::Dictionary = plist::from_bytes(&bytes).unwrap();
+        assert_eq!(exported["CFBundleIdentifier"].as_string(), Some("com.hongson117.isideload"));
+        assert_eq!(exported["CFBundleVersion"].as_string(), Some("42"));
     }
 }
 

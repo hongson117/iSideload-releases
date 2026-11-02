@@ -8,6 +8,16 @@ struct DeviceView: View {
         NavigationStack {
             Form {
                 Section {
+                    NavigationLink {
+                        PeerInstallView()
+                    } label: {
+                        Label("Cài cho iPhone khác", systemImage: "iphone.gen3.radiowaves.left.and.right")
+                    }
+                    .disabled(engine.busy)
+                } footer: {
+                    Text("Cài iSideload cho máy mới chạy iOS 27+ ở cùng Wi-Fi. Máy nhận không cần RC Pair hay máy tính.")
+                }
+                Section {
                     Label(engine.hasPairing ? "Đã có file ghép nối" : "Chưa có file ghép nối",
                           systemImage: engine.hasPairing ? "checkmark.seal.fill" : "exclamationmark.triangle")
                         .foregroundStyle(engine.hasPairing ? .green : .orange)

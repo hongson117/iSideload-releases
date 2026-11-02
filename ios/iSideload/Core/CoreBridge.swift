@@ -17,20 +17,23 @@ final class CoreCall {
 
     private let onEvent: Event
     private let onPrompt: Prompt
+    private let onStructured: (([String: Any]) -> Void)?
 
-    private init(onEvent: @escaping Event, onPrompt: @escaping Prompt) {
+    private init(onEvent: @escaping Event, onPrompt: @escaping Prompt, onStructured: (([String: Any]) -> Void)?) {
         self.onEvent = onEvent
         self.onPrompt = onPrompt
+        self.onStructured = onStructured
     }
 
     /// Runs one core operation synchronously. Call from a background thread.
     static func run(_ request: [String: Any], onEvent: @escaping Event = { _, _ in },
-                    onPrompt: @escaping Prompt = { _ in nil }) -> [String: Any] {
+                    onPrompt: @escaping Prompt = { _ in nil },
+                    onStructured: (([String: Any]) -> Void)? = nil) -> [String: Any] {
         guard let data = try? JSONSerialization.data(withJSONObject: request),
               let json = String(data: data, encoding: .utf8) else {
             return ["ok": false, "error": "Bad request"]
         }
-        let box = CoreCall(onEvent: onEvent, onPrompt: onPrompt)
+        let box = CoreCall(onEvent: onEvent, onPrompt: onPrompt, onStructured: onStructured)
         let ctx = Unmanaged.passRetained(box).toOpaque()
         defer { Unmanaged<CoreCall>.fromOpaque(ctx).release() }
 
@@ -38,7 +41,7 @@ final class CoreCall {
             guard let ctx, let json else { return }
             let me = Unmanaged<CoreCall>.fromOpaque(ctx).takeUnretainedValue()
             let obj = (try? JSONSerialization.jsonObject(with: Data(String(cString: json).utf8))) as? [String: Any] ?? [:]
-            if obj["stage"] == nil { CoreCall.structured?(obj); return }
+            if obj["stage"] == nil { (me.onStructured ?? CoreCall.structured)?(obj); return }
             me.onEvent(obj["stage"] as? String ?? "", obj["progress"] as? Double ?? 0)
         }
         let pr: isl_prompt_cb = { ctx, json, out, cap in
@@ -59,10 +62,11 @@ final class CoreCall {
     }
 
     static func runAsync(_ request: [String: Any], onEvent: @escaping Event = { _, _ in },
-                         onPrompt: @escaping Prompt = { _ in nil }) async -> [String: Any] {
+                         onPrompt: @escaping Prompt = { _ in nil },
+                         onStructured: (([String: Any]) -> Void)? = nil) async -> [String: Any] {
         await withCheckedContinuation { cont in
             Thread.detachNewThread {
-                cont.resume(returning: run(request, onEvent: onEvent, onPrompt: onPrompt))
+                cont.resume(returning: run(request, onEvent: onEvent, onPrompt: onPrompt, onStructured: onStructured))
             }
         }
     }

@@ -17,6 +17,7 @@ final class Engine: ObservableObject {
     @Published var apps: [SideloadedApp] = []
     @Published var deviceLine = ""
     @Published var busy = false
+    @Published var peerBusy = false
     @Published var stage = ""
     @Published var progress: Double = 0
     @Published var prompt: CorePrompt?
@@ -154,12 +155,25 @@ final class Engine: ObservableObject {
     func answerPrompt(_ a: String?) { answer = a; prompt = nil; answered.signal() }
 
     private func run(_ req: [String: Any]) async throws -> [String: Any] {
+        guard !peerBusy else { throw CoreError(message: "Đang hỗ trợ iPhone khác. Hãy hoàn tất thao tác đó trước.") }
         busy = true; stage = ""; progress = 0
         defer { busy = false }
         let r = await CoreCall.runAsync(req, onEvent: { s, p in
             DispatchQueue.main.async { self.stage = s; self.progress = p }
         }, onPrompt: { [weak self] p in self?.ask(p) })
         return try r.checked()
+    }
+
+    // Peer jobs share only the signing account and prompt UI, never this phone's app list or pairing file.
+    func peerRequest(_ op: String, account: String = "") -> [String: Any] {
+        base(op, signer: account.isEmpty ? nil : "apple:" + account)
+    }
+
+    func callForPeer(_ req: [String: Any], onEvent: @escaping CoreCall.Event,
+                     onStructured: (([String: Any]) -> Void)? = nil) async throws -> [String: Any] {
+        try await CoreCall.runAsync(req, onEvent: onEvent,
+                                   onPrompt: { [weak self] p in self?.ask(p) },
+                                   onStructured: onStructured).checked()
     }
 
     private func guarded(_ work: () async throws -> Void) async {
@@ -585,6 +599,7 @@ final class Engine: ObservableObject {
 
     /// On open/foreground: re-sign anything expiring within 2 days (VPN needed).
     func foregroundCheck() async {
+        guard !peerBusy else { return }
         await resumeAfterVPN()
         guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, canSign else { return }
         let urgent = apps.contains { ($0.daysLeft ?? 99) < 2 }

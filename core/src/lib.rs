@@ -9,6 +9,7 @@ mod device;
 mod license;
 mod ops;
 mod imported;
+mod peer;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::OnceLock;
