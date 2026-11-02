@@ -88,7 +88,11 @@ fn load_profile(file: &str, bytes: Vec<u8>) -> Result<Prof, String> {
     let gs = |k: &str| p.get(k).and_then(PV::as_string).unwrap_or("").to_string();
     let team = parsed.team_id().to_string();
     let full = parsed.entitlements().get("application-identifier").and_then(PV::as_string).unwrap_or("").to_string();
-    let app_id = full.strip_prefix(&format!("{team}.")).unwrap_or(&full).to_string();
+    // Strip the App ID prefix (TeamID or a legacy AppIdentifierPrefix that may differ from the team) → "*", "com.x.*" or explicit.
+    let app_id = full.strip_prefix(&format!("{team}.")).map(str::to_string).unwrap_or_else(|| match full.split_once('.') {
+        Some((pre, rest)) if pre.len() == 10 && pre.chars().all(|c| c.is_ascii_alphanumeric()) => rest.to_string(),
+        _ => full.clone(),
+    });
     let expires = p
         .get("ExpirationDate")
         .and_then(PV::as_date)
@@ -279,7 +283,8 @@ pub fn clear(req: &Value) -> Result<Value, String> {
 /// Profile entitlements made concrete for one bundle id.
 fn entitlements_for(p: &Prof, bundle_id: &str) -> Dictionary {
     let mut e = p.parsed.entitlements().clone();
-    let full = format!("{}.{}", p.team, bundle_id);
+    let prefix = e.get("application-identifier").and_then(PV::as_string).and_then(|x| x.split_once('.')).map(|x| x.0.to_string()).unwrap_or_else(|| p.team.clone());
+    let full = format!("{prefix}.{bundle_id}");
     e.insert("application-identifier".into(), PV::String(full.clone()));
     if let Some(PV::Array(groups)) = e.get_mut("keychain-access-groups") {
         for g in groups.iter_mut() {
@@ -464,6 +469,7 @@ mod tests {
         assert_eq!(match_score("com.a.b", "com.a.b"), 2);
         assert_eq!(match_score("*", "com.a.b"), 1);
         assert_eq!(match_score("com.a.*", "com.a.b"), 1);
+        assert_eq!(match_score("*", "com.any.app"), 1);
         assert_eq!(match_score("com.x.*", "com.a.b"), 0);
     }
 }
