@@ -25,3 +25,8 @@ iSideload is **free and needs no activation code** — the ISL- license gate was
 
 ## Hardening
 - Release: Rust `strip = true`, `panic = "abort"`; Xcode strips all symbols.
+
+
+## Cài lần đầu từ Windows / First install from Windows
+Tải `isl-windows.zip` ở [Release mới nhất](https://github.com/hongson117/iSideload/releases/latest), giải nén, chạy `Cai-iSideload.bat`. Hướng dẫn từng bước (VI + EN): [windows/README.md](windows/README.md).
+Download `isl-windows.zip` from the [latest release](https://github.com/hongson117/iSideload/releases/latest), unzip, run `Cai-iSideload.bat`. Step-by-step guide (VI + EN): [windows/README.md](windows/README.md). *Not yet tested on a real Windows PC.*

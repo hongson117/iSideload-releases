@@ -1,0 +1,26 @@
+[package]
+name = "isl-cli"
+autobins = false
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+plist = "1.8"
+isideload = { version = "0.4.6", default-features = false, features = ["install", "fs-storage", "tokio-mt"] }
+idevice = { version = "0.1.61", default-features = false, features = ["afc", "installation_proxy", "tcp", "usbmuxd", "ring"] }
+serde = { version = "1", features = ["derive"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rootcause = "0.12.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "time"] }
+rpassword = "7"
+
+[patch.crates-io]
+idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "d32c8189c51c2789496b0768039419c3705498c3" }
+isideload = { path = "../core/vendor/isideload" }
+
+[profile.release]
+strip = true
+
+[[bin]]
+name = "isl-cli"
+path = "src/bin/isl-win.rs"

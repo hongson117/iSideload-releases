@@ -9,3 +9,4 @@ build/
 *.xcodeproj/
 out/
 *.ipa
+windows/target/
