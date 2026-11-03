@@ -1,6 +1,6 @@
 # iSideload
 
-**Bản IPA, bộ cài macOS và hướng dẫn cài đặt chính thức.** Repository này không chứa mã nguồn ứng dụng, Git bundle, bản ghi ghép nối hay thông tin máy chủ.
+**Bản IPA, bộ cài Windows/macOS và hướng dẫn cài đặt chính thức.** Repository này không chứa mã nguồn ứng dụng, Git bundle, bản ghi ghép nối hay thông tin máy chủ.
 
 [**Tải bản phát hành mới nhất**](https://github.com/hongson117/iSideload-releases/releases/latest)
 
@@ -21,6 +21,8 @@ Chọn tài khoản sẽ dùng lâu dài trên máy nhận để ký lượt cà
 Máy nhận không cần RC Pair hay Tailscale cho lượt cài này. Máy hỗ trợ không cần tự ghép nối hoặc bật LocalDevVPN để cài sang máy khác. Giữ iSideload mở trên máy hỗ trợ cho tới khi hoàn tất.
 
 ## Cài lần đầu bằng máy tính
+
+**Windows 10/11 x64:** [tải isl-windows.zip (1.2.2 RC1)](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc1/isl-windows.zip), giải nén toàn bộ và mở `Cai-iSideload.bat`. Chọn **1** để cài từ đầu kèm file Remote Pairing; chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi. [Hướng dẫn Windows từng bước](WINDOWS.md). Bản thử đã qua kiểm thử phần mềm; cần xác nhận USB trên iPhone thật.
 
 **macOS (Apple Silicon và Intel, macOS 11+):** tải [isl-macos-universal.zip](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.1/isl-macos-universal.zip), giải nén, cắm iPhone bằng cáp và mở `Cai-iSideload.command`. Công cụ dùng dịch vụ USB của Apple có sẵn, không yêu cầu Homebrew/Xcode; đã kèm đúng IPA 1.2.1. [Xem hướng dẫn macOS từng bước](MACOS.md).
 
