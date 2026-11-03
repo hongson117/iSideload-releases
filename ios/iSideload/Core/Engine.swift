@@ -237,6 +237,37 @@ final class Engine: ObservableObject {
         r["host_path"] = Bundle.main.bundleURL.path
         _ = try await run(r)
     }
+
+    var installedRunner1App: SideloadedApp? {
+        apps.first {
+            $0.bundleID == "com.hongson117.sicontainer.runner1" ||
+            $0.bundleID.hasPrefix("com.hongson117.sicontainer.runner1.")
+        }
+    }
+
+    var hasBundledRunner1IPA: Bool {
+        Bundle.main.url(forResource: "SIContainerRunner1", withExtension: "ipa") != nil
+    }
+
+    func installBundledRunner1(signer: String? = nil) async {
+        guard !busy, !peerBusy else { return }
+        guard let bundled = Bundle.main.url(forResource: "SIContainerRunner1", withExtension: "ipa") else {
+            errorText = "Không tìm thấy gói SIContainerRunner1.ipa đính kèm trong ứng dụng."
+            return
+        }
+        let cached = Self.ipaDir.appendingPathComponent("SIContainerRunner1.ipa")
+        try? FileManager.default.createDirectory(at: Self.ipaDir, withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: cached)
+        do {
+            try FileManager.default.copyItem(at: bundled, to: cached)
+        } catch {
+            errorText = "Không chép được gói SIContainer Phụ 1: \(error.localizedDescription)"
+            return
+        }
+        let chosen = signer ?? installedRunner1App.map(signerOf) ?? selfApp.map(signerOf) ?? defaultSigner
+        await install(ipa: cached, upgrade: installedRunner1App != nil, signer: chosen)
+        vpnJobDone()
+    }
     #endif
 
     func peerRequest(_ op: String, account: String = "") -> [String: Any] {
@@ -925,7 +956,31 @@ final class Engine: ObservableObject {
     var liveContainerInstalled: SideloadedApp? { LiveContainerSigning.latestInstalled(in: apps, activeBundleID: liveContainerActiveBundleID) }
 
     func handleURL(_ url: URL) {
-        if url.scheme == "icontainer" {
+        if url.scheme == "icontainer" || url.scheme == "sicontainer" {
+            #if ICONTAINER
+            if url.host == "launch" {
+                let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                if let guestID = items.first(where: { $0.name == "guest" })?.value, !guestID.isEmpty {
+                    selectedTab = 0
+                    ContainerStore.shared.launchFromShortcut(guestID: guestID)
+                }
+                return
+            }
+            if url.host == "complete-switch" {
+                let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                let slot = items.first(where: { $0.name == "slot" })?.value ?? "runner1"
+                let req = items.first(where: { $0.name == "req" })?.value ?? ""
+                if !req.isEmpty {
+                    ContainerStore.shared.completeRunnerSwitch(slot: slot, requestID: req)
+                }
+                return
+            }
+            if url.host == "probe-complete" {
+                ContainerStore.shared.reload()
+                ContainerStore.shared.message = "Đã xác minh kết nối 2 chiều với SIContainer Phụ 1!"
+                return
+            }
+            #endif
             if url.host == "vpn-ready" || url.host == nil || url.host == "" { Task { await resumeAfterVPN() }; return }
             if url.host == "refresh" { Task { await refreshAll(includeSelf: true, onlyDue: false, background: false) } }
             else if url.host == "refresh-apps" { Task { await refreshAll(includeSelf: false, onlyDue: false, background: false) } }

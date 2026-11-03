@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>SIContainer Phụ 1</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>sicontainer-runner1</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ISLGitSHA</key>
+	<string>dev</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>sicontainer</string>
+		<string>icontainer</string>
+	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer kết nối Bluetooth.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Lịch.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer sử dụng Camera khi bạn yêu cầu.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Danh bạ.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer xác thực bằng Face ID.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>SIContainer dùng mạng cục bộ để kết nối, ghép nối thiết bị và hỗ trợ ứng dụng bên trong.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Vị trí khi đang dùng ứng dụng.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer sử dụng Micro khi bạn yêu cầu.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer lưu ảnh vào Thư viện ảnh.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Thư viện ảnh khi bạn sử dụng.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Lời nhắc.</string>
+	<key>UIFileSharingEnabled</key>
+	<false/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
+</dict>
+</plist>

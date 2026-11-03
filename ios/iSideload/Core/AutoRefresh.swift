@@ -9,8 +9,13 @@ import UserNotifications
 /// for a Shortcuts personal automation. Other apps are refreshed first, iContainer last,
 /// because replacing itself terminates the process.
 enum AutoRefresh {
-    static let taskID = "com.hongson117.icontainer.refresh"
-    static let procID = "com.hongson117.icontainer.resign"
+    static var baseBundlePrefix: String {
+        (Bundle.main.bundleIdentifier ?? "").hasPrefix("com.hongson117.sicontainer")
+            ? "com.hongson117.sicontainer"
+            : "com.hongson117.icontainer"
+    }
+    static var taskID: String { baseBundlePrefix + ".refresh" }
+    static var procID: String { baseBundlePrefix + ".resign" }
     static var enabled: Bool { UserDefaults.standard.bool(forKey: "autoRefresh") }
     static var thresholdDays: Int { max(0, UserDefaults.standard.object(forKey: "refreshDays") as? Int ?? 2) }
     static var lastRun: Date? { UserDefaults.standard.object(forKey: "lastRefresh") as? Date }

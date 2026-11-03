@@ -151,19 +151,34 @@ impl<C: MaxCertsCallback> Sideloader<C> {
         }
         .clone();
 
+        let is_sicontainer_family = main_app_id_str == "com.hongson117.sicontainer"
+            || main_app_id_str.starts_with("com.hongson117.sicontainer.");
         let group_identifier = format!(
             "group.{}",
             if Some(SpecialApp::SideStoreLc) == special {
                 format!("com.SideStore.SideStore.{}", team.team_id)
+            } else if is_sicontainer_family {
+                format!("com.hongson117.sicontainer.{}", team.team_id)
             } else {
                 main_app_id_str.clone()
             }
         );
+        let group_display_name = if is_sicontainer_family {
+            "SIContainer".to_string()
+        } else {
+            main_app_name.clone()
+        };
 
         let app_group = self
             .dev_session
-            .ensure_app_group(&team, &main_app_name, &group_identifier, None)
+            .ensure_app_group(&team, &group_display_name, &group_identifier, None)
             .await?;
+
+        if is_sicontainer_family {
+            let group_array = plist::Value::Array(vec![plist::Value::String(group_identifier.clone())]);
+            app.bundle.app_info.insert("SICAppGroups".to_string(), group_array.clone());
+            app.bundle.app_info.insert("ALTAppGroups".to_string(), group_array);
+        }
 
         for app_id in app_ids.iter_mut() {
             app_id

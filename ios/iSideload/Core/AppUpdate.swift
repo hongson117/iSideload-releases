@@ -22,7 +22,7 @@ struct AppUpdateRelease: Codable, Equatable {
               url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
               parts.count == 6, parts[0] == "hongson117", parts[1] == "iSideload-releases",
               parts[2] == "releases", parts[3] == "download",
-              ["iSideload.ipa", "iContainer.ipa"].contains(String(parts[5])) else {
+              ["iSideload.ipa", "iContainer.ipa", "SIContainer.ipa"].contains(String(parts[5])) else {
             throw AppUpdateError.invalid("Địa chỉ bản cập nhật không thuộc kho phát hành chính thức.")
         }
         try validateMetadata()
@@ -63,7 +63,7 @@ enum AppUpdateError: LocalizedError {
 enum AppUpdates {
     static let feed = URL(string: "https://raw.githubusercontent.com/hongson117/iSideload-releases/main/app-updates.json")!
     static func product(bundleID: String) -> String? {
-        for product in ["isideload", "icontainer"] {
+        for product in ["isideload", "icontainer", "sicontainer"] {
             let base = "com.hongson117." + product
             if bundleID == base || bundleID.hasPrefix(base + ".") { return product }
         }
@@ -81,7 +81,12 @@ enum AppUpdates {
         guard manifest.schema == 1 else { throw AppUpdateError.invalid("Định dạng cập nhật chưa được hỗ trợ.") }
         guard let release = manifest.apps[product] else { return nil }
         try release.validate()
-        let expected = product == "icontainer" ? "iContainer.ipa" : "iSideload.ipa"
+        let expected: String
+        switch product {
+        case "sicontainer": expected = "SIContainer.ipa"
+        case "icontainer": expected = "iContainer.ipa"
+        default: expected = "iSideload.ipa"
+        }
         guard release.url.lastPathComponent == expected else { throw AppUpdateError.invalid("Bản cập nhật thuộc ứng dụng khác.") }
         return release
     }

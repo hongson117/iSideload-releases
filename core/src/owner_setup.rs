@@ -5,7 +5,7 @@ use serde_json::{json,Value};
 use isideload::dev::teams::DeveloperTeam;
 use crate::ops::s;
 pub fn family(id:&str)->Option<&'static str>{
-    ["com.hongson117.icontainer","com.hongson117.isideload"].into_iter().find(|base|id==*base || id.starts_with(&format!("{base}.")))
+    ["com.hongson117.sicontainer.runner1","com.hongson117.sicontainer.runner2","com.hongson117.sicontainer","com.hongson117.icontainer","com.hongson117.isideload"].into_iter().find(|base|id==*base || id.starts_with(&format!("{base}.")))
 }
 pub fn own_id(id:&str)->bool {family(id).is_some()}
 pub fn hash(data:&[u8])->String {ring::digest::digest(&ring::digest::SHA256,data).as_ref().iter().map(|b|format!("{b:02x}")).collect()}

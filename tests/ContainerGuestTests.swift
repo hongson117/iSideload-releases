@@ -15,6 +15,10 @@ struct ContainerGuestTests {
         var fixed = base; fixed["preparation_revision"] = 3
         let fresh = try decode(fixed)
         precondition(fresh.readyToLaunch && fresh.id == old.id && fresh.bundleID == old.bundleID)
+        fixed["prepared_slots"] = ["com.hongson117.sicontainer.BSV5CJQF89", "com.hongson117.sicontainer.runner1.BSV5CJQF89"]
+        let multiSlot = try decode(fixed)
+        precondition(multiSlot.isPrepared(forSlotBundleID: "com.hongson117.sicontainer.runner1.BSV5CJQF89"))
+        precondition(!multiSlot.isPrepared(forSlotBundleID: "com.hongson117.sicontainer.runner2.BSV5CJQF89"))
         fixed["prepared"] = false
         let unfinished = try decode(fixed)
         precondition(!unfinished.readyToLaunch)

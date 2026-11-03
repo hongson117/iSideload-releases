@@ -8,7 +8,10 @@ import UIKit
 /// "LocalDevVPN"; the bundled Tunnel/ provider is for paid developer accounts.
 enum LoopbackVPN {
     static let appStoreURL = URL(string: "https://apps.apple.com/app/id6755608044")!
-    static let enableURL = URL(string: "localdevvpn://enable?scheme=icontainer")!
+    static var callbackScheme: String {
+        (Bundle.main.bundleIdentifier ?? "").hasPrefix("com.hongson117.sicontainer") ? "sicontainer" : "icontainer"
+    }
+    static var enableURL: URL { URL(string: "localdevvpn://enable?scheme=\(callbackScheme)")! }
     static let defaultTarget = "10.7.0.1"
 
     @MainActor static var helperInstalled: Bool { UIApplication.shared.canOpenURL(URL(string: "localdevvpn://")!) }
@@ -57,7 +60,7 @@ enum LoopbackVPN {
         return err == 0 || err == ECONNREFUSED
     }
 
-    static let disableURL = URL(string: "localdevvpn://disable?scheme=icontainer")!
+    static var disableURL: URL { URL(string: "localdevvpn://disable?scheme=\(callbackScheme)")! }
     /// Turn LocalDevVPN off again (foreground only — iOS can't open URLs from a background task).
     @MainActor static func turnOff() { if helperInstalled { UIApplication.shared.open(disableURL) } }
     @MainActor static func turnOn() { UIApplication.shared.open(helperInstalled ? enableURL : appStoreURL) }

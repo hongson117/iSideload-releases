@@ -24,6 +24,7 @@ struct AppUpdateTests {
             do { try unsafe.validate(); preconditionFailure("Accepted an untrusted release URL") } catch {}
         }
         precondition(AppUpdates.product(bundleID: "com.hongson117.icontainer.PERSONAL12") == "icontainer")
+        precondition(AppUpdates.product(bundleID: "com.hongson117.sicontainer.PERSONAL12") == "sicontainer")
         precondition(AppUpdates.product(bundleID: "com.hongson117.isideload.PERSONAL12") == "isideload")
         precondition(AppUpdates.product(bundleID: "com.hongson117.icontainerFake") == nil)
         let encoded = try JSONEncoder().encode(release)

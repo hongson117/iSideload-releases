@@ -75,10 +75,10 @@ struct AppsView: View {
                     NavigationLink {
                         ContainerView()
                     } label: {
-                        Label("Mở Container · chạy app bên trong", systemImage: "shippingbox")
+                        Label("Mở SIContainer · điều phối & chạy app bên trong", systemImage: "shippingbox")
                     }
-                } header: { Text("Container tích hợp") } footer: {
-                    Text("Nhập IPA vào iContainer để chạy bên trong, không cần cài LiveContainer riêng. Nút Chọn file IPA để cài ở trên vẫn cài app độc lập ra màn hình chính như trước.")
+                } header: { Text("SIContainer (1 Chính + 1 Phụ)") } footer: {
+                    Text("Nhập vô số IPA vào SIContainer để chạy qua Slot Phụ 1 (App Group dùng chung) và tạo Shortcut ra thẳng màn hình chính. Nút Chọn file IPA để cài ở trên vẫn cài app độc lập ra màn hình chính như trước.")
                 }
                 #else
                 Section {
@@ -113,7 +113,7 @@ struct AppsView: View {
                     } header: { header(sg, list) }
                 }
             }
-            .navigationTitle("iContainer")
+            .navigationTitle(engine.isideloadBundleID.hasPrefix("com.hongson117.sicontainer") ? "SIContainer" : "iContainer")
             .onAppear { engine.syncSelfRecord() }
             .refreshable { await engine.refreshList() }
             .sheet(isPresented: $picking) { DocumentPicker { engine.importIPA(from: $0) } }

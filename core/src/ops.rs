@@ -367,7 +367,7 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     if self_refresh {
         let installed_id = s(req, "installed_bundle_id");
         let actual = inspect_ipa(&ipa)?;
-        if !(installed_id == "com.hongson117.icontainer" || installed_id.starts_with("com.hongson117.icontainer."))
+        if !crate::owner_setup::own_id(installed_id)
             || actual["bundle_id"].as_str() != Some(installed_id) {
             return Err("Bản đóng gói không khớp iSideload đang chạy. Hãy mở lại app rồi thử làm mới.".into());
         }
@@ -578,12 +578,11 @@ fn pack_self(req: &Value) -> Result<Value, String> {
                 if rel == "Info.plist" && req.get("peer_bootstrap").and_then(Value::as_bool).unwrap_or(false) {
                     let mut info: plist::Dictionary = plist::from_bytes(&data).map_err(|e| e.to_string())?;
                     let old = info.get("CFBundleIdentifier").and_then(plist::Value::as_string).unwrap_or("");
-                    let family = ["com.hongson117.isideload", "com.hongson117.icontainer"].into_iter()
-                        .find(|base| old == *base || old.starts_with(&format!("{base}.")))
+                    let family = crate::owner_setup::family(old)
                         .ok_or("Chỉ đóng gói ứng dụng của chính dự án để cài cho máy khác.")?;
                     // Drop the source phone's team suffix before signing for the receiving phone.
                     info.insert("CFBundleIdentifier".into(), plist::Value::String(family.into()));
-                    let product=if family=="com.hongson117.icontainer"{"iContainer"}else{"iSideload"};
+                    let product=if family=="com.hongson117.sicontainer.runner1"{"SIContainer Phụ 1"}else if family=="com.hongson117.sicontainer.runner2"{"SIContainer Phụ 2"}else if family=="com.hongson117.sicontainer"{"SIContainer"}else if family=="com.hongson117.icontainer"{"iContainer"}else{"iSideload"};
                     let label=if req.get("personal_setup").and_then(Value::as_bool).unwrap_or(false){format!("{product} Cá nhân")}else{product.to_string()};
                     info.insert("CFBundleDisplayName".into(),plist::Value::String(label));
                     data.clear();

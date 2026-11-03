@@ -40,7 +40,7 @@ pub fn prepare(req:&Value)->Result<Value,String>{
 #[cfg(test)]mod tests {
     use super::*;
     #[test]fn update_keeps_owner_identity_profile_and_display_name_and_rejects_tampering(){
-        for family in ["com.hongson117.icontainer","com.hongson117.isideload"] {
+        for family in ["com.hongson117.sicontainer","com.hongson117.icontainer","com.hongson117.isideload"] {
             let root=std::env::temp_dir().join(format!("update-{}-{}",std::process::id(),family));
             let _=fs::remove_dir_all(&root);
             let host=root.join("Owner.app");let source=root.join("Source.app");

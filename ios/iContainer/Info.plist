@@ -4,13 +4,13 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.hongson117.icontainer.refresh</string>
-		<string>com.hongson117.icontainer.resign</string>
+		<string>com.hongson117.sicontainer.refresh</string>
+		<string>com.hongson117.sicontainer.resign</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>iContainer</string>
+	<string>SIContainer</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -46,6 +46,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>sicontainer</string>
 				<string>icontainer</string>
 			</array>
 		</dict>
@@ -56,19 +57,41 @@
 	<string>dev</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
-		<string>livecontainer</string>
+		<string>sicontainer-runner1</string>
+		<string>sicontainer-runner2</string>
 		<string>localdevvpn</string>
+		<string>livecontainer</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer kết nối Bluetooth.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_remotepairing-pairable-host._tcp</string>
 	</array>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Lịch.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer sử dụng Camera khi bạn yêu cầu.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Danh bạ.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer xác thực bằng Face ID.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>iContainer dùng mạng cục bộ để kết nối và ghép nối thiết bị.</string>
+	<string>SIContainer dùng mạng cục bộ để kết nối, ghép nối thiết bị và hỗ trợ ứng dụng bên trong.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Vị trí khi đang dùng ứng dụng.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer sử dụng Micro khi bạn yêu cầu.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer lưu ảnh vào Thư viện ảnh.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Thư viện ảnh khi bạn sử dụng.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Cho phép ứng dụng bên trong SIContainer truy cập Lời nhắc.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

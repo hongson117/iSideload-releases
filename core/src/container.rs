@@ -20,7 +20,8 @@ fn valid_id(id: &str) -> bool {
 }
 fn root(req: &Value) -> Result<PathBuf,String> {
     let p = PathBuf::from(s(req,"container_root"));
-    if !p.is_absolute() || p.file_name().and_then(|s|s.to_str()) != Some("iContainer") { return Err("Invalid iContainer storage root".into()); }
+    let name = p.file_name().and_then(|s|s.to_str());
+    if !p.is_absolute() || (name != Some("iContainer") && name != Some("SIContainer")) { return Err("Invalid container storage root".into()); }
     fs::create_dir_all(&p).map_err(err)?;
     if fs::symlink_metadata(&p).map_err(err)?.file_type().is_symlink() { return Err("Container root must not be a symlink".into()); }
     fs::canonicalize(p).map_err(err)
@@ -153,20 +154,142 @@ fn macho_paths(app:&Path)->Result<Vec<PathBuf>,String> {
         }
     } Ok(files)
 }
+pub fn valid_container_bundle_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && !id.contains("..")
+        && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+        && (id == "com.hongson117.icontainer"
+            || id.starts_with("com.hongson117.icontainer.")
+            || id == "com.hongson117.sicontainer"
+            || id.starts_with("com.hongson117.sicontainer."))
+}
+
+pub fn resolve_target_slots(host_id: &str, req: &Value) -> Result<Vec<String>, String> {
+    if !valid_container_bundle_id(host_id) {
+        return Err("Chỉ chuẩn bị app cho chính SIContainer / iContainer.".into());
+    }
+    let mut slots = Vec::new();
+    if let Some(arr) = req.get("target_bundle_ids").and_then(Value::as_array) {
+        for item in arr {
+            let id = item.as_str().unwrap_or("").trim();
+            if !valid_container_bundle_id(id) {
+                return Err("Danh tính Slot chuẩn bị không hợp lệ.".into());
+            }
+            if !slots.iter().any(|x| x == id) {
+                slots.push(id.to_string());
+            }
+        }
+    } else if !s(req, "target_bundle_id").trim().is_empty() {
+        let id = s(req, "target_bundle_id").trim();
+        if !valid_container_bundle_id(id) {
+            return Err("Danh tính Slot chuẩn bị không hợp lệ.".into());
+        }
+        slots.push(id.to_string());
+    }
+    if slots.is_empty() {
+        if host_id == "com.hongson117.sicontainer" || host_id.starts_with("com.hongson117.sicontainer.") {
+            let tail = host_id.strip_prefix("com.hongson117.sicontainer").unwrap_or("");
+            let team_suffix = if let Some(rest) = tail.strip_prefix(".runner1") {
+                rest
+            } else if let Some(rest) = tail.strip_prefix(".runner2") {
+                rest
+            } else {
+                tail
+            };
+            let main_slot = format!("com.hongson117.sicontainer{team_suffix}");
+            let runner1_slot = format!("com.hongson117.sicontainer.runner1{team_suffix}");
+            slots.push(main_slot);
+            if !slots.iter().any(|x| x == &runner1_slot) {
+                slots.push(runner1_slot);
+            }
+        } else {
+            slots.push(host_id.to_string());
+        }
+    }
+    Ok(slots)
+}
+
+fn prepare_slot_bundle(
+    original: &Path,
+    slot_root: &Path,
+    slot_id: &str,
+    team_id: &str,
+    signer: &dyn apple_codesign_quick::CmsSigner,
+    base_record: &Value,
+) -> Result<Value, String> {
+    fs::create_dir_all(slot_root).map_err(err)?;
+    let staging = slot_root.join("Preparing.app");
+    let final_app = slot_root.join("Prepared.app");
+    let backup = slot_root.join("Previous.app");
+    if !final_app.exists() && backup.exists() {
+        fs::rename(&backup, &final_app).map_err(err)?;
+    }
+    if staging.exists() {
+        fs::remove_dir_all(&staging).map_err(err)?;
+    }
+    let result = (|| {
+        copy_main_app(original, &staging)?;
+        let exe = base_record["executable"].as_str().ok_or("Missing executable")?.to_string();
+        let main = staging.join(&exe);
+        let mut entry = 0;
+        for path in macho_paths(&staging)? {
+            let (patched, offset) = macho::prepare(&fs::read(&path).map_err(err)?, path == main)?;
+            if path == main {
+                entry = offset.ok_or("Missing entry")?;
+            }
+            // Always sign a new inode; never rewrite code already mapped by a guest.
+            let signed = crate::container_signing::sign_guest(&path, &patched, slot_id, team_id, signer)?;
+            fs::write(&path, signed).map_err(err)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).map_err(err)?;
+            }
+        }
+        if entry == 0 {
+            return Err("Executable was not prepared".into());
+        }
+        let mut slot_record = base_record.clone();
+        slot_record["entry_offset"] = json!(entry);
+        slot_record["host_bundle_id"] = json!(slot_id);
+        // The loader trusts only metadata committed next to the exact signed copy.
+        atomic_json(&staging.join("iContainerLaunch.json"), &slot_record)?;
+        if backup.exists() {
+            fs::remove_dir_all(&backup).map_err(err)?;
+        }
+        if final_app.exists() {
+            fs::rename(&final_app, &backup).map_err(err)?;
+        }
+        if let Err(e) = fs::rename(&staging, &final_app) {
+            if backup.exists() {
+                let _ = fs::rename(&backup, &final_app);
+            }
+            return Err(err(e));
+        }
+        let _ = fs::remove_dir_all(&backup);
+        Ok(slot_record)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&staging);
+    }
+    result
+}
+
 pub fn prepare(req:&Value)->Result<Value,String> {
     let dest=guest(req)?;
     let original=dest.join("Original.app");
     let mut record=validate_app(&original)?;
     let host=Path::new(s(req,"host_path")); let host_info=info(host)?;
     let host_id=strval(&host_info,"CFBundleIdentifier");
-    if host_id!="com.hongson117.icontainer" && !host_id.starts_with("com.hongson117.icontainer.") { return Err("Chỉ chuẩn bị app cho chính iContainer.".into()); }
+    let target_slots=resolve_target_slots(host_id,req)?;
     let p12=base64::engine::general_purpose::STANDARD.decode(s(req,"p12_base64")).map_err(err)?;
     let keys=KeyStore::from_pkcs12(&p12,s(req,"password"),Pkcs12ImportPolicy::Relaxed).map_err(|_|"Không đọc được chứng chỉ ký.")?;
     let (_,chain)=keys.private_key_chain().ok_or("Chứng chỉ không có khóa riêng.")?;
     let key=RsaPrivateKey::from_pkcs8_der(chain.key().as_der()).map_err(err)?;
     let leaf=chain.certs().first().ok_or("Thiếu chứng chỉ.")?;
     if !macho::signature_contains(&fs::read(host.join(executable(&host_info)?)).map_err(err)?,leaf.as_der())? {
-        return Err("Chứng chỉ đã chọn không khớp bản iContainer đang chạy. Hãy gia hạn iContainer bằng tài khoản đó trước, mở lại app rồi chuẩn bị lại; hoặc nhập đúng .p12 đã dùng khi cài iContainer.".into());
+        return Err("Chứng chỉ đã chọn không khớp bản SIContainer/iContainer đang chạy. Hãy gia hạn bằng tài khoản đó trước, mở lại app rồi chuẩn bị lại; hoặc nhập đúng .p12 đã dùng khi cài.".into());
     }
     let cert=Certificate::from_der(leaf.as_der()).map_err(err)?;
     let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(err)?.as_secs();
@@ -177,37 +300,26 @@ pub fn prepare(req:&Value)->Result<Value,String> {
     };
     let chain=identity.profile_to_certificate_chain(&profile).map_err(|e|format!("Không dựng được chuỗi chứng chỉ: {e}"))?;
     let signer=RustCryptoCmsSigner::new(key,cert,chain);
-    let staging=dest.join("Preparing.app"); let final_app=dest.join("Prepared.app"); let backup=dest.join("Previous.app");
-    if !final_app.exists() && backup.exists() { fs::rename(&backup,&final_app).map_err(err)?; }
-    if staging.exists() { fs::remove_dir_all(&staging).map_err(err)?; }
-    let result=(|| {
-        copy_main_app(&original,&staging)?;
-        let exe=record["executable"].as_str().ok_or("Missing executable")?.to_string();
-        let main=staging.join(&exe); let mut entry=0;
-        for path in macho_paths(&staging)? {
-            let (patched,offset)=macho::prepare(&fs::read(&path).map_err(err)?,path==main)?;
-            if path==main { entry=offset.ok_or("Missing entry")?; }
-            // Always sign a new inode; never rewrite code already mapped by a guest.
-            let signed=crate::container_signing::sign_guest(&path,&patched,host_id,profile.team_id(),&signer)?;
-            fs::write(&path,signed).map_err(err)?;
-            #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; fs::set_permissions(&path,fs::Permissions::from_mode(0o700)).map_err(err)?; }
-        }
-        if entry==0 { return Err("Executable was not prepared".into()); }
-        record["id"]=json!(s(req,"guest_id")); record["prepared"]=json!(true); record["preparation_revision"]=json!(3); record["entry_offset"]=json!(entry);
-        record["signer"]=json!(s(req,"signer")); record["host_bundle_id"]=json!(host_id);
-        record["certificate_expires"]=json!(signer.signer_certificate().tbs_certificate.validity.not_after.to_unix_duration().as_secs());
-        // The loader trusts only metadata committed next to the exact signed copy.
-        atomic_json(&staging.join("iContainerLaunch.json"),&record)?;
-        if backup.exists() { fs::remove_dir_all(&backup).map_err(err)?; }
-        if final_app.exists() { fs::rename(&final_app,&backup).map_err(err)?; }
-        if let Err(e)=fs::rename(&staging,&final_app) { if backup.exists(){let _=fs::rename(&backup,&final_app);} return Err(err(e)); }
-        if let Err(e)=atomic_json(&dest.join("manifest.json"),&record) {
-            let _=fs::remove_dir_all(&final_app); if backup.exists(){let _=fs::rename(&backup,&final_app);} return Err(e);
-        }
-        let _=fs::remove_dir_all(&backup);
-        Ok(json!({"ok":true,"guest":record}))
-    })();
-    if result.is_err(){let _=fs::remove_dir_all(staging);} result
+    let expires=signer.signer_certificate().tbs_certificate.validity.not_after.to_unix_duration().as_secs();
+    record["id"]=json!(s(req,"guest_id"));
+    record["prepared"]=json!(true);
+    record["preparation_revision"]=json!(3);
+    record["signer"]=json!(s(req,"signer"));
+    record["certificate_expires"]=json!(expires);
+    record["prepared_slots"]=json!(target_slots);
+
+    let primary_slot=target_slots.iter().find(|id|*id==host_id).unwrap_or(&target_slots[0]).clone();
+    let primary_record=prepare_slot_bundle(&original,&dest,&primary_slot,profile.team_id(),&signer,&record)?;
+    record["entry_offset"]=primary_record["entry_offset"].clone();
+    record["host_bundle_id"]=json!(primary_slot);
+
+    let per_slot_root=dest.join("Prepared");
+    for slot_id in &target_slots {
+        let slot_dir=per_slot_root.join(slot_id);
+        prepare_slot_bundle(&original,&slot_dir,slot_id,profile.team_id(),&signer,&record)?;
+    }
+    atomic_json(&dest.join("manifest.json"),&record)?;
+    Ok(json!({"ok":true,"guest":record}))
 }
 pub fn remove(req:&Value)->Result<Value,String> { let p=guest(req)?; fs::remove_dir_all(p).map_err(err)?; Ok(json!({"ok":true})) }
 
@@ -243,6 +355,65 @@ mod tests {
         assert!(original.join("PlugIns/Widget.appex/Widget").exists());assert!(original.join("Watch/WatchApp.app/WatchExec").exists());
         assert!(!prepared.join("PlugIns").exists());assert!(!prepared.join("Watch").exists());
         assert_eq!(fs::read(prepared.join("Phone")).unwrap(),main);assert_eq!(macho_paths(&prepared).unwrap().len(),1);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test] fn resolves_default_and_explicit_sicontainer_slots_and_writes_per_slot_bundles(){
+        assert_eq!(
+            resolve_target_slots("com.hongson117.sicontainer.BSV5CJQF89",&json!({})).unwrap(),
+            vec!["com.hongson117.sicontainer.BSV5CJQF89","com.hongson117.sicontainer.runner1.BSV5CJQF89"]
+        );
+        assert!(resolve_target_slots("com.example.other",&json!({})).is_err());
+        assert!(resolve_target_slots("com.hongson117.sicontainer.BSV5CJQF89",&json!({"target_bundle_ids":["../escape"]})).is_err());
+
+        struct DummySigner;
+        impl apple_codesign_quick::CmsSigner for DummySigner {
+            fn sign(&self, req: apple_codesign_quick::CmsSigningRequest<'_>) -> apple_codesign_quick::Result<Vec<u8>> {
+                Ok(req.code_directories.iter().flat_map(|d| d.bytes.iter().copied().take(16)).collect())
+            }
+        }
+        let root=temp();
+        let ipa=root.join("guest.ipa");
+        let mut main=vec![0u8;8192];
+        let set=|b:&mut[u8],at:usize,n:u32|b[at..at+4].copy_from_slice(&n.to_le_bytes());
+        for (at,n) in [(0,0xfeedfacf),(4,0x0100000c),(12,2),(16,3),(20,248),(32,0x19),(36,152),(88,7),(92,5),(96,1),(152,4096),(184,0x80000028),(188,24),(208,0x19),(212,72)]{set(&mut main,at,n);}
+        main[40..46].copy_from_slice(b"__TEXT");
+        main[64..72].copy_from_slice(&8192u64.to_le_bytes());
+        main[80..88].copy_from_slice(&8192u64.to_le_bytes());
+        main[104..110].copy_from_slice(b"__text");
+        main[136..144].copy_from_slice(&4096u64.to_le_bytes());
+        main[144..152].copy_from_slice(&4096u64.to_le_bytes());
+        main[192..200].copy_from_slice(&4096u64.to_le_bytes());
+        main[216..226].copy_from_slice(b"__LINKEDIT");
+        main[232..240].copy_from_slice(&8192u64.to_le_bytes());
+        main[248..256].copy_from_slice(&8192u64.to_le_bytes());
+        let mut d=plist::Dictionary::new();
+        d.insert("CFBundleIdentifier".into(),"com.example.guest".into());
+        d.insert("CFBundleExecutable".into(),"GuestApp".into());
+        d.insert("CFBundleName".into(),"GuestApp".into());
+        d.insert("CFBundleSupportedPlatforms".into(),PV::Array(vec!["iPhoneOS".into()]));
+        let mut xml=Vec::new();plist::to_writer_xml(&mut xml,&d).unwrap();
+        let mut zip=zip::ZipWriter::new(fs::File::create(&ipa).unwrap());
+        for (p,b) in [("Payload/GuestApp.app/Info.plist",xml.as_slice()),("Payload/GuestApp.app/GuestApp",main.as_slice())]{
+            zip.start_file(p,zip::write::SimpleFileOptions::default()).unwrap();zip.write_all(b).unwrap();
+        }
+        zip.finish().unwrap();
+        let storage=root.join("SIContainer");
+        let id="2D3029B6-A7BB-4BD4-A2E9-1F39543A5114";
+        let imported=import(&json!({"ipa_path":ipa,"container_root":storage,"guest_id":id})).unwrap();
+        let mut base=imported["guest"].clone();
+        base["id"]=json!(id);base["prepared"]=json!(true);base["preparation_revision"]=json!(3);
+        let guest_dir=storage.join(id);
+        fs::write(guest_dir.join("Data/Documents/user-note.txt"),b"keep-me").unwrap();
+        for slot in ["com.hongson117.sicontainer.BSV5CJQF89","com.hongson117.sicontainer.runner1.BSV5CJQF89"] {
+            let slot_root=guest_dir.join("Prepared").join(slot);
+            let rec=prepare_slot_bundle(&guest_dir.join("Original.app"),&slot_root,slot,"BSV5CJQF89",&DummySigner,&base).unwrap();
+            assert_eq!(rec["host_bundle_id"],json!(slot));
+            let launch:Value=serde_json::from_slice(&fs::read(slot_root.join("Prepared.app/iContainerLaunch.json")).unwrap()).unwrap();
+            assert_eq!(launch["host_bundle_id"],json!(slot));
+            let bin=fs::read(slot_root.join("Prepared.app/GuestApp")).unwrap();
+            assert!(bin.windows(slot.len()).any(|w|w==slot.as_bytes()));
+        }
+        assert_eq!(fs::read(guest_dir.join("Data/Documents/user-note.txt")).unwrap(),b"keep-me");
         fs::remove_dir_all(root).unwrap();
     }
 }
