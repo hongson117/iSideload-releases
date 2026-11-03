@@ -74,6 +74,8 @@ struct AccountView: View {
                     Section {
                         Text(result["apple_id"] as? String ?? "").font(.headline)
                         Text("App ID: \(result["bundle_id"] as? String ?? "")").font(.caption).textSelection(.enabled)
+                        Button("Cài bản cá nhân lên máy này") { Task { await engine.installPreparedOwner() } }
+                            .disabled(engine.busy || engine.peerBusy)
                         ShareLink(item: file) { Label("Chia sẻ bản cài cho máy hỗ trợ", systemImage: "square.and.arrow.up") }
                     } header: { Text("Bản cài của bạn đã sẵn sàng") } footer: {
                         Text("Bản cài đã ký bằng tài khoản của bạn. Giữ bản hiện tại cho đến khi bản mới cài và mở thành công; mật khẩu không nằm trong file IPA.")

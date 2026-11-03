@@ -5,10 +5,13 @@ struct PeerInstallView: View {
     @StateObject private var installer = PeerInstaller()
     @State private var account = ""
     @State private var confirmInstall = false
+    @State private var bootstrap = false
 
     var body: some View {
         Form {
             Section {
+                Toggle("Cài tạm bằng tài khoản máy hỗ trợ", isOn: $bootstrap).disabled(installer.active)
+                Text(bootstrap ? "Người nhận đăng nhập Apple ID riêng sau khi cài và chọn Thiết lập bản cá nhân. Khóa ký của tài khoản máy hỗ trợ không được chuyển sang máy nhận." : "Chọn Apple ID người nhận để ký bản đầu tiên. Người nhận dùng chính tài khoản đó để tự gia hạn.").font(.footnote).foregroundStyle(.secondary)
                 Label("Hai máy cùng Wi-Fi", systemImage: "wifi")
                 Text("Máy nhận cần iOS/iPadOS 27 trở lên, đã bật Chế độ nhà phát triển và giữ màn hình mở khóa. Giữ iContainer mở trên máy này trong suốt quá trình.")
                 Text("Dùng Wi-Fi trực tiếp giữa hai máy. LocalDevVPN không cần cho lượt cài này; nếu VPN chặn mạng cục bộ, hãy tắt trước khi bắt đầu.")
@@ -42,7 +45,7 @@ struct PeerInstallView: View {
                     LabeledContent("Thiết bị", value: peer.model)
                     LabeledContent("IP Wi-Fi", value: peer.ip)
                     Text(peer.udid).font(.caption.monospaced()).textSelection(.enabled)
-                    Picker("Apple ID của người nhận", selection: $account) {
+                    Picker(bootstrap ? "Apple ID máy hỗ trợ" : "Apple ID của người nhận", selection: $account) {
                         Text("Chọn tài khoản").tag("")
                         ForEach(engine.signedAccounts, id: \.self) { Text($0).tag($0) }
                     }.disabled(installer.active)
@@ -75,7 +78,7 @@ struct PeerInstallView: View {
                 Section {
                     Label(installer.receiverSetupVerified ? "Cài và thiết lập thành công" : "Đã cài · cần hoàn tất thiết lập", systemImage: installer.receiverSetupVerified ? "checkmark.circle.fill" : "exclamationmark.triangle").foregroundStyle(installer.receiverSetupVerified ? .green : .orange)
                     Text("Trên máy nhận: Cài đặt › Cài đặt chung › VPN & Quản lý thiết bị › tin cậy tài khoản nhà phát triển.")
-                    Text("Mở iContainer trên máy nhận và đăng nhập đúng Apple ID đã chọn ở bước cài. Bản đã thiết lập thành công có sẵn khóa ký và ghép nối; cài LocalDevVPN rồi Kiểm tra kết nối để tự gia hạn.")
+                    Text(installer.receiverNeedsPersonalSetup ? "Mở iContainer trên máy nhận, đăng nhập Apple ID riêng rồi chọn Thiết lập iContainer bằng tài khoản này. Cài bản cá nhân trước khi dùng tài khoản đó để tự gia hạn." : "Mở iContainer trên máy nhận và đăng nhập đúng Apple ID đã chọn ở bước cài. Bản đã thiết lập thành công có sẵn khóa ký và ghép nối; cài LocalDevVPN rồi Kiểm tra kết nối để tự gia hạn.")
                 } header: { Text("3. Hoàn tất trên máy nhận") }
             }
 
@@ -89,11 +92,18 @@ struct PeerInstallView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(installer.active)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear { if account.isEmpty { account = installer.receiver?.installAccount ?? "" } }
+        .onAppear {
+            if account.isEmpty { account = installer.receiver?.installAccount ?? "" }
+            if let previous = installer.receiver?.installedBootstrap { bootstrap = previous }
+        }
         .confirmationDialog("Cài iContainer lên \(installer.receiver?.name ?? "máy nhận")?",
                             isPresented: $confirmInstall, titleVisibility: .visible) {
-            Button("Ký và cài bằng \(account)") { Task { await installer.install(account: account) } }
+            Button("Ký và cài bằng \(account)") { Task { await installer.install(account: account, bootstrap: bootstrap) } }
             Button("Hủy", role: .cancel) {}
-        } message: { Text("Máy nhận: \(installer.receiver?.ip ?? ""). Apple ID người nhận: \(account). Người nhận sẽ dùng chính tài khoản này để tự gia hạn. Đổi tài khoản khi cài lại có thể tạo bản app riêng; bản cũ không tự bị gỡ. Giữ cả hai máy mở khóa và cùng Wi-Fi cho đến khi cài xong.") }
+        } message: {
+            Text(bootstrap
+                 ? "Máy nhận: \(installer.receiver?.ip ?? ""). Đây là bản khởi tạo ký bằng \(account). Người nhận đăng nhập tài khoản riêng và thiết lập bản cá nhân sau khi cài. Khóa ký của máy hỗ trợ không được chuyển sang."
+                 : "Máy nhận: \(installer.receiver?.ip ?? ""). Apple ID người nhận: \(account). Người nhận sẽ dùng chính tài khoản này để tự gia hạn. Đổi tài khoản khi cài lại có thể tạo bản app riêng; bản cũ không tự bị gỡ. Giữ cả hai máy mở khóa và cùng Wi-Fi cho đến khi cài xong.")
+        }
     }
 }

@@ -322,6 +322,16 @@ final class Engine: ObservableObject {
         return Self.docs.appendingPathComponent(relative)
     }
 
+    func installPreparedOwner() async {
+        guard !busy && !peerBusy, let file = preparedOwnerIPA,
+              let account = preparedOwnerInstallation?["apple_id"] as? String,
+              signedAccounts.contains(account) else { return }
+        await installNow(file, signer: "apple:" + account)
+        if errorText == nil {
+            infoText = "Đã gửi bản iContainer cá nhân tới iOS. Mở bản mới để đăng nhập tài khoản của bạn và kiểm tra gia hạn trước khi bỏ bản khởi tạo."
+        }
+    }
+
     func importCert(p12: URL?, password: String, profiles: [URL], replaceProfiles: Bool = false) async {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
@@ -486,6 +496,9 @@ final class Engine: ObservableObject {
             apps.append(rec); save()
             if info["icon_path"] != nil { IconCache.adopt(tmpIcon, for: bid) }
             infoText = Self.doneLine(rec.name, exp) + (notes.isEmpty ? "" : "\n" + notes.joined(separator: " "))
+            if r["recipient_setup_verified"] as? Bool == false {
+                infoText = (infoText ?? "Đã cài app.") + "\nThiết lập tự gia hạn chưa hoàn tất: " + (r["recipient_setup_error"] as? String ?? "chưa xác minh khóa ký và ghép nối")
+            }
         }
     }
 
