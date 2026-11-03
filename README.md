@@ -2,6 +2,12 @@
 
 **Bản IPA, bộ cài Windows/macOS và hướng dẫn cài đặt chính thức.** Repository này không chứa mã nguồn ứng dụng, Git bundle, bản ghi ghép nối hay thông tin máy chủ.
 
+## IPA mới — iSideload 1.2.4 RC1 (build 6)
+
+[Tải trực tiếp iSideload.ipa 1.2.4](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.4-rc1/iSideload.ipa) · [Trang phát hành và checksum](https://github.com/hongson117/iSideload-releases/releases/tag/v1.2.4-rc1)
+
+Bản mới thêm nhập Apple ID người nhận ngay lúc cài cho máy khác, xóa Apple ID đã lưu, thiết lập bản cá nhân và xử lý quota chứng chỉ bằng thu hồi rồi ký tiếp. Đây là IPA chưa ký, dùng Apple ID/chứng chỉ của người cài. Các ZIP Windows/macOS bên dưới vẫn kèm IPA 1.2.3; không coi chúng là gói 1.2.4.
+
 ## Tải bộ cài — 1.2.3 RC1
 
 Hai file ZIP nằm ngay trong repo và đã kèm IPA iSideload 1.2.3 build 36. Hỗ trợ iOS/iPadOS 17.4+ cho thiết lập ghép đôi tự động qua USB.
