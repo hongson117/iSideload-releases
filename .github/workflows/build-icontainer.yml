@@ -51,7 +51,7 @@ jobs:
             exit 1
           fi
   ios:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 45
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
