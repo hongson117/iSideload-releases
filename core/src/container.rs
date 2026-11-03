@@ -1,7 +1,7 @@
 //! Transactional storage for iContainer. Guest data is never replaced during
 //! preparation; only a successfully patched and signed copy becomes launchable.
 use std::{fs, io::{Read, Write}, path::{Path, PathBuf}};
-use apple_codesign_quick::{sign_macho_file, MachOSigningConfig, ProvisioningProfile, RustCryptoCmsSigner};
+use apple_codesign_quick::{ProvisioningProfile, RustCryptoCmsSigner};
 use base64::Engine as _;
 use p12_keystore::{KeyStore, Pkcs12ImportPolicy};
 use plist::Value as PV;
@@ -184,18 +184,16 @@ pub fn prepare(req:&Value)->Result<Value,String> {
         copy_main_app(&original,&staging)?;
         let exe=record["executable"].as_str().ok_or("Missing executable")?.to_string();
         let main=staging.join(&exe); let mut entry=0;
-        let ent=plist::Dictionary::new();
         for path in macho_paths(&staging)? {
             let (patched,offset)=macho::prepare(&fs::read(&path).map_err(err)?,path==main)?;
             if path==main { entry=offset.ok_or("Missing entry")?; }
             // Always sign a new inode; never rewrite code already mapped by a guest.
-            fs::write(&path,patched).map_err(err)?;
-            let config=MachOSigningConfig::new(host_id,profile.team_id(),&ent,Some(&signer));
-            sign_macho_file(&path,&config).map_err(err)?;
+            let signed=crate::container_signing::sign_guest(&path,&patched,host_id,profile.team_id(),&signer)?;
+            fs::write(&path,signed).map_err(err)?;
             #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; fs::set_permissions(&path,fs::Permissions::from_mode(0o700)).map_err(err)?; }
         }
         if entry==0 { return Err("Executable was not prepared".into()); }
-        record["id"]=json!(s(req,"guest_id")); record["prepared"]=json!(true); record["preparation_revision"]=json!(2); record["entry_offset"]=json!(entry);
+        record["id"]=json!(s(req,"guest_id")); record["prepared"]=json!(true); record["preparation_revision"]=json!(3); record["entry_offset"]=json!(entry);
         record["signer"]=json!(s(req,"signer")); record["host_bundle_id"]=json!(host_id);
         record["certificate_expires"]=json!(signer.signer_certificate().tbs_certificate.validity.not_after.to_unix_duration().as_secs());
         // The loader trusts only metadata committed next to the exact signed copy.

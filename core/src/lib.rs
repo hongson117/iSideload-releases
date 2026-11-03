@@ -12,6 +12,7 @@ mod imported;
 mod peer;
 mod container;
 mod container_macho;
+mod container_signing;
 mod self_refresh;
 mod owner_setup;
 mod receiver_setup;

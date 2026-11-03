@@ -97,3 +97,21 @@ existing LiveContainer installation or delete its data for this preview.
 project-icontainer.yml`; build scheme `iContainer` with the shared Rust static
 library. The `iContainer private preview` workflow builds the IPA and original
 demo guest, runs regression/security tests and audits the final package.
+
+
+### 0.1.2 — DER-complete guest signing
+
+The preparation stage now signs each patched guest Mach-O with both XML and DER
+entitlements and seals slot 7 in both CodeDirectories before computing the CMS.
+The Mach-O remains a library with no main-executable privileges. Signature space
+is reserved before hashing; no load command is changed after the final hashes.
+This fixes the `dlopen: code signature invalid` case confirmed on the test iPhone
+when running Lịch Âm Dương after the earlier duplicate-RPATH fix.
+
+Prepared cache revision 3 is required. After upgrading, choose **Chuẩn bị lại**
+for an existing guest, select the signing identity matching the iContainer host,
+and then **Chạy**. Original.app and Data are retained. The trial executable that
+was placed directly on the test phone is not needed after preparation by 0.1.2.
+Re-signing the host with a different certificate still requires preparing guests
+again with that same certificate. IPA extension/Watch bundles are kept in the
+original import; the in-process Container runs only the main iPhone application.

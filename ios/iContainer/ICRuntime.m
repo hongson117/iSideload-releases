@@ -59,7 +59,7 @@ BOOL ICQueueGuest(NSString *identifier, NSError **error) {
         if (error && !*error) *error=[NSError errorWithDomain:@"iContainer" code:2 userInfo:@{NSLocalizedDescriptionKey:@"App chưa được chuẩn bị. Chọn nguồn ký rồi chuẩn bị lại."}];
         return NO;
     }
-    if ([manifest[@"preparation_revision"] integerValue] < 2) {
+    if ([manifest[@"preparation_revision"] integerValue] < 3) {
         if (error) *error=[NSError errorWithDomain:@"iContainer" code:3 userInfo:@{NSLocalizedDescriptionKey:@"Chọn Chuẩn bị lại để sửa bản chạy cũ. App gốc và dữ liệu được giữ nguyên."}];
         return NO;
     }
@@ -187,7 +187,7 @@ int ICBootGuest(void) {
     NSData *data=app ? [NSData dataWithContentsOfFile:[app stringByAppendingPathComponent:@"iContainerLaunch.json"]] : nil;
     NSDictionary *manifest=data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
     if (![manifest isKindOfClass:NSDictionary.class] || ![manifest[@"id"] isEqual:identifier] || ![manifest[@"prepared"] boolValue]) {fail(@"Không đọc được bản app đã chuẩn bị.");return -1;}
-    if ([manifest[@"preparation_revision"] integerValue] < 2) {fail(@"Bản chạy cũ cần Chuẩn bị lại. App gốc và dữ liệu được giữ nguyên.");return -1;}
+    if ([manifest[@"preparation_revision"] integerValue] < 3) {fail(@"Bản chạy cũ cần Chuẩn bị lại. App gốc và dữ liệu được giữ nguyên.");return -1;}
     if (![manifest[@"host_bundle_id"] isEqual:NSBundle.mainBundle.bundleIdentifier] || [manifest[@"certificate_expires"] doubleValue]<=[NSDate.date timeIntervalSince1970]) {
         fail(@"Chứng chỉ hoặc danh tính host đã thay đổi/hết hạn. Chọn Chuẩn bị lại bằng nguồn ký hiện tại.");return -1;
     }

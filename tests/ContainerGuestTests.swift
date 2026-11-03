@@ -9,7 +9,10 @@ struct ContainerGuestTests {
         }
         let old = try decode(base)
         precondition(old.prepared && !old.readyToLaunch, "Old prepared copies must be re-prepared before dlopen")
-        var fixed = base; fixed["preparation_revision"] = 2
+        var previous = base; previous["preparation_revision"] = 2
+        let xmlOnly = try decode(previous)
+        precondition(!xmlOnly.readyToLaunch, "XML-only signatures require preparation again")
+        var fixed = base; fixed["preparation_revision"] = 3
         let fresh = try decode(fixed)
         precondition(fresh.readyToLaunch && fresh.id == old.id && fresh.bundleID == old.bundleID)
         fixed["prepared"] = false
