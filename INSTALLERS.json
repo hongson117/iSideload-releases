@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "version": "1.2.2-rc2",
+  "channel": "prerelease",
+  "app_version": "1.2.2",
+  "app_build": "35",
+  "minimum_ios": "17.4",
+  "packages": {
+    "windows": {
+      "file": "isl-windows.zip",
+      "sha256": "38d56e83de077593d2f283f6b74ab834817de8339f23c1d50fa534066bc4a1d2",
+      "launch": "Cai-iSideload.bat",
+      "os": "Windows 10/11 x64",
+      "architectures": [
+        "x86_64"
+      ],
+      "guide": "WINDOWS.md",
+      "bytes": 9954824,
+      "download_url": "https://raw.githubusercontent.com/hongson117/iSideload-releases/main/isl-windows.zip",
+      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-windows.zip"
+    },
+    "macos": {
+      "file": "isl-macos-universal.zip",
+      "sha256": "d6c01af14413b8154e50252946af310e1ad676c5f93c7cf24ad101194e783fff",
+      "launch": "Cai-iSideload.command",
+      "os": "macOS 11+",
+      "architectures": [
+        "arm64",
+        "x86_64"
+      ],
+      "guide": "MACOS.md",
+      "bytes": 13241840,
+      "download_url": "https://raw.githubusercontent.com/hongson117/iSideload-releases/main/isl-macos-universal.zip",
+      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-macos-universal.zip"
+    }
+  },
+  "modes": {
+    "1": "Install iSideload and set up Remote Pairing over trusted USB",
+    "2": "Only set up or repair pairing for an already installed iSideload; no signing login"
+  },
+  "interactive_steps": [
+    "Trust computer and enter device passcode on iPhone",
+    "Enable Developer Mode and confirm reboot on iPhone when needed",
+    "Enter Apple ID/password/2FA directly in local installer terminal for mode 1"
+  ],
+  "hardware_usb_test": "pending; CI/software checks passed"
+}

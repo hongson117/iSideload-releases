@@ -2,7 +2,45 @@
 
 **Bản IPA, bộ cài Windows/macOS và hướng dẫn cài đặt chính thức.** Repository này không chứa mã nguồn ứng dụng, Git bundle, bản ghi ghép nối hay thông tin máy chủ.
 
-[**Tải bản phát hành mới nhất**](https://github.com/hongson117/iSideload-releases/releases/latest)
+## Tải bộ cài — 1.2.2 RC2
+
+Hai file ZIP nằm ngay trong repo và đã kèm IPA iSideload 1.2.2 build 35. Hỗ trợ iOS/iPadOS 17.4+ cho thiết lập ghép đôi tự động qua USB.
+
+| Máy tính | Tải trực tiếp | File mở sau khi giải nén | Hướng dẫn |
+|---|---|---|---|
+| Windows 10/11 x64 | [isl-windows.zip](https://raw.githubusercontent.com/hongson117/iSideload-releases/main/isl-windows.zip) | `Cai-iSideload.bat` | [Windows](WINDOWS.md) |
+| Mac Apple Silicon / Intel, macOS 11+ | [isl-macos-universal.zip](https://raw.githubusercontent.com/hongson117/iSideload-releases/main/isl-macos-universal.zip) | `Cai-iSideload.command` | [macOS](MACOS.md) |
+
+Chọn **1** để cài iSideload từ đầu kèm tự tạo/chép/xác minh file Remote Pairing. Chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi; chế độ 2 không yêu cầu đăng nhập Apple ID để ký lại app.
+
+[Checksum SHA-256](SHA256SUMS.txt) · [Thông tin gói cho AI](INSTALLERS.json) · [Trang phát hành RC2](https://github.com/hongson117/iSideload-releases/releases/tag/v1.2.2-rc2)
+
+Đây là bản thử đã qua build/kiểm thử phần mềm trên Windows và macOS. Luồng USB đầu-cuối với iPhone thật vẫn cần xác nhận. Windows EXE chưa ký Authenticode; Mac binary có chữ ký ad-hoc, chưa notarize. Xem phần mở công cụ trong hướng dẫn đúng hệ điều hành.
+
+## Nhờ AI cài nhanh
+
+Dùng AI có quyền thao tác **Terminal/máy tính Windows hoặc Mac đang cắm iPhone**. Nếu AI chỉ trò chuyện hoặc công cụ chạy trong cloud/sandbox, AI sẽ hướng dẫn bạn chạy trên máy thật; không thể tự cài lên iPhone từ môi trường đó.
+
+Sao chép đoạn này gửi cho AI:
+
+```text
+Hãy giúp tôi cài iSideload từ repo chính thức:
+https://github.com/hongson117/iSideload-releases
+
+Đọc README.md, AI-INSTALL.md và INSTALLERS.json.
+Tôi muốn cài từ đầu (lựa chọn 1).
+Kiểm tra hệ điều hành trên máy tính thật của tôi, tải đúng ZIP,
+đối chiếu SHA-256 rồi giải nén và mở bộ cài trong Terminal tương tác.
+Tôi sẽ tự nhập Apple ID/mật khẩu/2FA trực tiếp trong bộ cài,
+bấm Tin cậy và bật Chế độ nhà phát triển trên iPhone khi được yêu cầu.
+Theo dõi đến thông báo XONG, rồi hướng dẫn kiểm tra LocalDevVPN trong iSideload.
+```
+
+Nếu đã có app, đổi câu “Tôi muốn cài từ đầu” thành **“Tôi đã có iSideload, chỉ thiết lập/sửa ghép đôi bằng lựa chọn 2.”**
+
+[Hướng dẫn chi tiết cho AI và người dùng](AI-INSTALL.md) · [Hướng dẫn agent trong repo](AGENTS.md)
+
+[Bản ổn định trước đó / Releases](https://github.com/hongson117/iSideload-releases/releases/latest)
 
 IPA tải về **chưa được ký**. Tải một file IPA không đồng nghĩa iOS sẽ tự cài được; dùng một trong các cách dưới đây để cài lần đầu. Không cần mã kích hoạt iSideload.
 
@@ -38,7 +76,7 @@ Các bước thiết lập ngay trên màn hình:
 
 1. **Chọn tài khoản ký:** đăng nhập Apple ID sẽ dùng để gia hạn, hoặc nhập chứng chỉ/profile của bạn.
 2. **Cài LocalDevVPN** từ App Store nếu dùng Apple ID để ký/cài trên chính máy này.
-3. **Ghép nối máy này:** iOS 27+ ghép nối trong app rồi nhập mã ở Cài đặt. Ghép nối lúc nhận app thuộc máy hỗ trợ; máy mới cần bản ghi riêng để tự gia hạn. Trên iOS cũ, cần bản ghi tương thích đã tạo từ máy tính.
+3. **Kiểm tra ghép đôi:** nếu bộ cài Windows/macOS RC2 đã báo XONG, file đã có trong app; bật LocalDevVPN rồi bấm **Thiết bị → Kiểm tra kết nối thiết bị**. Nếu cài bằng Sideloadly/công cụ khác, chạy bộ cài desktop và chọn **2** để bổ sung file. iOS 27+ cũng có thể tự ghép nối trong app. Máy nhận app qua tính năng Cài cho iPhone khác vẫn cần bản ghi riêng cho tự gia hạn.
 4. Bấm **Làm mới iSideload** để thử. App sẽ mở LocalDevVPN nếu cần kết nối. Sau khi cài đè, app có thể tự đóng; mở lại để kiểm tra hạn ký.
 
 ## Cài thêm ứng dụng và gia hạn
@@ -58,4 +96,4 @@ Apple ID miễn phí thường có profile 7 ngày; xem ngày hết hạn thật
 - Build đã loại bỏ symbol/debug thừa. Điều này tăng chi phí phân tích, không làm IPA miễn nhiễm với dịch ngược hoặc ngăn người khác tải lại một file công khai.
 - Các thư viện nguồn mở giữ giấy phép/ghi công tương ứng; xem **Cài đặt → Giấy phép phần mềm nguồn mở** trong app.
 
-Luồng cài từ iPhone hỗ trợ sang máy mới đã được người dùng xác nhận ở bản 1.2.0 build 31. Bản 1.2.1 bổ sung tự nhận diện/gia hạn và kiểm thử tự động; kiểm tra CI không thay thế việc thử trên thiết bị thật. Khi báo lỗi, gửi phiên bản/build, bước thao tác và nội dung lỗi đã loại bỏ dữ liệu riêng; không gửi mật khẩu, file ghép nối hay `.p12`.
+Luồng cài từ iPhone hỗ trợ sang máy mới đã được người dùng xác nhận ở bản 1.2.0 build 31. Bản 1.2.2 bổ sung sửa nhập Remote Pairing; hai bộ cài RC2 tự thiết lập ghép đôi qua USB. Kiểm thử tự động đã qua; kiểm tra CI không thay thế việc thử trên thiết bị thật. Khi báo lỗi, gửi phiên bản/build, bước thao tác và nội dung lỗi đã loại bỏ dữ liệu riêng; không gửi mật khẩu, file ghép nối hay `.p12`.

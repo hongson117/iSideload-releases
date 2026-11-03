@@ -7,3 +7,7 @@
 .env
 *secret*
 *token*
+
+# Only these reviewed binary installer archives are public in the repository.
+!/isl-windows.zip
+!/isl-macos-universal.zip
