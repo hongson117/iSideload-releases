@@ -73,7 +73,10 @@ existing LiveContainer installation or delete its data for this preview.
 
 - Ordinary arm64 iPhone/iPad binaries only. Reject encrypted FairPlay apps,
   tvOS/macOS/simulator binaries, arm64e-only binaries and unsupported Mach-O layout.
-- Extensions and Watch bundles are rejected, not silently removed.
+- IPAs containing `PlugIns` extensions or `Watch` apps can be imported for the
+  iPhone main app. Their components are preserved in `Original.app`; preparation
+  excludes them from the loadable copy and labels this limitation in the UI.
+  This does not register extensions/widgets or install a companion on Apple Watch.
 - Framework dependency loading is best effort. CFBundle-based asset lookup,
   SwiftUI scenes, app URL callbacks, app groups, Keychain/preferences routing and
   app-specific private entitlements are not guaranteed for arbitrary guests.

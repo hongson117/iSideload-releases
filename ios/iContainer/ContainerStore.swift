@@ -8,7 +8,8 @@ struct ContainerGuest: Identifiable, Decodable {
     let version: String
     let prepared: Bool
     let signer: String?
-    enum CodingKeys: String, CodingKey { case id, name, version, prepared, signer; case bundleID = "bundle_id" }
+    let embeddedComponents: [String]?
+    enum CodingKeys: String, CodingKey { case id, name, version, prepared, signer; case bundleID = "bundle_id", embeddedComponents = "embedded_components" }
 }
 
 @MainActor
@@ -46,9 +47,12 @@ final class ContainerStore: ObservableObject {
         do {
             var r = request("container_import", id: UUID().uuidString)
             r["ipa_path"] = url.path
-            _ = try await engine.containerOperation(r)
+            let result = try await engine.containerOperation(r)
             reload()
             message = "Đã nhập app vào Container. Chọn Chuẩn bị và dùng đúng chứng chỉ đã ký iContainer để chạy. Mỗi lần nhập tạo một bản dữ liệu riêng."
+            if let guest = result["guest"] as? [String: Any], guest["main_app_only"] as? Bool == true {
+                message = (message ?? "") + "\nGói có extension hoặc Apple Watch: bản gốc được giữ nguyên, Container chỉ chuẩn bị và chạy app chính trên iPhone. Extension/Watch không được kích hoạt."
+            }
         } catch { failure = error.localizedDescription }
     }
 

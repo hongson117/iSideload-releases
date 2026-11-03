@@ -41,6 +41,10 @@ struct ContainerView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Label(guest.name.isEmpty ? guest.bundleID : guest.name, systemImage: "app.dashed").font(.headline)
                             Text("\(guest.bundleID) · \(guest.version)").font(.caption).foregroundStyle(.secondary)
+                            if !(guest.embeddedComponents ?? []).isEmpty {
+                                Label("IPA có extension/Watch · chạy app chính trên iPhone", systemImage: "info.circle")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
                             HStack {
                                 Button(guest.prepared ? "Chuẩn bị lại" : "Chuẩn bị") { preparing = guest }
                                 Spacer()

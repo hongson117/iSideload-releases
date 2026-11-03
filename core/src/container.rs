@@ -89,13 +89,15 @@ fn validate_app(app:&Path)->Result<Value,String> {
     let platforms=d.get("CFBundleSupportedPlatforms").and_then(PV::as_array);
     let family=d.get("UIDeviceFamily").and_then(PV::as_array);
     if strval(&d,"DTPlatformName").starts_with("appletv") || platforms.is_some_and(|a| a.iter().any(|v| v.as_string()!=Some("iPhoneOS"))) || family.is_some_and(|a|a.iter().any(|v|v.as_unsigned_integer()==Some(3))) { return Err("Chỉ nhận IPA iPhone/iPad thật, không nhận tvOS hoặc simulator.".into()); }
-    if app.join("PlugIns").exists() || app.join("Watch").exists() { return Err("Bản thử chưa hỗ trợ IPA có extension hoặc Watch app. Hãy dùng bản IPA không có các thành phần đó.".into()); }
+    let mut components=Vec::new();
+    if app.join("PlugIns").is_dir(){components.push("extensions");}
+    if app.join("Watch").is_dir(){components.push("watch");}
     let bundle=strval(&d,"CFBundleIdentifier");
     if bundle.is_empty() { return Err("IPA không có Bundle ID.".into()); }
     let exe=executable(&d)?;
     // Verify the entry point and FairPlay status before committing an import.
     macho::prepare(&fs::read(app.join(exe)).map_err(err)?,true)?;
-    Ok(json!({"bundle_id":bundle,"name":if strval(&d,"CFBundleDisplayName").is_empty(){strval(&d,"CFBundleName")}else{strval(&d,"CFBundleDisplayName")},"version":strval(&d,"CFBundleShortVersionString"),"executable":exe}))
+    Ok(json!({"bundle_id":bundle,"name":if strval(&d,"CFBundleDisplayName").is_empty(){strval(&d,"CFBundleName")}else{strval(&d,"CFBundleDisplayName")},"version":strval(&d,"CFBundleShortVersionString"),"executable":exe,"embedded_components":components,"main_app_only":!components.is_empty()}))
 }
 pub fn import(req:&Value)->Result<Value,String> {
     let dest=guest(req)?;
@@ -124,6 +126,21 @@ fn copy_tree(from:&Path,to:&Path)->Result<(),String> {
         else if ty.is_file() { fs::copy(e.path(),to.join(e.file_name())).map_err(err)?; }
         else { return Err("Unexpected special file".into()); }
     } Ok(())
+}
+/// Preserve all components in Original.app. The loadable copy contains only
+/// the iPhone application; iOS extensions and watchOS executables are not
+/// registered or loaded by this in-process launcher.
+fn copy_main_app(from:&Path,to:&Path)->Result<(),String>{
+    fs::create_dir_all(to).map_err(err)?;
+    for e in fs::read_dir(from).map_err(err)?{
+        let e=e.map_err(err)?;let kind=e.file_type().map_err(err)?;let name=e.file_name();
+        if kind.is_symlink(){return Err("Unexpected symlink in guest bundle".into());}
+        if kind.is_dir() && (name=="PlugIns" || name=="Watch"){continue;}
+        if kind.is_dir(){copy_tree(&e.path(),&to.join(name))?;}
+        else if kind.is_file(){fs::copy(e.path(),to.join(name)).map_err(err)?;}
+        else{return Err("Unexpected special file".into());}
+    }
+    Ok(())
 }
 fn macho_paths(app:&Path)->Result<Vec<PathBuf>,String> {
     let mut dirs=vec![app.to_path_buf()]; let mut files=Vec::new();
@@ -164,7 +181,7 @@ pub fn prepare(req:&Value)->Result<Value,String> {
     if !final_app.exists() && backup.exists() { fs::rename(&backup,&final_app).map_err(err)?; }
     if staging.exists() { fs::remove_dir_all(&staging).map_err(err)?; }
     let result=(|| {
-        copy_tree(&original,&staging)?;
+        copy_main_app(&original,&staging)?;
         let exe=record["executable"].as_str().ok_or("Missing executable")?.to_string();
         let main=staging.join(&exe); let mut entry=0;
         let ent=plist::Dictionary::new();
@@ -209,4 +226,25 @@ mod tests {
         }
     }
     #[test] fn refuses_non_uuid_before_deleting() { for id in ["../other","", "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAA/"] { assert!(!valid_id(id)); } assert!(valid_id("2D3029B6-A7BB-4BD4-A2E9-1F39543A5114")); }
+    #[test] fn imports_extension_watch_ipas_but_prepares_only_the_phone_application(){
+        let root=temp();let ipa=root.join("with-components.ipa");
+        let mut main=vec![0u8;8192];
+        let set=|b:&mut[u8],at:usize,n:u32|b[at..at+4].copy_from_slice(&n.to_le_bytes());
+        for (at,n) in [(0,0xfeedfacf),(4,0x0100000c),(12,2),(16,2),(20,176),(32,0x19),(36,152),(96,1),(152,4096),(184,0x80000028),(188,24)]{set(&mut main,at,n);}
+        main[192..200].copy_from_slice(&4096u64.to_le_bytes());
+        let mut d=plist::Dictionary::new();d.insert("CFBundleIdentifier".into(),"com.example.phone".into());d.insert("CFBundleExecutable".into(),"Phone".into());d.insert("CFBundleName".into(),"Phone".into());d.insert("CFBundleSupportedPlatforms".into(),PV::Array(vec!["iPhoneOS".into()]));
+        let mut xml=Vec::new();plist::to_writer_xml(&mut xml,&d).unwrap();
+        let mut zip=zip::ZipWriter::new(fs::File::create(&ipa).unwrap());
+        for (path,bytes) in [("Payload/Phone.app/Info.plist",xml.as_slice()),("Payload/Phone.app/Phone",main.as_slice()),("Payload/Phone.app/PlugIns/Widget.appex/Widget",b"unsupported extension binary".as_slice()),("Payload/Phone.app/Watch/WatchApp.app/WatchExec",b"unsupported watchOS binary".as_slice())]{
+            zip.start_file(path,zip::write::SimpleFileOptions::default()).unwrap();zip.write_all(bytes).unwrap();
+        }zip.finish().unwrap();
+        let storage=root.join("iContainer");let id="2D3029B6-A7BB-4BD4-A2E9-1F39543A5114";
+        let result=import(&json!({"ipa_path":ipa,"container_root":storage,"guest_id":id})).unwrap();
+        assert_eq!(result["guest"]["embedded_components"],json!(["extensions","watch"]));assert_eq!(result["guest"]["main_app_only"],true);
+        let original=storage.join(id).join("Original.app");let prepared=storage.join(id).join("TestPrepared.app");copy_main_app(&original,&prepared).unwrap();
+        assert!(original.join("PlugIns/Widget.appex/Widget").exists());assert!(original.join("Watch/WatchApp.app/WatchExec").exists());
+        assert!(!prepared.join("PlugIns").exists());assert!(!prepared.join("Watch").exists());
+        assert_eq!(fs::read(prepared.join("Phone")).unwrap(),main);assert_eq!(macho_paths(&prepared).unwrap().len(),1);
+        fs::remove_dir_all(root).unwrap();
+    }
 }
