@@ -2,9 +2,11 @@ name: Build macOS installer
 
 on:
   push:
-    branches: [main, feature/macos-installer]
+    branches: [main, feature/macos-installer, feature/macos-auto-pairing]
     paths:
       - 'macos/**'
+      - 'installer-common/**'
+      - 'scripts/test_macos_launcher.py'
       - 'scripts/generate_notices.py'
       - 'core/vendor/isideload/**'
       - '.github/workflows/macos-installer.yml'
@@ -18,7 +20,7 @@ jobs:
     runs-on: macos-26
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
-      IPA_SHA256: 80f879da89f5efb80f56d9d75b9e498102d9a78596cba1662deb3bf47374cbc5
+      IPA_SHA256: 026a3f23bc37d689af53cd03a5c608b8e99e305091b86d101f33570fe6ad4227
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -29,6 +31,11 @@ jobs:
           workspaces: macos
           key: macos-universal
           cache-on-failure: true
+      - name: Test shared USB transfer and launcher
+        run: |
+          cargo test --locked --manifest-path macos/Cargo.toml
+          bash -n macos/Cai-iSideload.command
+          python3 scripts/test_macos_launcher.py
       - name: Build Apple Silicon and Intel binaries
         run: |
           export ISL_GIT_SHA=${GITHUB_SHA::7}
@@ -54,7 +61,7 @@ jobs:
           cp macos/Cai-iSideload.command macos/README-VI.txt out/iSideload-macOS/
           chmod 755 out/iSideload-macOS/Cai-iSideload.command out/iSideload-macOS/isl-mac
           bash -n out/iSideload-macOS/Cai-iSideload.command
-          curl --fail --location --retry 3 https://github.com/hongson117/iSideload-releases/releases/download/v1.2.1/iSideload.ipa -o out/iSideload-macOS/iSideload.ipa
+          curl --fail --location --retry 3 https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc1/iSideload.ipa -o out/iSideload-macOS/iSideload.ipa
           echo "$IPA_SHA256  out/iSideload-macOS/iSideload.ipa" | shasum -a 256 -c -
           python3 scripts/generate_notices.py --manifest-path macos/Cargo.toml --platform aarch64-apple-darwin --output out/iSideload-macOS/ThirdPartyNotices.txt
           (cd out/iSideload-macOS && shasum -a 256 isl-mac iSideload.ipa Cai-iSideload.command README-VI.txt ThirdPartyNotices.txt > SHA256SUMS.txt && shasum -a 256 -c SHA256SUMS.txt)

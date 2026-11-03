@@ -1,5 +1,5 @@
 //! Native Windows USB installer and Remote Pairing setup tool.
-#[path = "../pairing_setup.rs"]
+#[path = "../../../installer-common/pairing_setup.rs"]
 mod pairing_setup;
 
 use std::{io::Write, path::{Path, PathBuf}, time::Duration};

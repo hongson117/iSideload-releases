@@ -1,58 +1,56 @@
-iSideload - CÀI LẦN ĐẦU TỪ macOS (USB)
-Gói: isl-macos-universal.zip - cho Mac Apple Silicon và Intel, macOS 11 trở lên.
-Trang chính thức: https://github.com/hongson117/iSideload-releases/releases/latest
+iSideload macOS 1.2.2 — CÀI APP VÀ TỰ THIẾT LẬP FILE GHÉP ĐÔI
+Gói Universal: Mac Apple Silicon + Intel, macOS 11+. iPhone/iPad cần iOS/iPadOS 17.4+ cho thiết lập Remote Pairing tự động.
+Tải: https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc1/isl-macos-universal.zip
 
 TRONG GÓI
-- Cai-iSideload.command: nhấp đúp để mở trình hướng dẫn trong Terminal.
-- isl-mac: công cụ native Universal (arm64 + x86_64).
-- iSideload.ipa: bản 1.2.1 build 34 chưa ký, đi kèm sẵn.
-- SHA256SUMS.txt: checksum các tệp trong gói.
-- ThirdPartyNotices.txt: thông tin giấy phép thư viện.
+Cai-iSideload.command, isl-mac Universal, iSideload.ipa 1.2.2 build 35, README-VI.txt, ThirdPartyNotices.txt và SHA256SUMS.txt.
+Không cần Homebrew, Xcode, Python, usbmuxd bên ngoài, RC Pair hay Tailscale cho lượt cài USB.
 
 CHUẨN BỊ
-1. Giải nén toàn bộ ZIP vào một thư mục. Không chạy công cụ ngay trong cửa sổ xem nội dung ZIP.
-2. Cắm iPhone/iPad vào Mac bằng cáp truyền dữ liệu. Giữ iPhone mở khóa, màn hình sáng.
-3. Mở Finder, chọn iPhone trong thanh bên. Bấm Trust/Tin cậy trên Mac và trên iPhone; nhập mật mã iPhone nếu được hỏi. Nếu Mac hỏi cho phép phụ kiện, chọn Allow.
-4. Chuẩn bị Apple ID sẽ dùng để ký và gia hạn, cùng thiết bị nhận mã 2FA. Dùng tài khoản của người sử dụng iPhone.
-5. iPhone cần iOS/iPadOS 17 trở lên để chạy iSideload. Bật Chế độ nhà phát triển khi iOS yêu cầu. Nếu chưa thấy mục này, thử cài trước rồi kiểm tra lại sau.
+1. Giải nén toàn bộ ZIP vào một thư mục, giữ các file cạnh nhau.
+2. Cắm iPhone bằng cáp dữ liệu, mở khóa, mở Finder và chọn thiết bị trong thanh bên.
+3. Bấm Trust/Tin cậy trên Mac và trên iPhone, nhập mật mã iPhone nếu được hỏi. Nếu Mac hỏi cho phép phụ kiện, chọn Allow.
+4. Khi cài từ đầu, chuẩn bị Apple ID sẽ dùng để ký/gia hạn và thiết bị nhận mã 2FA.
 
-CÀI
-6. Nhấp đúp Cai-iSideload.command. Terminal mở, nhấn Enter sau khi đã chuẩn bị xong.
-7. Công cụ kiểm tra checksum, tìm iPhone qua dịch vụ USB có sẵn của macOS. Nếu cắm nhiều máy, chọn đúng số và UDID của máy muốn cài.
-8. Nhập Apple ID, mật khẩu (không hiển thị khi gõ), rồi mã 2FA. Có thể nhập sms để yêu cầu mã qua SMS. Nhấn Enter tại bước 2FA để hủy.
-9. Chờ ký và cài hoàn tất, không rút cáp hay khóa iPhone. Nếu Apple báo hết chứng chỉ, công cụ hỏi trước khi thu hồi; Enter để hủy mà không thu hồi chứng chỉ nào.
-10. Khi thấy XONG: trên iPhone vào Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển, bật và khởi động lại nếu cần. Sau đó Cài đặt > Cài đặt chung > VPN & Quản lý thiết bị > tin cậy tài khoản nhà phát triển, rồi mở iSideload.
+CÁCH 1 — CÀI TỪ ĐẦU, APP CÓ SẴN FILE GHÉP ĐÔI
+1. Nhấp đúp Cai-iSideload.command để mở Terminal. Công cụ kiểm tra checksum gói.
+2. Chọn 1. Nếu có nhiều iPhone, chọn đúng số/UDID.
+3. Nhập Apple ID, mật khẩu (ẩn khi gõ), mã 2FA nếu được hỏi. Có thể nhập sms để yêu cầu mã SMS; Enter trống tại bước 2FA để hủy.
+4. Công cụ ký và cài app. Nếu Chế độ nhà phát triển chưa bật, làm theo hướng dẫn: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Bật. Giữ cáp, khởi động lại và xác nhận Bật trên iPhone khi được yêu cầu; xong nhấn Enter trên Mac.
+5. Giữ iPhone mở khóa, đóng hẳn iSideload trong khi thiết lập. Công cụ tạo Remote Pairing qua USB, xác minh với iPhone, chép vào app, đọc lại và xác minh lần cuối.
+6. Chờ thông báo XONG: iSideload đã có file Remote Pairing… Không cần tự xuất/nhập file bằng idevice_pair hay ứng dụng khác.
+7. Trên iPhone, tin cậy tài khoản nhà phát triển tại Cài đặt > Cài đặt chung > VPN & Quản lý thiết bị nếu được yêu cầu.
+8. Mở iSideload, đăng nhập cùng Apple ID, kết nối Wi-Fi có Internet. Cài/bật LocalDevVPN, quay lại Thiết bị > Kiểm tra kết nối thiết bị, rồi thử Làm mới iSideload.
 
-KHÔNG CẦN cài Homebrew, Xcode, Python, usbmuxd bên ngoài, RC Pair hay Tailscale cho lượt cài USB này. Công cụ không cần sudo/mật khẩu quản trị Mac. Gatekeeper có thể yêu cầu xác nhận của chủ máy, tùy cấu hình quản lý thiết bị.
+CÁCH 2 — ĐÃ CÓ iSIDELOAD, CHỈ THIẾT LẬP/SỬA GHÉP ĐÔI
+1. Cắm iPhone, mở khóa và đóng hẳn iSideload.
+2. Mở Cai-iSideload.command, chọn 2. Chế độ này không cần Apple ID/mật khẩu, không ký hay cài lại app.
+3. Nếu có nhiều bản iSideload, chọn đúng bundle ID. Công cụ chỉ nhận họ bundle ID com.hongson117.isideload.
+4. Làm theo hướng dẫn bật Chế độ nhà phát triển nếu cần, rồi chờ XONG.
+5. Mở lại iSideload, bật LocalDevVPN và bấm Kiểm tra kết nối thiết bị.
 
-NẾU macOS CHẶN CÔNG CỤ
-Gói được build bằng GitHub Actions, có chữ ký ad-hoc để chạy trên Mac; chưa có Developer ID/notarization của Apple.
-- Chỉ tải từ trang phát hành chính thức ở trên và đối chiếu checksum ZIP tại đó.
-- Thử mở Cai-iSideload.command. Nếu thông báo bị chặn, mở System Settings > Privacy & Security, xem phần Security và chọn Open Anyway cho đúng công cụ vừa mở. Xác nhận rồi thử lại.
-- Có thể cần xác nhận riêng cho isl-mac. Đọc nội dung cảnh báo để chắc đúng file trong thư mục bộ cài.
-- Không cần tắt Gatekeeper toàn hệ thống. Nếu Mac do công ty quản lý không cho phép, liên hệ quản trị viên.
-- Nếu Terminal báo permission denied do phần mềm giải nén làm mất quyền chạy: mở Terminal, gõ chmod +x (thêm một dấu cách), kéo file Cai-iSideload.command vào cửa sổ rồi Enter; lặp lại cho isl-mac. Sau đó mở lại .command.
+File ghép đôi được tạo riêng cho đúng iPhone, không phải file dùng chung đóng gói sẵn trong ZIP. Bản ghi hiện có được dùng lại nếu iPhone vẫn chấp nhận; quá trình chép thử có kiểm tra và khôi phục file cũ nếu thất bại. Công cụ không xóa danh sách app hay tài khoản trong iSideload.
+Xác minh USB của bộ cài khác với kiểm tra đường LocalDevVPN trong app. Cần bấm Kiểm tra kết nối thiết bị sau khi mở app để xác nhận đường tự gia hạn.
 
-SAU KHI CÀI
-- iSideload tự xuất hiện trong tab Ứng dụng kèm hạn ký thật.
-- Đăng nhập trong iSideload bằng tài khoản đã dùng để ký. Muốn tự gia hạn: cài LocalDevVPN từ App Store và làm theo mục Ghép nối máy này. iOS 27+ ghép nối ngay trong iSideload; iOS cũ cần file ghép nối tương thích từ máy tính.
-- Trước khi hết hạn, dùng Làm mới iSideload hoặc Ký lại tất cả. Có thể thiết lập Phím tắt để tự mở app và LocalDevVPN khi cần.
-- Muốn dùng máy này cài iSideload cho máy khác: Thiết bị > Cài cho iPhone khác; máy nhận cần iOS 27+ và cùng Wi-Fi.
+NẾU CHƯA HOÀN TẤT
+- Không thấy iPhone: kiểm tra cáp dữ liệu, mở khóa, mở Finder và bấm Trust/Tin cậy.
+- App đã cài nhưng ghép đôi lỗi: giữ app, sửa nguyên nhân ghi trong Terminal, rồi chạy lại lựa chọn 2.
+- Nếu Apple báo hết chỗ chứng chỉ, công cụ yêu cầu chọn và xác nhận trước khi thu hồi. Enter để hủy mà không thu hồi. Chứng chỉ bị thu hồi có thể làm các app đã dùng nó ngừng mở.
+- Bộ cài không cần sudo hoặc mật khẩu quản trị Mac.
 
-KHẮC PHỤC LỖI
-- Không thấy iPhone: đổi cáp/cổng USB, mở khóa, chọn thiết bị trong Finder, xác nhận Trust trên cả hai máy. Cáp chỉ sạc không dùng được.
-- Không đọc được pairing record: hoàn tất Trust trong Finder trước, rồi mở lại .command.
-- Không đăng nhập được Apple: kiểm tra tài khoản/mật khẩu/2FA, kết nối Internet và điều khoản developer.apple.com nếu là tài khoản mới. Không gửi mật khẩu cho người hỗ trợ.
-- Hết chỗ app/App ID: gỡ bớt app tự ký hoặc chờ hạn App ID theo quy định của Apple. Đổi Apple ID không bảo đảm tăng số app trên máy.
-- Cài xong chưa mở được: kiểm tra Developer Mode và VPN & Quản lý thiết bị trên iPhone.
+NẾU GATEKEEPER CHẶN
+Binary có chữ ký ad-hoc, chưa có Developer ID/notarization của Apple. Chỉ tải gói chính thức và đối chiếu checksum ZIP trên trang release.
+- Mở file, rồi vào System Settings > Privacy & Security > Open Anyway cho đúng file vừa bị chặn. Trên macOS cũ: System Preferences > Security & Privacy > General. Có thể cần xác nhận riêng cho isl-mac.
+- Không cần tắt Gatekeeper toàn hệ thống. Nếu Mac thuộc công ty và bị quản lý, làm theo quy định của quản trị viên.
+- Nếu phần mềm giải nén làm mất quyền chạy: trong Terminal gõ chmod +x (kèm dấu cách), kéo đúng file Cai-iSideload.command vào rồi Enter; lặp lại cho isl-mac.
 
-QUYỀN RIÊNG TƯ
-Mật khẩu được nhập trong Terminal và không ghi ra file bởi công cụ; dùng cho quá trình xác thực Apple. Công cụ không gửi mật khẩu lên VPS hoặc máy chủ của người phát hành. Cache anisette, khóa/chứng chỉ ký nằm trong ~/Library/Application Support/iSideload-Installer, thư mục riêng của tài khoản Mac hiện tại. Giữ bí mật thư mục này; xóa cache có thể khiến lần cài sau phải cấp chứng chỉ lại.
+DỮ LIỆU
+Mật khẩu được nhập ẩn và không được công cụ ghi ra file; dùng để xác thực Apple. Bộ cài không gửi mật khẩu/file ghép đôi lên VPS của người phát hành. Cache anisette, khóa/chứng chỉ ký ở ~/Library/Application Support/iSideload-Installer, chỉ tài khoản Mac hiện tại truy cập. Giữ bí mật thư mục này.
 
 KIỂM CHỨNG
-Build/test tự động trên macOS kiểm tra binary Universal, tự kiểm tra CLI, cú pháp launcher và checksum IPA/gói. Chưa xác nhận cài USB end-to-end trên Mac cá nhân có iPhone thật; khi báo lỗi, gửi nội dung lỗi đã loại bỏ dữ liệu riêng, phiên bản Mac/iOS, không gửi mật khẩu hoặc file khóa/chứng chỉ.
+CI chạy kiểm thử chép/khôi phục file ghép đôi, launcher hai chế độ, hủy/EOF, checksum sai, binary Universal và CLI self-test trên Apple Silicon và Intel qua Rosetta khi có sẵn. Kiểm tra phần mềm không thay thế xác nhận cài USB đầu-cuối trên Mac với iPhone thật. Khi báo lỗi, gửi phiên bản macOS/iOS và nội dung lỗi, không gửi mật khẩu hoặc khóa riêng.
 
 Tài liệu Apple:
 https://support.apple.com/109054
 https://support.apple.com/108643
-https://support.apple.com/102445
+https://support.apple.com/guide/mac-help/mh40617/mac

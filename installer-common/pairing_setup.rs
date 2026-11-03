@@ -10,6 +10,7 @@ use idevice::{
 pub const DIRECTORY: &str = "/Documents/Storage";
 pub const TARGET: &str = "/Documents/Storage/pairing.plist";
 const MAX_RECORD: usize = 64 * 1024;
+const PLATFORM: &str = if cfg!(target_os = "macos") { "macOS" } else { "Windows" };
 
 async fn bounded<T>(operation: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
     tokio::time::timeout(Duration::from_secs(30), operation).await
@@ -79,8 +80,8 @@ impl Files for AfcClient {
 async fn replace_record(files: &mut impl Files, data: &[u8], nonce: &str) -> Result<(), String> {
     let old = files.read(TARGET).await?;
     if old.as_deref() == Some(data) { return Ok(()); }
-    let temporary = format!("{DIRECTORY}/pairing-windows-{nonce}.tmp");
-    let backup = format!("{DIRECTORY}/pairing-before-windows-{nonce}.plist");
+    let temporary = format!("{DIRECTORY}/pairing-installer-{nonce}.tmp");
+    let backup = format!("{DIRECTORY}/pairing-before-installer-{nonce}.plist");
     files.write(&temporary, data).await?;
     if files.read(&temporary).await?.as_deref() != Some(data) {
         let _ = files.remove(&temporary).await;
@@ -119,7 +120,7 @@ async fn verify_device(provider: &impl IdeviceProvider, expected: &str) -> Resul
 async fn verify_record(provider: &impl IdeviceProvider, record: &mut RpPairingFile) -> Result<(), String> {
     bounded(async {
     let service = RemotePairingLockdownService::connect(provider).await.map_err(|e| e.to_string())?;
-    let mut client = service.into_client("iSideload Windows").map_err(|e| e.to_string())?;
+    let mut client = service.into_client(&format!("iSideload {PLATFORM}")).map_err(|e| e.to_string())?;
     client.attempt_pair_verify().await.map_err(|e| e.to_string())?;
     client.validate_pairing(record).await.map_err(|e| e.to_string())
     }).await
@@ -148,7 +149,7 @@ pub async fn setup(provider: &impl IdeviceProvider, bundle_id: &str, udid: &str)
     if record.is_none() {
         println!("Đang tạo Remote Pairing qua kết nối USB đã được Tin cậy…");
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?.as_nanos();
-        let host = format!("iSideload Windows {nonce:x}");
+        let host = format!("iSideload {PLATFORM} {nonce:x}");
         let mut created = RpPairingFile::generate(&host);
         // A second fresh control connection commits/reuses the saved identity,
         // matching upstream idevice_pair's USB onboarding flow.

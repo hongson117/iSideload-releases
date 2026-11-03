@@ -1,13 +1,13 @@
 [package]
 name = "isl-cli"
-version = "0.1.0"
+version = "1.2.2"
 edition = "2021"
 autobins = false
 
 [dependencies]
 plist = "1.8"
 isideload = { version = "0.4.6", default-features = false, features = ["install", "fs-storage", "tokio-mt"] }
-idevice = { version = "0.1.61", default-features = false, features = ["afc", "installation_proxy", "tcp", "usbmuxd", "ring"] }
+idevice = { version = "0.1.61", default-features = false, features = ["afc", "house_arrest", "installation_proxy", "tcp", "usbmuxd", "ring", "remote_pairing", "amfi"] }
 serde = { version = "1", features = ["derive"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rootcause = "0.12.0"

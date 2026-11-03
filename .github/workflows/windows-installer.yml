@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main, feature/windows-auto-pairing]
-    paths: ['windows/**', 'core/vendor/isideload/**', 'scripts/generate_notices.py', '.github/workflows/windows-installer.yml']
+    paths: ['windows/**', 'installer-common/**', 'core/vendor/isideload/**', 'scripts/generate_notices.py', '.github/workflows/windows-installer.yml']
 
 permissions:
   contents: read
