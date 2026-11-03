@@ -1,0 +1,129 @@
+name: Build public iSideload binary
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Approved private source commit (40 hex characters)
+        required: true
+      build_number:
+        description: Increasing iPhone app build number
+        required: true
+        default: '10'
+permissions:
+  contents: read
+concurrency:
+  group: public-isideload-build
+  cancel-in-progress: false
+jobs:
+  core-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+    steps:
+      - name: Validate build request
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] && [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+      - uses: actions/checkout@v4
+        with:
+          repository: hongson117/iSideload
+          ref: ${{ inputs.source_sha }}
+          ssh-key: ${{ secrets.TEMP_SOURCE_READ_KEY }}
+          persist-credentials: false
+          show-progress: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /core/
+            !**/target/
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test private core without publishing source diagnostics
+        run: |
+          if cargo test --locked --manifest-path core/Cargo.toml >/tmp/core-tests.log 2>&1; then
+            echo 'Core regression tests passed.'
+          else
+            echo 'Core regression tests failed; private diagnostics were not uploaded.'
+            exit 1
+          fi
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      BUILD_NUMBER: ${{ inputs.build_number }}
+    steps:
+      - name: Validate build request
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] && [[ "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+      - uses: actions/checkout@v4
+        with:
+          repository: hongson117/iSideload
+          ref: ${{ inputs.source_sha }}
+          ssh-key: ${{ secrets.TEMP_SOURCE_READ_KEY }}
+          persist-credentials: false
+          show-progress: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /core/
+            /ios/
+            /scripts/
+            /tests/
+            /project.yml
+            !**/target/
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - name: Build private signing core
+        run: |
+          export IPHONEOS_DEPLOYMENT_TARGET=17.0
+          export ISL_GIT_SHA=${SOURCE_SHA:0:7}
+          export RUSTFLAGS="--remap-path-prefix=${GITHUB_WORKSPACE}=/src --remap-path-prefix=${HOME}/.cargo=/deps/cargo"
+          cargo build --locked --release --target aarch64-apple-ios --manifest-path core/Cargo.toml >/tmp/core-build.log 2>&1 || { echo 'Core build failed; private diagnostics were not uploaded.'; exit 1; }
+      - name: Test app policies and generate project
+        run: |
+          (
+            set -e
+            swiftc -parse-as-library ios/iSideload/Core/SelfSigningIdentity.swift tests/SelfSigningIdentityTests.swift -o /tmp/identity-tests
+            /tmp/identity-tests
+            swiftc -parse-as-library ios/iSideload/Core/PeerSigningChoice.swift tests/PeerSigningChoiceTests.swift -o /tmp/choice-tests
+            /tmp/choice-tests
+            swiftc -parse-as-library ios/iSideload/Core/AppUpdate.swift tests/AppUpdateTests.swift -o /tmp/update-tests
+            /tmp/update-tests
+            swiftc -parse-as-library ios/iSideload/Core/Models.swift ios/iSideload/Core/InstalledAppState.swift tests/InstalledAppStateTests.swift -o /tmp/lifecycle-tests
+            /tmp/lifecycle-tests
+            swiftc -parse-as-library ios/iSideload/Core/PairingRecord.swift tests/PairingRecordTests.swift -o /tmp/pair-tests
+            /tmp/pair-tests
+            swiftc -parse-as-library ios/iSideload/Core/Models.swift ios/iSideload/Core/LiveContainerSigning.swift tests/LiveContainerSigningTests.swift -o /tmp/lc-tests
+            /tmp/lc-tests
+            python3 scripts/generate_notices.py
+            brew install xcodegen
+            xcodegen generate
+          ) >/tmp/app-tests.log 2>&1 || { echo 'App checks failed; private diagnostics were not uploaded.'; exit 1; }
+          echo 'App policy tests passed.'
+      - name: Build unsigned app
+        run: |
+          xcodebuild -project iSideload.xcodeproj -scheme iSideload -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/app-build.log 2>&1 || { echo 'App build failed; private diagnostics were not uploaded.'; exit 1; }
+      - name: Package audited binary only
+        run: |
+          APP=build/Build/Products/Release-iphoneos/iSideload.app
+          /usr/libexec/PlistBuddy -c "Set :ISLGitSHA ${SOURCE_SHA:0:7}" "$APP/Info.plist"
+          mkdir -p out/Payload publish
+          cp -R "$APP" out/Payload/
+          (cd out && zip -qry ../publish/iSideload.ipa Payload)
+          python3 scripts/audit_release.py --self-test >/tmp/audit-test.log 2>&1
+          python3 scripts/audit_release.py publish/iSideload.ipa --expected-sha "${SOURCE_SHA:0:7}" --output publish/recipient-audit.json >/tmp/audit.log 2>&1
+          (cd publish && shasum -a 256 iSideload.ipa > SHA256SUMS.txt)
+          python3 - <<'PY'
+          import os,json,pathlib
+          pathlib.Path('publish/BUILD-SOURCE.json').write_text(json.dumps({'source_commit':os.environ['SOURCE_SHA'],'build':os.environ['BUILD_NUMBER'],'product':'iSideload','version':'1.2.5','unsigned':True}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iSideload-public-${{ inputs.build_number }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            publish/iSideload.ipa
+            publish/SHA256SUMS.txt
+            publish/recipient-audit.json
+            publish/BUILD-SOURCE.json
