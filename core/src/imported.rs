@@ -355,6 +355,12 @@ pub async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     let upgrade = req.get("upgrade").and_then(Value::as_bool).unwrap_or(false);
     let port = req.get("port").and_then(Value::as_u64).unwrap_or(0) as u16;
     let (id, profs) = load_stored(req)?;
+    if req.get("self_refresh").and_then(Value::as_bool).unwrap_or(false) {
+        let expected=crate::self_refresh::installed_team(&ipa)?;
+        if !id.team.eq_ignore_ascii_case(&expected) {
+            return Err(format!("Chứng chỉ đã nhập thuộc Team {}, khác Team {} đang ký iContainer. Gia hạn bản hiện tại cần giữ Team đã cài.",id.team,expected));
+        }
+    }
     if id.expires <= now() {
         return Err("Chứng chỉ có sẵn đã hết hạn.".into());
     }

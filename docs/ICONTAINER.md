@@ -37,6 +37,14 @@ existing LiveContainer installation or delete its data for this preview.
 - Each import creates a new entry and new data; updating/migrating an existing
   LiveContainer guest is not implemented.
 - Guest preparation never replaces `Data/` or the original imported bundle.
+- Self-refresh reads the signing team from the installed provisioning profile,
+  selects that team from the authenticated account, and rejects a different team
+  before requesting certificates or registering an App ID. The first account
+  logged into a fresh app is not assumed to be the installer.
+- The optional per-device `Storage/installation-identity.json` supplies the
+  installer's Apple ID as a login hint, only when bundle ID and team match the
+  installed profile. It is created on-device by the installer and is never
+  embedded in the distributable IPA. Apple ID passwords are not in this file.
 
 ## First installation and smoke test
 

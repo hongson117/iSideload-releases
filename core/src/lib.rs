@@ -12,6 +12,7 @@ mod imported;
 mod peer;
 mod container;
 mod container_macho;
+mod self_refresh;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::OnceLock;

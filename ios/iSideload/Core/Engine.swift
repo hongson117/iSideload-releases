@@ -65,11 +65,34 @@ final class Engine: ObservableObject {
     }
     func signerOf(_ app: SideloadedApp) -> String {
         if let signer = app.signer { return signer }
-        if isSelf(app) { return defaultSigner.isEmpty ? "self" : defaultSigner }
+        if isSelf(app) { return "self" }
         return "apple:" + appleID
     }
     func isSelf(_ app: SideloadedApp) -> Bool { app.bundleID == isideloadBundleID }
     var selfApp: SideloadedApp? { apps.first(where: isSelf) }
+
+    var selfSigningIdentity: SelfSigningIdentity? {
+        guard let state = InstalledAppState.read(bundleURL: Bundle.main.bundleURL), let teamID = state.teamID else { return nil }
+        return SelfSigningIdentity(bundleID: state.bundleID, teamID: teamID,
+            installerData: try? Data(contentsOf: Self.storage.appendingPathComponent("installation-identity.json")))
+    }
+
+    private func knownTeamIDs(for account: String) -> [String]? {
+        (UserDefaults.standard.dictionary(forKey: "accountTeamIDs") as? [String: [String]])?[account.lowercased()]
+    }
+
+    func selfSignerProblem(_ signer: String) -> String? {
+        guard let identity = selfSigningIdentity else { return "Chưa đọc được Team ký bản đang cài." }
+        let teams: [String]?
+        if signer == "cert" {
+            let team = (importedCert?["certificate"] as? [String: Any])?["team_id"] as? String
+            teams = team.map { [$0] }
+        }
+        else if signer.hasPrefix("apple:") { teams = knownTeamIDs(for: String(signer.dropFirst(6))) }
+        else { return nil }
+        guard let teams, !identity.accepts(teamIDs: teams) else { return nil }
+        return "Nguồn ký đã chọn không thuộc Team của bản đang cài. " + identity.description
+    }
 
     /// Register a fresh installation without needing VPN or a device browse first.
     func syncSelfRecord(signer: String? = nil) {
@@ -225,13 +248,19 @@ final class Engine: ObservableObject {
         await guarded {
             do {
                 let r = try await run(base("sign_in", signer: "apple:" + id))
+                let teamIDs = (r["teams"] as? [[String: Any]] ?? []).compactMap { $0["team_id"] as? String }
+                var memberships = UserDefaults.standard.dictionary(forKey: "accountTeamIDs") as? [String: [String]] ?? [:]
+                memberships[id.lowercased()] = teamIDs
+                UserDefaults.standard.set(memberships, forKey: "accountTeamIDs")
                 if appleID.isEmpty || Keychain.load(appleID) == nil { appleID = id }
                 if !accounts.contains(id) { accountsRaw = (accounts + [id]).joined(separator: "\n") }
                 var t = UserDefaults.standard.dictionary(forKey: "teams") as? [String: String] ?? [:]
                 t[id] = r["team_name"] as? String ?? (r["team"] as? String ?? ""); UserDefaults.standard.set(t, forKey: "teams")
                 if id == appleID { teamName = r["team_name"] as? String ?? (r["team"] as? String ?? "") }
                 signedIn = true
-                if selfApp?.signer == nil { syncSelfRecord(signer: "apple:" + id) }
+                if selfApp?.signer == nil, selfSigningIdentity?.accepts(teamIDs: teamIDs) == true {
+                    syncSelfRecord(signer: "apple:" + id)
+                }
                 infoText = "Đã thêm tài khoản \(id)."
             } catch {
                 if let previousPassword { Keychain.save(previousPassword, for: id) }
@@ -444,6 +473,7 @@ final class Engine: ObservableObject {
         guard signers.contains(who) else {
             errorText = "Chọn tài khoản ký cho iContainer: đăng nhập Apple ID trong tab Tài khoản, hoặc nhập chứng chỉ của bạn."; return
         }
+        if let problem = selfSignerProblem(who) { errorText = problem; return }
         if who != "cert" {
             guard hasPairing else { errorText = "Máy này chưa tự ghép nối. Vào Thiết bị › Ghép nối ngay trên máy, rồi thử Làm mới iContainer."; return }
             if !vpnActive { pendingVPNAction = .refreshSelf(who); LoopbackVPN.turnOn(); return }

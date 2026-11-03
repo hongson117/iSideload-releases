@@ -28,7 +28,9 @@ struct AppsView: View {
                                 } else {
                                     Text("Chưa đọc được hạn ký từ iOS").font(.caption).foregroundStyle(.secondary)
                                 }
-                                if engine.canSign { Text("Ký lại bằng: \(engine.signerLabel(engine.signerOf(app)))").font(.caption2) }
+                                if let identity = engine.selfSigningIdentity {
+                                    Text(identity.description).font(.caption2).foregroundStyle(.secondary)
+                                }
                             }
                         }
                         if !engine.signers.isEmpty {
@@ -39,6 +41,9 @@ struct AppsView: View {
                                 Text("Chọn tài khoản ký").tag("")
                                 ForEach(engine.signers, id: \.self) { Text(engine.signerLabel($0)).tag($0) }
                             }.disabled(engine.busy)
+                        }
+                        if let problem = engine.selfSignerProblem(engine.signerOf(app)) {
+                            Text(problem).font(.footnote).foregroundStyle(.orange)
                         }
                         Button {
                             Task { await engine.refreshSelf() }

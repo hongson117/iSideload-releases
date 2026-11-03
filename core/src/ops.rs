@@ -144,9 +144,10 @@ async fn apps(req: &Value) -> Result<Value, String> {
 
 async fn sign_in_only(req: &Value, ui: Ui) -> Result<Value, String> {
     let (_a, mut dev) = sign_in(req, ui).await?;
-    let team = dev.list_teams().await.map_err(|e| explain("No developer team", &e))?
-        .into_iter().next().ok_or("This Apple ID has no developer team.")?;
-    Ok(json!({"ok": true, "team": team.team_id, "team_name": team.name}))
+    let teams = dev.list_teams().await.map_err(|e| explain("No developer team", &e))?;
+    let team = teams.first().ok_or("This Apple ID has no developer team.")?;
+    Ok(json!({"ok": true, "team": team.team_id, "team_name": team.name,
+        "teams": teams.iter().map(|t|json!({"team_id":t.team_id,"name":t.name})).collect::<Vec<_>>() }))
 }
 
 // ---- Apple ID ----
@@ -339,6 +340,7 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     }
     let upgrade = req.get("upgrade").and_then(Value::as_bool).unwrap_or(false);
     let self_refresh = req.get("self_refresh").and_then(Value::as_bool).unwrap_or(false);
+    let installed_team = if self_refresh { Some(crate::self_refresh::installed_team(&ipa)?) } else { None };
     if self_refresh {
         let installed_id = s(req, "installed_bundle_id");
         let actual = inspect_ipa(&ipa)?;
@@ -371,7 +373,13 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     }
 
     // 2. Apple ID + developer session; certificate is reused from storage when valid.
-    let (_account, dev) = sign_in(req, ui).await?;
+    let (_account, mut dev) = sign_in(req, ui).await?;
+    // Validate the selected account before creating certificates, registering
+    // devices or attempting to claim an App ID already owned by another team.
+    let refresh_team = if let Some(expected) = installed_team.as_deref() {
+        let teams=dev.list_teams().await.map_err(|e|explain("Không kiểm tra được Team của Apple ID",&e))?;
+        Some(crate::self_refresh::select_team(&teams,expected,s(req,"apple_id"))?)
+    } else { None };
     let revoke_prompt = move |certs: Vec<DevelopmentCertificate>| -> MaxCertsCallbackFuture {
         Box::pin(async move {
             let q = json!({"kind": "revoke", "certs": certs.iter().map(cert_json).collect::<Vec<_>>()});
@@ -391,7 +399,8 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
 
     // 3. Register this iPhone/iPad as a development device.
     ui.progress("Đang đăng ký thiết bị…", None);
-    let team = sideloader.get_team().await.map_err(|e| explain("No developer team", &e))?;
+    let team = if let Some(team)=refresh_team { team }
+        else { sideloader.get_team().await.map_err(|e| explain("No developer team", &e))? };
     sideloader
         .get_dev_session()
         .ensure_device_registered(&team, &dev_name, &udid, Some(DeveloperDeviceType::Ios))

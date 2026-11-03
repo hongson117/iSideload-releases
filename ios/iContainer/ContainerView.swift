@@ -20,12 +20,16 @@ struct ContainerView: View {
                 if let own = engine.selfApp {
                     Section("Gia hạn iContainer") {
                         if let date = own.expires { Text("Hết hạn: " + date.formatted(date: .abbreviated, time: .shortened)) }
+                        if let identity = engine.selfSigningIdentity { Text(identity.description).font(.footnote).foregroundStyle(.secondary) }
                         Picker("Nguồn ký", selection: Binding(get: {
                             let current = engine.signerOf(own)
                             return engine.signers.contains(current) ? current : ""
                         }, set: { if !$0.isEmpty { engine.syncSelfRecord(signer: $0) } })) {
                             Text("Chọn nguồn ký").tag("")
                             ForEach(engine.signers, id: \.self) { s in Text(engine.signerLabel(s)).tag(s) }
+                        }
+                        if let problem = engine.selfSignerProblem(engine.signerOf(own)) {
+                            Text(problem).font(.footnote).foregroundStyle(.orange)
                         }
                         Button("Làm mới toàn bộ iContainer") { Task { await engine.refreshSelf() } }
                             .disabled(!engine.canSign)
