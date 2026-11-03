@@ -20,7 +20,7 @@ Nếu AI chỉ trò chuyện hoặc Terminal của AI chạy trong cloud/sandbox
 | Chưa có iSideload, cài từ đầu | **1** | Người dùng nhập trực tiếp vào Terminal của bộ cài |
 | Đã có iSideload qua Sideloadly/công cụ khác, chỉ cần ghép đôi | **2** | Không yêu cầu đăng nhập để ký lại app |
 
-Windows: mở `Cai-iSideload.bat` trong thư mục `isl-windows` sau khi giải nén. Mac: mở `Cai-iSideload.command` trong thư mục `iSideload-macOS`. Gói đã kèm IPA 1.2.2 build 35; không cần tải IPA riêng cho hai luồng này.
+Windows: mở `Cai-iSideload.bat` trong thư mục `isl-windows` sau khi giải nén. Mac: mở `Cai-iSideload.command` trong thư mục `iSideload-macOS`. Gói đã kèm IPA 1.2.3 build 36; không cần tải IPA riêng cho hai luồng này.
 
 ## Quy trình để AI hỗ trợ
 
@@ -68,4 +68,14 @@ macOS:
 
 ## Giới hạn của bản phát hành
 
-1.2.2 RC2 là bản thử. Build Windows/macOS, kiểm thử chép/khôi phục file, launcher và self-test đã qua; Windows lựa chọn 2 đã được xác nhận với bản ghi có sẵn trên iPhone thật: xác minh USB và kiểm tra LocalDevVPN đều thành công. Lượt này chưa thử tạo bản ghi mới; cài từ đầu bằng lựa chọn 1 và USB trên Mac vẫn cần xác nhận. File ghép đôi được tạo riêng khi chạy, không có bản ghi dùng chung trong ZIP. Hai bộ cài không tự đăng nhập tài khoản vào app iPhone; người dùng đăng nhập trong app sau khi cài để tự gia hạn.
+1.2.3 RC1 là bản thử. Build Windows/macOS, kiểm thử chép/khôi phục file, launcher và self-test đã qua; Windows lựa chọn 2 đã được xác nhận với bản ghi có sẵn trên iPhone thật: xác minh USB và kiểm tra LocalDevVPN đều thành công. Lượt này chưa thử tạo bản ghi mới; cài từ đầu bằng lựa chọn 1 và USB trên Mac vẫn cần xác nhận. File ghép đôi được tạo riêng khi chạy, không có bản ghi dùng chung trong ZIP. Hai bộ cài không tự đăng nhập tài khoản vào app iPhone; người dùng đăng nhập trong app sau khi cài để tự gia hạn.
+
+
+## Trong iSideload 1.2.3
+
+- **Đã có file ghép đôi:** file còn trong app. Bật LocalDevVPN và bấm **Kiểm tra kết nối thiết bị** ngay ở đầu tab Thiết bị. Mở lại/cập nhật app đặt lại trạng thái kiểm tra, chưa cần tạo hay nhập lại file chỉ vì chưa kiểm tra ở lần mở mới.
+- **VPN đã bật:** đây là bước chuẩn bị; nút kiểm tra thiết bị mới xác nhận kết nối tới iPhone.
+- **Cài/cài lại LiveContainer:** chọn rõ Apple ID hoặc chứng chỉ .p12 đã nhập. Nguồn được giữ qua bước bật VPN và dùng cho chứng chỉ chuyển sang LiveContainer.
+- **Nhiều bản LiveContainer:** dùng hướng dẫn lưu/nhập .p12 vào đúng bản trong app. Đổi nguồn ký có thể tạo bản khác; dữ liệu bản cũ không tự chuyển sang bản mới.
+
+Công cụ `--version` vẫn báo desktop installer 1.2.2; manifest phiên bản 1.2.3-rc1 chỉ gói phân phối kèm app iPhone 1.2.3 build 36. Đây không phải lỗi sai phiên bản.

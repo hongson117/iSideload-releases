@@ -75,3 +75,11 @@ Công cụ dùng lại bản ghi Remote Pairing trong app nếu iPhone vẫn ch�
 - `isl-cli.exe --self-test`: kiểm tra ngoại tuyến, không cần iPhone hay tài khoản.
 
 Apple ID miễn phí thường có profile 7 ngày. Xem hạn ký thật trong iSideload; gia hạn trước ngày hết hạn. Quy trình Apple ID mới vẫn có thể cần chấp nhận điều khoản của Apple.
+
+
+## Trong iSideload 1.2.3
+
+- **Đã có file ghép đôi:** file còn trong app. Bật LocalDevVPN và bấm **Kiểm tra kết nối thiết bị** ngay ở đầu tab Thiết bị. Mở lại/cập nhật app đặt lại trạng thái kiểm tra, chưa cần tạo hay nhập lại file chỉ vì chưa kiểm tra ở lần mở mới.
+- **VPN đã bật:** đây là bước chuẩn bị; nút kiểm tra thiết bị mới xác nhận kết nối tới iPhone.
+- **Cài/cài lại LiveContainer:** chọn rõ Apple ID hoặc chứng chỉ .p12 đã nhập. Nguồn được giữ qua bước bật VPN và dùng cho chứng chỉ chuyển sang LiveContainer.
+- **Nhiều bản LiveContainer:** dùng hướng dẫn lưu/nhập .p12 vào đúng bản trong app. Đổi nguồn ký có thể tạo bản khác; dữ liệu bản cũ không tự chuyển sang bản mới.
