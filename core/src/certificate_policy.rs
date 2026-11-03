@@ -30,6 +30,7 @@ fn selection(answer:&str,rows:&[Value])->Result<Vec<String>,String>{
 }
 pub fn behavior(req:&Value,ui:Ui,team:&str)->MaxCertsBehavior<MaxCertsCallbackBox>{
     let protected=protected(req,team);let account=s(req,"apple_id").to_string();let team=team.to_string();
+    let interactive=req.get("allow_certificate_prompt").and_then(Value::as_bool).unwrap_or(true);
     MaxCertsBehavior::Prompt(Box::new(move |certs:Vec<DevelopmentCertificate>|->MaxCertsCallbackFuture{
         let protected=protected.clone();let account=account.clone();let team=team.clone();
         Box::pin(async move{
@@ -44,6 +45,7 @@ pub fn behavior(req:&Value,ui:Ui,team:&str)->MaxCertsBehavior<MaxCertsCallbackBo
             let expired:Vec<String>=rows.iter().filter(|r|r["expired"]==true && r["protected"]!=true).filter_map(|r|r["serial"].as_str().map(str::to_string)).collect();
             if !expired.is_empty(){ui.progress("Đang thu hồi chứng chỉ đã hết hạn để tiếp tục ký…",None);return Ok(Some(expired));}
             if rows.is_empty(){return Err(report!("Apple báo đầy chứng chỉ nhưng không trả về chứng chỉ có thể thu hồi. Hãy thử tải lại danh sách trong Tài khoản."));}
+            if !interactive{return Err(report!("Mở app để chọn chứng chỉ cũ cần thu hồi rồi tiếp tục ký. Tác vụ nền không tự thu hồi chứng chỉ còn hạn."));}
             ui.progress("Apple đã đủ chứng chỉ. Chọn chứng chỉ cũ để thu hồi rồi tiếp tục ký.",None);
             let answer=ui.ask(json!({"kind":"revoke","certs":rows,"account":account,"team_id":team})).await
                 .ok_or_else(||report!("Đã hủy thu hồi chứng chỉ; chưa thu hồi thêm chứng chỉ nào."))?;
@@ -88,5 +90,10 @@ pub fn behavior(req:&Value,ui:Ui,team:&str)->MaxCertsBehavior<MaxCertsCallbackBo
         let policy=behavior(&json!({"apple_id":"owner@example.com"}),Ui::new(None,None,std::ptr::null_mut()),"TEAM123456");
         let MaxCertsBehavior::Prompt(callback)=policy else{panic!("quota policy must support recovery")};
         assert_eq!(callback(vec![certificate("LIVE"),expired]).await.unwrap(),Some(vec!["EXPIRED".into()]));
+    }
+    #[tokio::test]async fn background_quota_does_not_wait_for_an_invisible_dialog(){
+        let policy=behavior(&json!({"apple_id":"owner@example.com","allow_certificate_prompt":false}),Ui::new(None,None,std::ptr::null_mut()),"TEAM123456");
+        let MaxCertsBehavior::Prompt(callback)=policy else{panic!("recovery policy")};
+        assert!(callback(vec![certificate("LIVE")]).await.unwrap_err().to_string().contains("Mở app"));
     }
 }

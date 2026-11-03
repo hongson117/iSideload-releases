@@ -191,7 +191,8 @@ final class Engine: ObservableObject {
          "license": LicenseManager.shared.license ?? "",
          "device_id": LicenseManager.deviceID,
          "build_sha": Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? "",
-         "host_path": Bundle.main.bundleURL.path]
+         "host_path": Bundle.main.bundleURL.path,
+         "allow_certificate_prompt": UIApplication.shared.applicationState == .active]
         if signer == "cert" { r["use_imported_cert"] = true }
         return r
     }
