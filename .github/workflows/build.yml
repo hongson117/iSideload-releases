@@ -43,6 +43,10 @@ jobs:
         run: |
           swiftc -parse-as-library ios/iSideload/Core/PairingRecord.swift tests/PairingRecordTests.swift -o /tmp/pairing-record-tests
           /tmp/pairing-record-tests
+      - name: Test LiveContainer signing decisions
+        run: |
+          swiftc -parse-as-library ios/iSideload/Core/Models.swift ios/iSideload/Core/LiveContainerSigning.swift tests/LiveContainerSigningTests.swift -o /tmp/livecontainer-signing-tests
+          /tmp/livecontainer-signing-tests
       - name: Generate Xcode project
         run: |
           python3 scripts/generate_notices.py

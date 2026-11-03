@@ -11,12 +11,15 @@ final class Engine: ObservableObject {
     @AppStorage("vpnTarget") var vpnTarget = ""
     @AppStorage("accounts") private var accountsRaw = ""          // extra Apple IDs, newline-separated
     @AppStorage("installSigner") var installSigner = ""           // default signer for new installs
+    @AppStorage("liveContainerActiveBundleID") private var liveContainerActiveBundleID = ""
     @Published var importedCert: [String: Any]?
     @Published var signedIn = false
     @Published var teamName = ""
     @Published var apps: [SideloadedApp] = []
     @Published var deviceLine = ""
     @Published var pairingVerified = false
+    @Published var pairingCheckError: String?
+    @Published var liveContainerCertificateFile: LiveContainerCertificateFile?
     @Published var busy = false
     @Published var peerBusy = false
     @Published var selectedTab = 0
@@ -58,7 +61,7 @@ final class Engine: ObservableObject {
     var canSign: Bool { !signers.isEmpty }
     func signerLabel(_ s: String) -> String {
         if s == "self" { return "Chưa chọn tài khoản ký" }
-        return s == "cert" ? "Chứng chỉ có sẵn" : String(s.dropFirst(6))
+        return s == "cert" ? "Chứng chỉ đã nhập (.p12)" : String(s.dropFirst(6))
     }
     func signerOf(_ app: SideloadedApp) -> String {
         if let signer = app.signer { return signer }
@@ -263,20 +266,22 @@ final class Engine: ObservableObject {
         do {
             let record = try PairingRecord.parse(Data(contentsOf: url))
             try record.data.write(to: Self.pairingURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            pairingVerified = false; deviceLine = ""; errorText = nil
+            pairingVerified = false; pairingCheckError = nil; deviceLine = ""; errorText = nil
             infoText = "Đã nhập file \(record.kind.rawValue). Bật LocalDevVPN rồi bấm Kiểm tra kết nối thiết bị."
             objectWillChange.send()
         } catch { errorText = error.localizedDescription }
     }
 
     func checkDevice() async {
-        pairingVerified = false; deviceLine = ""; errorText = nil
+        guard !busy else { return }
+        pairingVerified = false; pairingCheckError = nil; deviceLine = ""; errorText = nil
         await guarded {
             let r = try await run(base("device"))
             deviceLine = "\(r["name"] as? String ?? "") · iOS \(r["ios"] as? String ?? "?")"
             if let u = r["udid"] as? String, !u.isEmpty { UserDefaults.standard.set(u, forKey: "deviceUDID") }
             pairingVerified = true
         }
+        pairingCheckError = errorText
     }
 
     func refreshList() async {
@@ -380,8 +385,10 @@ final class Engine: ObservableObject {
             if who == "cert" { exp = [exp, importedExpiry].compactMap { $0 }.min() }
             let rec = SideloadedApp(bundleID: bid, name: r["name"] as? String ?? bid, version: r["version"] as? String ?? "",
                                     expires: exp, ipaFile: ipa.lastPathComponent, signer: who)
-            if let c = r["lc_cert"] as? [String: Any] { lastLCCert = c }
-            apps.removeAll { $0.bundleID == bid || ($0.bundleID == bundle && prev != nil) }
+            if let c = r["lc_cert"] as? [String: Any] { lastLCCert = c; lastLCCertSigner = who }
+            // A different team may produce a second app, not an in-place replacement.
+            // Keep the old identity in the list until it is actually uninstalled.
+            apps.removeAll { $0.bundleID == bid }
             apps.append(rec); save()
             if info["icon_path"] != nil { IconCache.adopt(tmpIcon, for: bid) }
             infoText = Self.doneLine(rec.name, exp) + (notes.isEmpty ? "" : "\n" + notes.joined(separator: " "))
@@ -489,7 +496,7 @@ final class Engine: ObservableObject {
             _ = try await run(req)
             try? FileManager.default.removeItem(at: Self.pairingURL)
             try FileManager.default.moveItem(at: tmp, to: Self.pairingURL)
-            pairingVerified = false; deviceLine = ""
+            pairingVerified = false; pairingCheckError = nil; deviceLine = ""
             infoText = "Ghép nối thành công. Bật LocalDevVPN rồi bấm Kiểm tra kết nối."
         }
     }
@@ -616,6 +623,7 @@ final class Engine: ObservableObject {
         case refreshAll(includeSelf: Bool, onlyDue: Bool = false, onlySelf: Bool = false, signer: String? = nil)
         case refreshSelf(String?)
         case install(URL, Bool, String?)
+        case liveContainerInstall(LiveContainerInstallPlan)
         case uninstall(SideloadedApp)
     }
     var pendingVPNAction: VPNAction?
@@ -630,6 +638,7 @@ final class Engine: ObservableObject {
             await refreshAll(includeSelf: s, onlyDue: due, background: false, onlySelf: own, signerFilter: signer)
         case .refreshSelf(let signer): await refreshSelf(signer: signer)
         case .install(let u, let up, let sg): await install(ipa: u, upgrade: up, signer: sg)
+        case .liveContainerInstall(let plan): await completeLiveContainerInstall(plan)
         case .uninstall(let app): await uninstall(app)
         }
         vpnJobDone()
@@ -647,25 +656,63 @@ final class Engine: ObservableObject {
                     else { await refreshAll(includeSelf: true, onlyDue: true, background: false) } }
     }
 
-    func installLiveContainer() async {
-        await guarded {
+    func installLiveContainer(signer: String?) async {
+        guard !busy, !liveContainerInstallActive else { return }
+        errorText = nil; infoText = nil
+        do {
+            // Validate before downloading; there is no fallback to the old/default source.
+            _ = try LiveContainerInstallPlan(ipa: Self.ipaDir, upgrade: false, selectedSigner: signer, availableSigners: signers)
+            busy = true
             stage = "Đang tải LiveContainer…"
             let r = try await LiveContainer.latest()
             let ipa = try await LiveContainer.download(r, into: Self.ipaDir)
-            let existing = liveContainerInstalled
-            lastLCCert = nil
-            await install(ipa: ipa, upgrade: existing != nil, signer: existing.map(signerOf))
-            // Right after installing, hand LiveContainer the signing certificate automatically.
-            if let c = lastLCCert, errorText == nil {
-                try await Task.sleep(nanoseconds: 1_500_000_000)
-                try sendCertToLiveContainer(c)
+            let plan = try LiveContainerInstallPlan(ipa: ipa, upgrade: liveContainerInstalled != nil,
+                selectedSigner: signer, availableSigners: signers)
+            busy = false
+            await completeLiveContainerInstall(plan)
+        } catch { busy = false; errorText = error.localizedDescription }
+        vpnJobDone()
+    }
+
+    private var liveContainerInstallActive = false
+    private func completeLiveContainerInstall(_ plan: LiveContainerInstallPlan) async {
+        guard !busy, !liveContainerInstallActive else { return }
+        guard signers.contains(plan.signer) else { errorText = LiveContainerInstallPlan.Invalid.unavailable.localizedDescription; return }
+        if plan.signer != "cert" {
+            guard hasPairing else { errorText = "Cần file ghép đôi để ký bằng Apple ID. Vào Thiết bị để thiết lập và kiểm tra kết nối."; return }
+            if !vpnActive {
+                pendingVPNAction = .liveContainerInstall(plan)
+                LoopbackVPN.turnOn(); return
             }
         }
-        vpnJobDone()
+        liveContainerInstallActive = true
+        defer { liveContainerInstallActive = false }
+        lastLCCert = nil; lastLCCertSigner = nil; errorText = nil
+        await install(ipa: plan.ipa, upgrade: plan.upgrade, signer: plan.signer)
+        if case .install(let url, _, let signer) = pendingVPNAction,
+           url == plan.ipa, signer == plan.signer {
+            pendingVPNAction = .liveContainerInstall(plan)
+        }
+        guard errorText == nil, pendingVPNAction == nil else { return }
+        guard let installed = apps.last(where: {
+            LiveContainerSigning.isContainer($0.bundleID) && $0.ipaFile == plan.ipa.lastPathComponent && $0.signer == plan.signer
+        }) else {
+            errorText = "Chưa xác định được bản LiveContainer đã cài bằng nguồn vừa chọn; chưa tự gửi chứng chỉ."; return
+        }
+        liveContainerActiveBundleID = installed.bundleID
+        UserDefaults.standard.set(false, forKey: Self.lcPendingKey)
+        do {
+            let certificate: [String: Any]
+            if let c = lastLCCert, lastLCCertSigner == plan.signer { certificate = c }
+            else { certificate = try await run(base("export_cert", signer: plan.signer)) }
+            try await Task.sleep(nanoseconds: 1_500_000_000)
+            try sendCertToLiveContainer(certificate, sourceSigner: plan.signer)
+        } catch { errorText = "LiveContainer đã được cài, nhưng chưa chuyển được chứng chỉ đã chọn: \(error.localizedDescription)" }
     }
 
     // MARK: LiveContainer certificate
     var lastLCCert: [String: Any]?
+    private var lastLCCertSigner: String?
     private static let lcPendingKey = "lcCertPending"
 
     /// After a successful re-sign: remember to push the current certificate to LiveContainer.
@@ -678,10 +725,14 @@ final class Engine: ObservableObject {
     func pushPendingLCCert() async {
         guard UserDefaults.standard.bool(forKey: Self.lcPendingKey) else { return }
         guard liveContainerInstalled != nil else { UserDefaults.standard.set(false, forKey: Self.lcPendingKey); return }
-        guard UIApplication.shared.applicationState == .active, !busy, canSign else { return }
+        guard UIApplication.shared.applicationState == .active, !busy, !liveContainerInstallActive,
+              pendingVPNAction == nil, liveContainerCertificateFile == nil, canSign else { return }
+        guard let signer = lcSigner, signers.contains(signer) else {
+            UserDefaults.standard.set(false, forKey: Self.lcPendingKey); return
+        }
         do {
-            let r = try await run(base("export_cert", signer: lcSigner))
-            try sendCertToLiveContainer(r)
+            let r = try await run(base("export_cert", signer: signer))
+            try sendCertToLiveContainer(r, sourceSigner: signer)
             UserDefaults.standard.set(false, forKey: Self.lcPendingKey)
         } catch { errorText = "Chưa gửi được chứng chỉ sang LiveContainer: \(error.localizedDescription)" }
     }
@@ -689,17 +740,20 @@ final class Engine: ObservableObject {
     /// Exports the certificate this Apple ID signs with (.p12 + password) and opens
     /// livecontainer://certificate so LiveContainer stores it for JIT-less mode.
     func exportCertToLiveContainer() async {
-        guard canSign else { errorText = "Hãy đăng nhập Apple ID trước (tab Tài khoản)."; return }
+        guard !busy, !liveContainerInstallActive else { return }
+        guard let signer = lcSigner, signers.contains(signer) else {
+            errorText = "Chưa xác định được nguồn ký của LiveContainer, hoặc nguồn đó chưa sẵn sàng. Chọn Cài lại LiveContainer để chọn rõ Apple ID/chứng chỉ, hoặc đăng nhập lại tài khoản đã ký."; return
+        }
         guard liveContainerInstalled != nil || UIApplication.shared.canOpenURL(URL(string: "livecontainer://")!) else {
             errorText = "Chưa cài LiveContainer. Hãy bấm Cài LiveContainer trước."; return
         }
         await guarded {
-            let r = try await run(base("export_cert", signer: lcSigner))
-            try sendCertToLiveContainer(r)
+            let r = try await run(base("export_cert", signer: signer))
+            try sendCertToLiveContainer(r, sourceSigner: signer)
         }
     }
 
-    private func sendCertToLiveContainer(_ c: [String: Any]) throws {
+    private func sendCertToLiveContainer(_ c: [String: Any], sourceSigner: String) throws {
         guard let b64 = c["p12_base64"] as? String, let pw = c["password"] as? String else {
             throw CoreError(message: "Không có dữ liệu chứng chỉ.")
         }
@@ -708,9 +762,14 @@ final class Engine: ObservableObject {
         guard let url = URL(string: "livecontainer://certificate?cert=\(enc(b64))&password=\(enc(pw))") else {
             throw CoreError(message: "Không tạo được liên kết cho LiveContainer.")
         }
-        // Keep a copy so the user can also import it by hand in LiveContainer › Settings.
-        if let d = Data(base64Encoded: b64) {
-            try? d.write(to: Self.docs.appendingPathComponent("LiveContainer-cert.p12"), options: .completeFileProtection)
+        guard let data = Data(base64Encoded: b64) else { throw CoreError(message: "Dữ liệu chứng chỉ không hợp lệ.") }
+        let manual = LiveContainerSigning.needsManualCertificateImport(apps: apps)
+        let file = Self.docs.appendingPathComponent(manual ? "LiveContainer-cert-\(UUID().uuidString).p12" : "LiveContainer-cert.p12")
+        try data.write(to: file, options: [.atomic, .completeFileProtection])
+        if manual {
+            infoText = nil
+            liveContainerCertificateFile = LiveContainerCertificateFile(url: file, password: pw, sourceLabel: signerLabel(sourceSigner))
+            return
         }
         UIApplication.shared.open(url) { ok in
             Task { @MainActor in
@@ -725,8 +784,8 @@ final class Engine: ObservableObject {
     }
 
     /// LiveContainer must get the certificate of the account that signed it.
-    var lcSigner: String { liveContainerInstalled.map(signerOf) ?? defaultSigner }
-    var liveContainerInstalled: SideloadedApp? { apps.first { $0.bundleID.hasPrefix(LiveContainer.bundlePrefix) } }
+    var lcSigner: String? { liveContainerInstalled?.signer }
+    var liveContainerInstalled: SideloadedApp? { LiveContainerSigning.latestInstalled(in: apps, activeBundleID: liveContainerActiveBundleID) }
 
     func handleURL(_ url: URL) {
         if url.scheme == "isideload" {

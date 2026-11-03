@@ -20,13 +20,13 @@ struct SetupChecklistView: View {
                          detail: "Ứng dụng miễn phí trên App Store, dùng khi ký/cài trên chính máy này.") {
                         UIApplication.shared.open(LoopbackVPN.appStoreURL)
                     }
-                    step("3. Ghép nối máy này", done: engine.hasPairing,
-                         detail: "Ghép nối lúc nhận app thuộc máy hỗ trợ. Máy này cần tạo bản ghi riêng để tự gia hạn.") {
+                    step(engine.hasPairing ? "3. Kiểm tra kết nối máy này" : "3. Thiết lập file ghép đôi", done: engine.pairingVerified,
+                         detail: engine.hasPairing ? "Đã có file. Bật LocalDevVPN rồi bấm Kiểm tra kết nối ở đầu tab Thiết bị; chưa cần ghép đôi lại." : "Bộ cài Windows/Mac RC2 tự đưa file vào app. Nếu cài cách khác, vào Thiết bị để xem cách thiết lập.") {
                         engine.selectedTab = 2
                     }
                 }
             } header: { Text("Thiết lập lần đầu") } footer: {
-                Text("Xong các bước trên, bấm Làm mới iSideload để thử gia hạn. App tự mở LocalDevVPN khi cần kết nối.")
+                Text("Đã có file không đồng nghĩa đã kiểm tra kết nối. Mở tab Thiết bị, bật LocalDevVPN và kiểm tra trước khi thử gia hạn.")
             }
         }
     }

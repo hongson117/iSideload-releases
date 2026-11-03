@@ -4,6 +4,13 @@ struct AppsView: View {
     @EnvironmentObject var engine: Engine
     @State private var picking = false
     @State private var confirmDelete: SideloadedApp?
+    @State private var choosingLCSigner = false
+    @State private var confirmingLCCertificate = false
+
+    private var lcSourceDescription: String {
+        guard let signer = engine.lcSigner else { return "Chưa xác định nguồn ký của bản LiveContainer đang cài." }
+        return "Nguồn ký hiện tại: " + (signer == "cert" ? engine.signerLabel(signer) : "Apple ID · " + engine.signerLabel(signer))
+    }
     var body: some View {
         NavigationStack {
             List {
@@ -54,14 +61,15 @@ struct AppsView: View {
                     let lc = engine.liveContainerInstalled
                     Button(lc == nil ? "Cài LiveContainer" :
                            (!engine.lcLatest.isEmpty && engine.lcLatest != lc!.version ? "Cập nhật LiveContainer \(engine.lcLatest)" : "Cài lại LiveContainer (bản mới nhất)")) {
-                        Task { await engine.installLiveContainer() }
+                        choosingLCSigner = true
                     }.disabled(engine.busy)
-                    Button { Task { await engine.exportCertToLiveContainer() } } label: {
-                        Label("Xuất chứng chỉ cho LiveContainer", systemImage: "key.horizontal")
+                    Button { confirmingLCCertificate = true } label: {
+                        Label("Gửi lại chứng chỉ đang dùng", systemImage: "key.horizontal")
                     }.disabled(engine.busy)
                     if let lc { Text("Đang cài \(lc.version)" + (engine.lcLatest.isEmpty ? "" : " · mới nhất \(engine.lcLatest)")).font(.footnote) }
+                    if lc != nil { Text(lcSourceDescription).font(.footnote).foregroundStyle(.secondary) }
                 } header: { Text("LiveContainer") } footer: {
-                    Text("Tải bản chính thức từ GitHub LiveContainer, ký bằng Apple ID của bạn. Cập nhật giữ nguyên dữ liệu. Được ký lại cùng các app khác. Sau khi cài, chứng chỉ ký được tự gửi sang LiveContainer (chế độ JIT-less); bấm Xuất chứng chỉ nếu cần gửi lại.")
+                    Text("Mỗi lần cài/cài lại đều hỏi nguồn ký: chọn Apple ID hoặc chứng chỉ .p12 đã nhập. LiveContainer nhận đúng chứng chỉ của nguồn bạn chọn. Đổi nguồn có thể tạo bản app khác; dữ liệu bản cũ không tự chuyển sang bản mới.")
                 }
                 .task { await engine.checkLiveContainer() }
                 if engine.apps.isEmpty && engine.signerGroups.isEmpty { Section("Đã sideload") { Text("Chưa có app nào.").foregroundStyle(.secondary) } }
@@ -84,6 +92,24 @@ struct AppsView: View {
             .onAppear { engine.syncSelfRecord() }
             .refreshable { await engine.refreshList() }
             .sheet(isPresented: $picking) { DocumentPicker { engine.importIPA(from: $0) } }
+            .confirmationDialog("Chọn nguồn ký LiveContainer", isPresented: $choosingLCSigner, titleVisibility: .visible) {
+                ForEach(engine.signers, id: \.self) { signer in
+                    Button(signer == "cert" ? "Dùng chứng chỉ đã nhập (.p12)" : "Dùng Apple ID · \(engine.signerLabel(signer))") {
+                        Task { await engine.installLiveContainer(signer: signer) }
+                    }
+                }
+                Button("Đăng nhập Apple ID hoặc nhập chứng chỉ khác") { engine.selectedTab = 3 }
+                Button("Hủy", role: .cancel) {}
+            } message: {
+                Text(lcSourceDescription + "\nLựa chọn này dùng để ký app và chuyển chứng chỉ tương ứng. Đổi nguồn ký có thể tạo thêm bản LiveContainer; sao lưu dữ liệu bản cũ trước khi chuyển.")
+            }
+            .confirmationDialog("Gửi lại chứng chỉ cho LiveContainer?", isPresented: $confirmingLCCertificate, titleVisibility: .visible) {
+                if engine.lcSigner != nil {
+                    Button("Gửi chứng chỉ của nguồn đang dùng") { Task { await engine.exportCertToLiveContainer() } }
+                }
+                Button("Cài lại và chọn nguồn ký khác") { choosingLCSigner = true }
+                Button("Hủy", role: .cancel) {}
+            } message: { Text(lcSourceDescription + "\nMuốn đổi nguồn chứng chỉ, chọn cài lại để ký LiveContainer bằng nguồn mới.") }
             .confirmationDialog("Gỡ \(confirmDelete?.name ?? "app")?", isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } }), titleVisibility: .visible) {
                 if let a = confirmDelete {
                     Button("Gỡ khỏi máy", role: .destructive) { Task { await engine.uninstall(a) } }
