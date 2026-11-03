@@ -10,10 +10,10 @@
     },
     "icontainer": {
       "version": "0.1.1",
-      "build": "1002",
-      "url": "https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.1-b1002/iContainer.ipa",
-      "sha256": "fc062d531fedb63103d4ee97e0367710aaa00f4fca7c96f80e9b5b68cd20e013",
-      "bytes": 4422731
+      "build": "1003",
+      "url": "https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.1-b1003/iContainer.ipa",
+      "sha256": "a4948f6d76533a5b1519d494f04f019ee7856be6c3728ea36ff9cf8ab728fde3",
+      "bytes": 4425644
     }
   }
 }
