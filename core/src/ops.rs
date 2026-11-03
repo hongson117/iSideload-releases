@@ -9,8 +9,7 @@ use isideload::dev::developer_session::DeveloperSession;
 use isideload::dev::device_type::DeveloperDeviceType;
 use isideload::dev::devices::DevicesApi;
 use isideload::dev::teams::TeamsApi;
-use isideload::sideload::builder::{MaxCertsBehavior, SideloaderBuilder};
-use isideload::util::callbacks::{MaxCertsCallbackBox, MaxCertsCallbackFuture};
+use isideload::sideload::builder::SideloaderBuilder;
 use isideload::sideload::cert_identity::CertificateIdentity;
 use isideload::dev::teams::DeveloperTeam;
 use base64::Engine as _;
@@ -252,7 +251,7 @@ async fn sign_in(req: &Value, ui: Ui) -> Result<(AppleAccount, DeveloperSession)
     Ok((account, session))
 }
 
-fn cert_json(c: &DevelopmentCertificate) -> Value {
+pub(crate) fn cert_json(c: &DevelopmentCertificate) -> Value {
     json!({
         "name": c.name,
         "serial": c.serial_number,
@@ -287,15 +286,17 @@ async fn revoke(req: &Value, ui: Ui) -> Result<Value, String> {
 /// Loads the development certificate iSideload signs with (private key kept in storage)
 /// and encodes it as a password-protected PKCS#12 for LiveContainer's
 /// `livecontainer://certificate?cert=<base64>&password=<pw>` import.
-/// Never creates or revokes certificates: it only exports the one already in use.
-async fn lc_cert_json(dev: &mut DeveloperSession, team: &DeveloperTeam, req: &Value) -> Result<Value, String> {
+/// Reuses a matching identity. If quota recovery is needed, it uses the same
+/// explicit revocation policy as installation and renewal.
+async fn lc_cert_json(dev: &mut DeveloperSession, team: &DeveloperTeam, req: &Value, ui: Ui) -> Result<Value, String> {
+    let recovery = crate::certificate_policy::behavior(req, ui, &team.team_id);
     let id = CertificateIdentity::retrieve(
         HOST_NAME,
         s(req, "apple_id"),
         dev,
         team,
         &storage(req),
-        &MaxCertsBehavior::<MaxCertsCallbackBox>::Error,
+        &recovery,
     )
     .await
     .map_err(|e| explain("Không lấy được chứng chỉ", &e))?;
@@ -311,10 +312,12 @@ async fn lc_cert_json(dev: &mut DeveloperSession, team: &DeveloperTeam, req: &Va
 
 async fn export_cert(req: &Value, ui: Ui) -> Result<Value, String> {
     let (_a, mut dev) = sign_in(req, ui).await?;
-    let team = dev.list_teams().await.map_err(|e| explain("No developer team", &e))?
-        .into_iter().next().ok_or("This Apple ID has no developer team.")?;
+    let teams=dev.list_teams().await.map_err(|e| explain("No developer team", &e))?;
+    let team=if !s(req,"expected_team_id").is_empty(){
+        crate::self_refresh::select_team(&teams,s(req,"expected_team_id"),s(req,"apple_id"))?
+    }else{teams.into_iter().next().ok_or("This Apple ID has no developer team.")?};
     ui.progress("Đang xuất chứng chỉ…", None);
-    let mut v = lc_cert_json(&mut dev, &team, req).await?;
+    let mut v = lc_cert_json(&mut dev, &team, req, ui).await?;
     v["ok"] = json!(true);
     Ok(v)
 }
@@ -398,27 +401,21 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
         let teams=dev.list_teams().await.map_err(|e|explain("Không lấy được Team của tài khoản người dùng",&e))?;
         Some(crate::owner_setup::choose_team(&teams,s(req,"owner_source_team"))?)
     } else { None };
-    let revoke_prompt = move |certs: Vec<DevelopmentCertificate>| -> MaxCertsCallbackFuture {
-        Box::pin(async move {
-            let q = json!({"kind": "revoke", "certs": certs.iter().map(cert_json).collect::<Vec<_>>()});
-            match ui.ask(q).await {
-                Some(a) if !a.is_empty() => Ok(Some(a.split(',').map(|x| x.trim().to_string()).collect())),
-                _ => Ok(None),
-            }
-        })
+    let signing_team=if let Some(team)=refresh_team{team}else{
+        dev.list_teams().await.map_err(|e|explain("No developer team",&e))?.into_iter().next().ok_or("This Apple ID has no developer team.")?
     };
+    let recovery = crate::certificate_policy::behavior(req, ui, &signing_team.team_id);
     let mut sideloader = SideloaderBuilder::new(dev, s(req, "apple_id").to_string())
         .storage(Box::new(storage(req)))
         .machine_name(HOST_NAME.to_string())
-        .max_certs_behavior(MaxCertsBehavior::Prompt(revoke_prompt))
+        .max_certs_behavior(recovery)
         .build();
     sideloader.set_device_type(Some(DeveloperDeviceType::Ios));
     sideloader.set_preserve_bundle_id(self_refresh);
 
     // 3. Register this iPhone/iPad as a development device.
     ui.progress("Đang đăng ký thiết bị…", None);
-    let team = if let Some(team)=refresh_team { team }
-        else { sideloader.get_team().await.map_err(|e| explain("No developer team", &e))? };
+    let team = signing_team;
     sideloader
         .get_dev_session()
         .ensure_device_registered(&team, &dev_name, &udid, Some(DeveloperDeviceType::Ios))
@@ -472,7 +469,7 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
 
     // LiveContainer needs the signing certificate for JIT-less mode: hand it back so the app can pass it on.
     let lc_cert = if bundle_id.starts_with("com.kdt.livecontainer") {
-        lc_cert_json(sideloader.get_dev_session(), &team, req).await.ok()
+        lc_cert_json(sideloader.get_dev_session(), &team, req, ui).await.ok()
     } else { None };
 
     Ok(json!({

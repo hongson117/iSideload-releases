@@ -190,7 +190,8 @@ final class Engine: ObservableObject {
          "storage_dir": Self.storage.path, "pairing_path": Self.pairingURL.path, "target": vpnTarget,
          "license": LicenseManager.shared.license ?? "",
          "device_id": LicenseManager.deviceID,
-         "build_sha": Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? ""]
+         "build_sha": Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? "",
+         "host_path": Bundle.main.bundleURL.path]
         if signer == "cert" { r["use_imported_cert"] = true }
         return r
     }
@@ -221,7 +222,9 @@ final class Engine: ObservableObject {
 
     func prepareContainerGuest(_ request: [String: Any], signer: String) async throws {
         guard signers.contains(signer) else { throw CoreError(message: "Chọn nguồn ký hợp lệ trong tab Tài khoản.") }
-        let certificate = try await run(base("export_cert", signer: signer))
+        var export = base("export_cert", signer: signer)
+        if let identity = selfSigningIdentity { export["expected_team_id"] = identity.teamID }
+        let certificate = try await run(export)
         var r = request
         r["p12_base64"] = certificate["p12_base64"]
         r["password"] = certificate["password"]

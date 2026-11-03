@@ -15,6 +15,7 @@ mod container_macho;
 mod self_refresh;
 mod owner_setup;
 mod receiver_setup;
+mod certificate_policy;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::OnceLock;
