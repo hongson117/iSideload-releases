@@ -1,0 +1,61 @@
+name: Build Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/windows-auto-pairing]
+    paths: ['windows/**', 'core/vendor/isideload/**', 'scripts/generate_notices.py', '.github/workflows/windows-installer.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      IPA_SHA256: 026a3f23bc37d689af53cd03a5c608b8e99e305091b86d101f33570fe6ad4227
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows
+          key: windows-msvc-auto-pair
+          cache-on-failure: true
+      - name: Test transfer recovery and device selection
+        shell: pwsh
+        run: cargo test --locked --manifest-path windows/Cargo.toml
+      - name: Build native standalone Windows executable
+        shell: pwsh
+        run: |
+          $env:ISL_GIT_SHA = $env:GITHUB_SHA.Substring(0,7)
+          $env:RUSTFLAGS = "-C target-feature=+crt-static --remap-path-prefix=$env:GITHUB_WORKSPACE=/src --remap-path-prefix=$env:USERPROFILE/.cargo=/deps/cargo"
+          cargo build --locked --release --manifest-path windows/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          windows/target/release/isl-cli.exe --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          windows/target/release/isl-cli.exe --help
+          windows/target/release/isl-cli.exe --version
+      - name: Package and validate Windows installer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = New-Item -ItemType Directory -Path out/isl-windows
+          Copy-Item windows/target/release/isl-cli.exe,windows/Cai-iSideload.bat,windows/Kiem-tra-goi.ps1 -Destination $package
+          Copy-Item windows/README.md -Destination (Join-Path $package 'HUONG-DAN.md')
+          Invoke-WebRequest https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc1/iSideload.ipa -OutFile (Join-Path $package 'iSideload.ipa')
+          if ((Get-FileHash (Join-Path $package 'iSideload.ipa') -Algorithm SHA256).Hash.ToLower() -ne $env:IPA_SHA256) { throw 'Unexpected IPA checksum' }
+          python scripts/generate_notices.py --manifest-path windows/Cargo.toml --platform x86_64-pc-windows-msvc --output (Join-Path $package 'ThirdPartyNotices.txt')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $rows = Get-ChildItem -LiteralPath $package -File | Sort-Object Name | ForEach-Object { '{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower(),$_.Name }
+          [IO.File]::WriteAllLines((Join-Path $package 'SHA256SUMS.txt'), $rows, [Text.UTF8Encoding]::new($false))
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $package 'Kiem-tra-goi.ps1')
+          if ($LASTEXITCODE -ne 0) { throw 'Package verification failed' }
+          Compress-Archive -LiteralPath $package.FullName -DestinationPath isl-windows.zip
+          [IO.File]::WriteAllText('SHA256SUMS-windows.txt', ((Get-FileHash isl-windows.zip -Algorithm SHA256).Hash.ToLower() + "  isl-windows.zip`n"), [Text.UTF8Encoding]::new($false))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isl-windows-auto-pair
+          path: |
+            isl-windows.zip
+            SHA256SUMS-windows.txt

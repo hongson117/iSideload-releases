@@ -1,91 +1,219 @@
-//! isl-win: first-time iSideload install over USB on Windows (Apple usbmuxd from Apple Devices/iTunes, TCP 127.0.0.1:27015).
-use std::io::Write;
-use std::path::PathBuf;
-use isideload::anisette::remote_v3::RemoteV3AnisetteProvider;
-use isideload::auth::apple_account::{AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse};
-use isideload::dev::developer_session::DeveloperSession;
-use isideload::dev::device_type::DeveloperDeviceType;
-use isideload::dev::devices::DevicesApi;
-use isideload::sideload::builder::{MaxCertsBehavior, SideloaderBuilder};
-use isideload::util::fs_storage::FsStorage;
-use idevice::usbmuxd::{Connection, UsbmuxdAddr, UsbmuxdConnection};
+//! Native Windows USB installer and Remote Pairing setup tool.
+#[path = "../pairing_setup.rs"]
+mod pairing_setup;
+
+use std::{io::Write, path::{Path, PathBuf}, time::Duration};
+use idevice::{IdeviceService, amfi::AmfiClient, installation_proxy::InstallationProxyClient,
+              provider::UsbmuxdProvider, remote_pairing::RpPairingFile,
+              usbmuxd::{Connection, UsbmuxdAddr}};
+use isideload::{
+    anisette::remote_v3::RemoteV3AnisetteProvider,
+    auth::apple_account::{AppleAccount, TwoFactorCallbackParams, TwoFactorCallbackResponse},
+    dev::{certificates::DevelopmentCertificate, developer_session::DeveloperSession,
+          device_type::DeveloperDeviceType, devices::DevicesApi},
+    sideload::builder::{MaxCertsBehavior, SideloaderBuilder},
+    util::{callbacks::MaxCertsCallbackFuture, fs_storage::FsStorage},
+};
 use rootcause::Report;
+use pairing_setup::{app_id_matches, selection};
 
 const ANISETTE: &[&str] = &["https://ani.jkcoxson.com", "https://mac-ani.jkcoxson.com", "https://ani.npeg.us", "https://ani.sidestore.io"];
 
-fn prompt(msg: &str) -> String { print!("{msg}"); let _ = std::io::stdout().flush(); let mut s = String::new(); let _ = std::io::stdin().read_line(&mut s); s.trim().to_string() }
-fn fail(code: i32, msg: String) -> ! { eprintln!("\nLOI: {msg}"); let _ = prompt("Nhan Enter de thoat..."); std::process::exit(code) }
+fn prompt(message: &str) -> String {
+    print!("{message}"); let _ = std::io::stdout().flush();
+    let mut line = String::new(); let _ = std::io::stdin().read_line(&mut line);
+    line.trim().to_string()
+}
 
-async fn login(storage: &std::path::Path, id: &str, pw: &str) -> Result<AppleAccount, String> {
-    let mut urls: Vec<String> = Vec::new();
-    urls.extend(ANISETTE.iter().map(|s| s.to_string()));
+fn fail(code: i32, message: impl std::fmt::Display) -> ! {
+    eprintln!("\nCHƯA HOÀN TẤT: {message}");
+    std::process::exit(code)
+}
+
+async fn login(storage: &Path, id: &str, password: &str) -> Result<AppleAccount, String> {
     let mut last = String::new();
-    for url in urls {
+    for &url in ANISETTE {
         let dir = storage.join("anisette").join(url.trim_start_matches("https://").replace(['/', ':'], "_"));
-        let _ = std::fs::create_dir_all(&dir);
-        let provider = match RemoteV3AnisetteProvider::new(&url, Box::new(FsStorage::new(dir)), "0".into()) {
-            Ok(p) => p, Err(e) => { last = format!("anisette {url}: {e}"); continue }
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let provider = match RemoteV3AnisetteProvider::new(url, Box::new(FsStorage::new(dir)), "0".into()) {
+            Ok(provider) => provider,
+            Err(error) => { last = error.to_string(); continue; }
         };
-        let cb = move |p: TwoFactorCallbackParams| { async move {
-            if let Some(e) = p.last_error { println!("(Ma truoc bi loi: {e})") }
-            let c = prompt("Nhap ma 2FA 6 so Apple gui ve (hoac go sms): ");
-            Ok::<_, Report>(match if c.is_empty() { None } else { Some(c) } {
-                Some(c) if c == "sms" => TwoFactorCallbackResponse::SendSms(p.selected_number_id.or(p.numbers.first().map(|n| n.id)).unwrap_or(1)),
-                Some(c) => TwoFactorCallbackResponse::SubmitCode(c),
-                None => TwoFactorCallbackResponse::Abort,
+        let callback = |params: TwoFactorCallbackParams| async move {
+            if let Some(error) = params.last_error { eprintln!("Mã trước bị từ chối: {error}"); }
+            let code = prompt("Nhập mã 2FA 6 số (hoặc sms để yêu cầu SMS; Enter để hủy): ");
+            Ok::<_, Report>(match code.as_str() {
+                "" => TwoFactorCallbackResponse::Abort,
+                "sms" => TwoFactorCallbackResponse::SendSms(params.selected_number_id.or(params.numbers.first().map(|n| n.id)).unwrap_or(1)),
+                _ => TwoFactorCallbackResponse::SubmitCode(code),
             })
-        }};
-        eprintln!("Signing in via anisette {url} ...");
-        match AppleAccount::builder(id).anisette_provider(provider).login(pw, cb).await {
-            Ok(acc) => return Ok(acc),
-            Err(e) => {
-                last = format!("{e}");
-                eprintln!("  failed: {}", last.lines().take(4).collect::<Vec<_>>().join(" | "));
-                let l = last.to_lowercase();
-                if l.contains("-22406") || l.contains("abort") || l.contains("2fa") { break }
+        };
+        println!("Đang xác thực Apple ID qua {url}…");
+        match AppleAccount::builder(id).anisette_provider(provider).login(password, callback).await {
+            Ok(account) => return Ok(account),
+            Err(error) => {
+                last = error.to_string();
+                let lower = last.to_lowercase();
+                if ["-22406", "abort", "2fa", "password", "locked"].iter().any(|needle| lower.contains(needle)) { break; }
+                eprintln!("Máy chủ chưa xác thực được, thử máy chủ dự phòng…");
             }
         }
     }
     Err(last)
 }
 
+fn revoke_prompt(certs: Vec<DevelopmentCertificate>) -> MaxCertsCallbackFuture {
+    Box::pin(async move {
+        let certs: Vec<_> = certs.into_iter().filter(|cert| cert.serial_number.as_deref().is_some_and(|s| !s.is_empty())).collect();
+        if certs.is_empty() { return Ok(None); }
+        println!("\nApple báo hết chỗ cấp chứng chỉ phát triển.");
+        for (index, cert) in certs.iter().enumerate() {
+            println!("  {}. {} — {}", index + 1,
+                cert.machine_name.as_deref().or(cert.name.as_deref()).unwrap_or("Không rõ thiết bị"),
+                cert.serial_number.as_deref().unwrap_or(""));
+        }
+        println!("Thu hồi chứng chỉ có thể khiến các app đã ký bằng nó ngừng mở.");
+        let Some(index) = selection(&prompt("Chọn MỘT số để thu hồi, hoặc Enter để hủy: "), certs.len()) else { return Ok(None); };
+        if prompt("Gõ THU HOI để xác nhận chứng chỉ vừa chọn: ") != "THU HOI" { return Ok(None); }
+        Ok(certs[index].serial_number.clone().map(|s| vec![s]))
+    })
+}
+
+async fn usb_devices(addr: &UsbmuxdAddr) -> Result<Vec<idevice::usbmuxd::UsbmuxdDevice>, String> {
+    let mut mux = addr.connect(0).await.map_err(|e| format!("Không kết nối được Apple Mobile Device Service: {e}. Cài Apple Devices hoặc iTunes, mở ứng dụng đó và kiểm tra iPhone đã được nhận."))?;
+    Ok(mux.get_devices().await.map_err(|e| e.to_string())?.into_iter()
+        .filter(|device| matches!(device.connection_type, Connection::Usb)).collect())
+}
+
+async fn reconnect(addr: &UsbmuxdAddr, udid: &str) -> Result<UsbmuxdProvider, String> {
+    for _ in 0..90 {
+        if let Ok(Ok(devices)) = tokio::time::timeout(Duration::from_secs(3), usb_devices(addr)).await {
+            if let Some(device) = devices.into_iter().find(|d| d.udid == udid) {
+                return Ok(device.to_provider(addr.clone(), "iSideload-Windows"));
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    Err("Chưa thấy lại đúng iPhone qua USB. Mở khóa, bấm Tin cậy, kiểm tra cáp rồi chạy chế độ 2.".into())
+}
+
+async fn developer_ready(addr: &UsbmuxdAddr, udid: &str) -> Result<UsbmuxdProvider, String> {
+    for _ in 0..3 {
+        let provider = reconnect(addr, udid).await?;
+        let mut amfi = AmfiClient::connect(&provider).await.map_err(|e| format!("Không kiểm tra được Chế độ nhà phát triển: {e}. Giữ iPhone mở khóa."))?;
+        if amfi.get_developer_mode_status().await.map_err(|e| e.to_string())? { return Ok(provider); }
+        let _ = amfi.reveal_developer_mode_option_in_ui().await;
+        drop(amfi);
+        println!("\nTrên iPhone: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Bật.");
+        println!("Nếu iPhone yêu cầu khởi động lại, giữ cáp, chờ máy lên, mở khóa và xác nhận Bật.");
+        if prompt("Xong bước trên, nhấn Enter để tiếp tục (gõ HUY để dừng): ").eq_ignore_ascii_case("HUY") {
+            return Err("Đã dừng. Có thể chạy lại chế độ 2 khi sẵn sàng, không cần cài lại app.".into());
+        }
+    }
+    Err("Chế độ nhà phát triển vẫn chưa bật; chưa tạo file ghép đôi. Bật xong chạy lại chế độ 2.".into())
+}
+
+async fn choose_installed_app(provider: &UsbmuxdProvider) -> Result<String, String> {
+    let apps = InstallationProxyClient::connect(provider).await.map_err(|e| e.to_string())?
+        .get_apps(Some("User"), None).await.map_err(|e| e.to_string())?;
+    let mut ids: Vec<_> = apps.keys().filter(|id| app_id_matches(id)).cloned().collect();
+    ids.sort();
+    if ids.is_empty() { return Err("Không thấy iSideload đã cài. Chọn chế độ 1 để cài từ đầu. Nếu đã tự đổi bundle ID trong Sideloadly, dùng lại bundle ID iSideload chính thức.".into()); }
+    if ids.len() == 1 { return Ok(ids.remove(0)); }
+    println!("Có nhiều bản iSideload:");
+    for (i, id) in ids.iter().enumerate() { println!("  {}. {id}", i + 1); }
+    let index = selection(&prompt("Chọn bản muốn thiết lập ghép đôi: "), ids.len()).ok_or("Chưa chọn ứng dụng hợp lệ.")?;
+    Ok(ids.remove(index))
+}
+
+fn signed_bundle_id(path: &Path) -> Result<String, String> {
+    let info = plist::Value::from_file(path.join("Info.plist")).map_err(|e| e.to_string())?;
+    let id = info.as_dictionary().and_then(|d| d.get("CFBundleIdentifier")).and_then(|v| v.as_string()).ok_or("IPA không có bundle ID.")?;
+    if !app_id_matches(id) { return Err("Bộ cài chỉ hỗ trợ IPA iSideload chính thức.".into()); }
+    Ok(id.to_string())
+}
+
+fn cleanup_signed(path: &Path) {
+    if let (Ok(path), Ok(temp)) = (path.canonicalize(), std::env::temp_dir().canonicalize()) {
+        if path != temp && path.starts_with(&temp) { let _ = std::fs::remove_dir_all(path); }
+    }
+}
 
 #[tokio::main]
 async fn main() {
+    let arguments: Vec<_> = std::env::args().skip(1).collect();
+    match arguments.first().map(String::as_str) {
+        Some("--help") | Some("-h") => {
+            println!("iSideload Windows Installer\n  isl-cli [iSideload.ipa] : cài app và thiết lập Remote Pairing\n  isl-cli --pair-only     : chỉ thiết lập/sửa ghép đôi cho app đã cài\n  isl-cli --list-devices\n  isl-cli --self-test\nCần Windows 10/11, Apple Devices/iTunes, cáp dữ liệu và iOS 17.4+. Không cần Python."); return;
+        }
+        Some("--version") => { println!("iSideload Windows Installer {} ({})", env!("CARGO_PKG_VERSION"), option_env!("ISL_GIT_SHA").unwrap_or("local")); return; }
+        Some("--self-test") => {
+            let record = RpPairingFile::generate("installer-offline-test");
+            let loaded = RpPairingFile::from_bytes(&record.to_bytes()).expect("RP round-trip");
+            assert_eq!(record.public_key_bytes(), loaded.public_key_bytes());
+            assert_eq!(record.identifier(), loaded.identifier());
+            assert!(app_id_matches("com.hongson117.isideload.TESTTEAM01"));
+            assert!(!app_id_matches("com.hongson117.isideload2"));
+            assert_eq!(selection("2", 2), Some(1)); assert_eq!(selection("0", 2), None);
+            #[cfg(windows)]
+            assert!(matches!(UsbmuxdAddr::default(), UsbmuxdAddr::TcpSocket(_)));
+            println!("Self-test passed: RP keys/identifier round-trip, bundle family, bounded device selection, native Windows USB transport."); return;
+        }
+        Some(flag) if flag.starts_with('-') && !["--pair-only", "--list-devices"].contains(&flag) => fail(2, "Tùy chọn không hợp lệ; dùng --help."),
+        _ => (),
+    }
     let _ = rustls::crypto::ring::default_provider().install_default();
-    let ipa: PathBuf = std::env::args().nth(1).map(PathBuf::from).unwrap_or_else(|| {
-        std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("iSideload.ipa"))).unwrap_or("iSideload.ipa".into()) });
-    if !ipa.exists() { fail(2, format!("khong thay {}", ipa.display())) }
-    let storage = std::env::var("LOCALAPPDATA").map(PathBuf::from).unwrap_or(std::env::temp_dir()).join("iSideload-win");
-    let _ = std::fs::create_dir_all(&storage);
-    println!("== Tim iPhone qua cap USB (can Apple Devices hoac iTunes) ==");
-    let addr = UsbmuxdAddr::from_env_var().unwrap_or_default();
-    let mut mux = match UsbmuxdConnection::default().await { Ok(m) => m,
-        Err(e) => fail(3, format!("khong ket noi duoc Apple Mobile Device Service ({e}). Cai Apple Devices (Microsoft Store) hoac iTunes.")) };
-    let devs = mux.get_devices().await.unwrap_or_else(|e| fail(3, format!("doc danh sach may: {e}")));
-    let dev = devs.into_iter().find(|d| matches!(d.connection_type, Connection::Usb)).unwrap_or_else(|| fail(4, "khong thay iPhone qua USB. Cam cap, mo khoa, bam Tin cay may tinh nay.".into()));
-    let provider = dev.to_provider(addr, "isl-win");
+    let _ = isideload::init();
+    let addr = UsbmuxdAddr::default();
+    let devices = usb_devices(&addr).await.unwrap_or_else(|e| fail(3, e));
+    if devices.is_empty() { fail(4, "Không thấy iPhone qua USB. Cắm cáp dữ liệu, mở khóa và bấm Tin cậy máy tính."); }
+    for (i, device) in devices.iter().enumerate() { println!("  {}. iPhone/iPad USB — {}", i + 1, device.udid); }
+    if arguments.first().map(String::as_str) == Some("--list-devices") { return; }
+    let index = if devices.len() == 1 { 0 } else {
+        selection(&prompt("Chọn số iPhone muốn thiết lập: "), devices.len()).unwrap_or_else(|| fail(4, "Chưa chọn đúng thiết bị."))
+    };
+    let provider = devices[index].clone().to_provider(addr.clone(), "iSideload-Windows");
     let info = isideload::util::device::IdeviceInfo::from_device(&provider).await
-        .unwrap_or_else(|e| fail(5, format!("chua ghep noi duoc voi iPhone (mo khoa, bam Tin cay, mo Apple Devices 1 lan): {e}")));
-    println!("Thay may: {} (UDID {})", info.name, info.udid);
-    let id = prompt("Apple ID (email): ");
-    let pw = rpassword::prompt_password("Mat khau Apple ID (an, khong luu): ").unwrap_or_default();
-    if id.is_empty() || pw.is_empty() { fail(1, "thieu Apple ID / mat khau".into()) }
-    let mut acc = login(&storage, &id, &pw).await.unwrap_or_else(|e| fail(10, format!("dang nhap that bai: {e}")));
-    drop(pw);
-    println!("Da dang nhap.");
-    let dev_s = DeveloperSession::from_account(&mut acc).await.unwrap_or_else(|e| fail(11, format!("developer session: {e}")));
-    let mut sl = SideloaderBuilder::<isideload::util::callbacks::MaxCertsCallbackBox>::new(dev_s, id.clone()).storage(Box::new(FsStorage::new(storage.clone())))
-        .machine_name("iSideload".into()).max_certs_behavior(MaxCertsBehavior::Revoke).build();
-    sl.set_device_type(Some(DeveloperDeviceType::Ios));
-    let team = sl.get_team().await.unwrap_or_else(|e| fail(12, format!("khong co team: {e}")));
-    println!("Team {}; dang ky thiet bi...", team.team_id);
-    if let Err(e) = sl.get_dev_session().ensure_device_registered(&team, &info.name, &info.udid, Some(DeveloperDeviceType::Ios)).await { fail(13, format!("dang ky may: {e}")) }
-    let prog = |f: f32| async move { print!("\rKy app {:.0}%   ", f * 100.0); let _ = std::io::stdout().flush(); };
-    let (signed, _) = sl.sign_app(ipa, Some(team), false, Some(prog), None, Some(&info.udid)).await.unwrap_or_else(|e| fail(14, format!("ky that bai: {e}")));
-    println!("\nDang cai len iPhone qua USB...");
-    if let Err(e) = isideload::sideload::install::install_app(&provider, &signed, |p| { print!("\rCai {p}%   "); let _ = std::io::stdout().flush(); }).await { fail(16, format!("cai that bai: {e}")) }
-    let _ = std::fs::remove_dir_all(&signed);
-    println!("\n\nXONG! Tren iPhone: Cai dat > Cai dat chung > VPN & Quan ly thiet bi > Apple ID cua ban > Tin cay. Roi mo iSideload.");
-    let _ = prompt("Nhan Enter de thoat...");
+        .unwrap_or_else(|e| fail(5, format!("Chưa có kết nối USB tin cậy: {e}. Mở Apple Devices/iTunes, mở khóa iPhone và bấm Tin cậy.")));
+    println!("Máy nhận: {} ({})", info.name, info.udid);
+    let repair = arguments.first().map(String::as_str) == Some("--pair-only");
+    let bundle_id = if repair {
+        choose_installed_app(&provider).await.unwrap_or_else(|e| fail(6, e))
+    } else {
+        let ipa = arguments.first().map(PathBuf::from).unwrap_or_else(|| std::env::current_exe().unwrap().parent().unwrap().join("iSideload.ipa"));
+        if !ipa.is_file() { fail(2, "Không thấy iSideload.ipa; giải nén đầy đủ gói ZIP."); }
+        let storage = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("iSideload-win");
+        std::fs::create_dir_all(&storage).unwrap_or_else(|e| fail(2, e));
+        let id = prompt("Apple ID sẽ dùng để ký và gia hạn trên iPhone (email): ");
+        let password = rpassword::prompt_password("Mật khẩu Apple ID (ẩn khi nhập): ").unwrap_or_default();
+        if id.is_empty() || password.is_empty() { fail(1, "Thiếu Apple ID hoặc mật khẩu."); }
+        let mut account = login(&storage, &id, &password).await.unwrap_or_else(|e| fail(10, e));
+        drop(password);
+        let developer = DeveloperSession::from_account(&mut account).await.unwrap_or_else(|e| fail(11, e));
+        let mut signer = SideloaderBuilder::new(developer, id).storage(Box::new(FsStorage::new(storage)))
+            .machine_name("iSideload Windows".into()).max_certs_behavior(MaxCertsBehavior::Prompt(revoke_prompt)).build();
+        signer.set_device_type(Some(DeveloperDeviceType::Ios));
+        let team = signer.get_team().await.unwrap_or_else(|e| fail(12, e));
+        signer.get_dev_session().ensure_device_registered(&team, &info.name, &info.udid, Some(DeveloperDeviceType::Ios)).await.unwrap_or_else(|e| fail(13, e));
+        let progress = |value: f32| async move { print!("\rĐang ký app: {:.0}%   ", value * 100.0); let _ = std::io::stdout().flush(); };
+        let (signed, _) = signer.sign_app(ipa, Some(team), false, Some(progress), None, Some(&info.udid)).await.unwrap_or_else(|e| fail(14, e));
+        let id = signed_bundle_id(&signed).unwrap_or_else(|e| fail(14, e));
+        println!("\nĐang cài iSideload qua USB…");
+        let result = isideload::sideload::install::install_app(&provider, &signed, |p| { print!("\rCài: {p}%   "); let _ = std::io::stdout().flush(); }).await;
+        cleanup_signed(&signed);
+        if let Err(error) = result { fail(16, error); }
+        println!("\nApp đã cài. Đang tiếp tục thiết lập ghép đôi; chưa rút cáp.");
+        id
+    };
+    println!("Đóng hẳn iSideload trên iPhone trong lúc công cụ thiết lập file ghép đôi.");
+    let provider = developer_ready(&addr, &info.udid).await.unwrap_or_else(|e| fail(20, e));
+    // Do not cancel the whole file transaction: each transport operation has its
+    // own deadline so interrupted transfers can still run their rollback.
+    if let Err(error) = pairing_setup::setup(&provider, &bundle_id, &info.udid).await {
+        fail(21, format!("{error}\nApp đã cài được giữ lại. Chạy lại chế độ 2 để sửa ghép đôi, không cần ký lại."));
+    }
+    println!("\nXONG: iSideload đã có file Remote Pairing, đã đọc lại và xác minh với đúng iPhone qua USB.");
+    println!("Trên iPhone: tin cậy tài khoản ở Cài đặt > Cài đặt chung > VPN & Quản lý thiết bị nếu được yêu cầu.");
+    println!("Mở lại iSideload, đăng nhập cùng Apple ID để gia hạn. Cài/bật LocalDevVPN rồi bấm Thiết bị > Kiểm tra kết nối thiết bị.");
+    println!("Không cần xuất hay nhập file ghép đôi bằng tay. Kiểm tra LocalDevVPN thành công rồi thử Làm mới iSideload.");
 }
