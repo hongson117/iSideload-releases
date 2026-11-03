@@ -1,23 +1,23 @@
 {
   "schema_version": 1,
-  "version": "1.2.5-rc2",
+  "version": "1.2.6-rc1",
   "channel": "prerelease",
-  "app_version": "1.2.5",
-  "app_build": "10",
+  "app_version": "1.2.6",
+  "app_build": "11",
   "minimum_ios": "17.4",
   "packages": {
     "windows": {
       "file": "isl-windows.zip",
-      "sha256": "ae7e5474d90114f22aaa285a6f70bbd841d5575bb9f2cf38c4a4fb616156f686",
+      "sha256": "81ef224dc9d1b329a600acbc9a27ca4c716e296813f655d01da02faba97ae37b",
       "launch": "Cai-iSideload.bat",
       "os": "Windows 10/11 x64",
       "architectures": [
         "x86_64"
       ],
       "guide": "WINDOWS.md",
-      "bytes": 9954952,
+      "bytes": 9976487,
       "download_url": "https://raw.githubusercontent.com/hongson117/iSideload-releases/main/isl-windows.zip",
-      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/isl-windows.zip",
+      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/isl-windows.zip",
       "hardware_validation": {
         "date": "2026-11-03",
         "platform": "windows",
@@ -38,7 +38,7 @@
     },
     "macos": {
       "file": "isl-macos-universal.zip",
-      "sha256": "028ee341a2083327afba761ecb9e01504547542adb9730b797f7bb57eaaed5c3",
+      "sha256": "b28f3139fb35c2dba2a55469cd6e0adc4516c81d44dcfcb1c6a61fbebff96f58",
       "launch": "Cai-iSideload.command",
       "os": "macOS 11+",
       "architectures": [
@@ -46,9 +46,9 @@
         "x86_64"
       ],
       "guide": "MACOS.md",
-      "bytes": 13573602,
+      "bytes": 13595138,
       "download_url": "https://raw.githubusercontent.com/hongson117/iSideload-releases/main/isl-macos-universal.zip",
-      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/isl-macos-universal.zip",
+      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/isl-macos-universal.zip",
       "desktop_installer_version": "1.2.2",
       "desktop_source_commit": "0545cbe685b4d2a10a363006aa3897907133798e"
     }
@@ -63,7 +63,7 @@
     "Enter Apple ID/password/2FA directly in local installer terminal for mode 1"
   ],
   "hardware_usb_test": "Windows mode 2: existing record verified over USB and LocalDevVPN check confirmed by user; first-install/new-record and macOS USB not yet verified",
-  "app_source_commit": "ff8bdfdbd887c7307a6f0c1d7b321880db871e28",
-  "app_ui_hardware_test": "1.2.5 build 8 installed and read back; new quota logic and six apps across two accounts not yet verified on physical iPhone",
+  "app_source_commit": "ef095f0a30d07c84797b0d728fa4e3ab12d32a21",
+  "app_ui_hardware_test": "Previous iSideload 1.2.5 installation verified; 1.2.6 certificate UI awaits user verification",
   "self_update_feed": "https://raw.githubusercontent.com/hongson117/iSideload-releases/main/app-updates.json"
 }

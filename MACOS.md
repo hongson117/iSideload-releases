@@ -1,11 +1,11 @@
-# iSideload macOS — gói 1.2.5 RC2 — CÀI APP VÀ TỰ THIẾT LẬP FILE GHÉP ĐÔI
+# iSideload macOS — gói 1.2.6 RC1 — CÀI APP VÀ TỰ THIẾT LẬP FILE GHÉP ĐÔI
 
 Gói Universal: Mac Apple Silicon + Intel, macOS 11+. iPhone/iPad cần iOS/iPadOS 17.4+ cho thiết lập Remote Pairing tự động.
-**[Tải bộ cài macOS Universal](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/isl-macos-universal.zip)**
+**[Tải bộ cài macOS Universal](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/isl-macos-universal.zip)**
 
 ## TRONG GÓI
 
-Cai-iSideload.command, isl-mac Universal, iSideload.ipa 1.2.5 build 10, README-VI.txt, ThirdPartyNotices.txt và SHA256SUMS.txt.
+Cai-iSideload.command, isl-mac Universal, iSideload.ipa 1.2.6 build 11, README-VI.txt, ThirdPartyNotices.txt và SHA256SUMS.txt.
 Không cần Homebrew, Xcode, Python, usbmuxd bên ngoài, RC Pair hay Tailscale cho lượt cài USB.
 
 ## CHUẨN BỊ
@@ -74,10 +74,10 @@ https://support.apple.com/guide/mac-help/mh40617/mac
 
 ## Cập nhật phiên bản bằng tài khoản của bạn
 
-Gói này kèm iSideload 1.2.5 có chức năng tải IPA mới từ GitHub, kiểm tra checksum rồi ký và cài đè bằng nguồn gia hạn của bản đang cài. Sau khi cài, đăng nhập cùng Apple ID đã dùng ký trên máy tính, chọn Tài khoản gia hạn trong tab Ứng dụng rồi thử Làm mới iSideload.
+Gói này kèm iSideload 1.2.6 có chức năng tải IPA mới từ GitHub, kiểm tra checksum rồi ký và cài đè bằng nguồn gia hạn của bản đang cài. Sau khi cài, đăng nhập cùng Apple ID đã dùng ký trên máy tính, chọn Tài khoản gia hạn trong tab Ứng dụng rồi thử Làm mới iSideload.
 
 Vào Cài đặt → Cập nhật iSideload → Kiểm tra phiên bản mới ngay. Có thể bật Tự tải, ký và cập nhật khi mở app (mặc định tắt). Apple ID cần Remote Pairing và LocalDevVPN. Chứng chỉ có sẵn vẫn cần profile phù hợp và xác nhận cài của iOS. Mở lại app để kiểm tra phiên bản sau khi cài đè; iOS không bảo đảm cài âm thầm khi app đóng.
 
 Nếu bản đầu được ký bằng tài khoản người hỗ trợ, vào Tài khoản → Thiết lập iSideload bằng tài khoản này để tạo bản Cá nhân của bạn trước. Cập nhật phiên bản giữ đúng App ID/Team đang cài; đổi chủ sở hữu là luồng riêng.
 
-Từ build 10: bỏ chốt chặn 3 app theo lịch sử cục bộ; Apple/thiết bị quyết định quota. Xem [giải thích giới hạn](INSTALL-LIMITS.md). Chưa kiểm chứng cài đủ 6 app trên iPhone bằng hai tài khoản.
+Từ bản 1.2.6: vào Cài đặt → Quản lý chứng chỉ phát triển để chọn Apple ID/Team và thu hồi chứng chỉ cũ; thao tác quay về từ VPN vẫn cho chọn Thu hồi và ký tiếp. Tác vụ nền không tự thu hồi chứng chỉ còn hạn.

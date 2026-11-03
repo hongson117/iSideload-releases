@@ -1,15 +1,15 @@
 # iSideload
 
-**IPA và bộ cài Windows/macOS chính thức — iSideload 1.2.5 RC2, build 10.** Repo phân phối binary/tài liệu; mã nguồn app được giữ private.
+**IPA và bộ cài Windows/macOS chính thức — iSideload 1.2.6 RC1, build 11.** Repo phân phối binary/tài liệu; mã nguồn app được giữ private.
 
 ## Tải bản mới
 
-- [iSideload.ipa 1.2.5](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/iSideload.ipa)
-- [Bộ cài Windows](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/isl-windows.zip) — giải nén và mở `Cai-iSideload.bat`.
-- [Bộ cài macOS Universal](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/isl-macos-universal.zip) — giải nén và mở `Cai-iSideload.command`.
-- [Trang phát hành/checksum](https://github.com/hongson117/iSideload-releases/releases/tag/v1.2.5-rc2) · [INSTALLERS.json](INSTALLERS.json).
+- [iSideload.ipa 1.2.6](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/iSideload.ipa)
+- [Bộ cài Windows](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/isl-windows.zip) — giải nén và mở `Cai-iSideload.bat`.
+- [Bộ cài macOS Universal](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/isl-macos-universal.zip) — giải nén và mở `Cai-iSideload.command`.
+- [Trang phát hành/checksum](https://github.com/hongson117/iSideload-releases/releases/tag/v1.2.6-rc1) · [INSTALLERS.json](INSTALLERS.json).
 
-Hai ZIP trong repo cũng đã kèm IPA **1.2.5 build 10**. Công cụ desktop vẫn 1.2.2; Windows 10/11 x64, macOS 11+ Apple Silicon/Intel, iPhone/iPad iOS 17.4+. Chọn **1** để cài mới kèm tạo/chép/xác minh Remote Pairing; chọn **2** để chỉ thiết lập/sửa ghép đôi cho app đã có. File ghép đôi được tạo riêng khi chạy, không có bản dùng chung trong ZIP.
+Hai ZIP trong repo cũng đã kèm IPA **1.2.6 build 11**. Công cụ desktop vẫn 1.2.2; Windows 10/11 x64, macOS 11+ Apple Silicon/Intel, iPhone/iPad iOS 17.4+. Chọn **1** để cài mới kèm tạo/chép/xác minh Remote Pairing; chọn **2** để chỉ thiết lập/sửa ghép đôi cho app đã có. File ghép đôi được tạo riêng khi chạy, không có bản dùng chung trong ZIP.
 
 [Hướng dẫn Windows](WINDOWS.md) · [Hướng dẫn macOS](MACOS.md) · [Cập nhật ngay trong app](APP-UPDATES.md)
 
@@ -58,9 +58,9 @@ Máy nhận không cần RC Pair hay Tailscale cho lượt cài này. Máy hỗ 
 
 ## Cài lần đầu bằng máy tính
 
-**Windows 10/11 x64:** [tải isl-windows.zip (1.2.5 RC2)](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/isl-windows.zip), giải nén toàn bộ và mở `Cai-iSideload.bat`. Chọn **1** để cài từ đầu kèm file Remote Pairing; chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi. [Hướng dẫn Windows từng bước](WINDOWS.md). Bản thử đã qua kiểm thử phần mềm; lựa chọn 2 đã được xác nhận qua USB và kiểm tra LocalDevVPN trên iPhone có sẵn bản ghi hợp lệ. Cài từ đầu vẫn cần xác nhận.
+**Windows 10/11 x64:** [tải isl-windows.zip (1.2.6 RC1)](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/isl-windows.zip), giải nén toàn bộ và mở `Cai-iSideload.bat`. Chọn **1** để cài từ đầu kèm file Remote Pairing; chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi. [Hướng dẫn Windows từng bước](WINDOWS.md). Bản thử đã qua kiểm thử phần mềm; lựa chọn 2 đã được xác nhận qua USB và kiểm tra LocalDevVPN trên iPhone có sẵn bản ghi hợp lệ. Cài từ đầu vẫn cần xác nhận.
 
-**macOS (Apple Silicon và Intel, macOS 11+):** tải [isl-macos-universal.zip](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/isl-macos-universal.zip), giải nén, cắm iPhone bằng cáp và mở `Cai-iSideload.command`. Công cụ dùng dịch vụ USB của Apple có sẵn, không yêu cầu Homebrew/Xcode; đã kèm IPA 1.2.5 build 10. Chọn **1** để cài từ đầu kèm Remote Pairing hoặc **2** để chỉ thiết lập/sửa ghép đôi. [Xem hướng dẫn macOS từng bước](MACOS.md).
+**macOS (Apple Silicon và Intel, macOS 11+):** tải [isl-macos-universal.zip](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/isl-macos-universal.zip), giải nén, cắm iPhone bằng cáp và mở `Cai-iSideload.command`. Công cụ dùng dịch vụ USB của Apple có sẵn, không yêu cầu Homebrew/Xcode; đã kèm IPA 1.2.6 build 11. Chọn **1** để cài từ đầu kèm Remote Pairing hoặc **2** để chỉ thiết lập/sửa ghép đôi. [Xem hướng dẫn macOS từng bước](MACOS.md).
 
 Tải `iSideload.ipa` từ trang release, dùng công cụ ký/cài iOS mà bạn tin cậy với Apple ID của chính bạn để cài lên thiết bị. Mở khóa iPhone, xác nhận Tin cậy máy tính khi được hỏi; bật Chế độ nhà phát triển và tin cậy nhà phát triển trước khi mở app.
 
@@ -106,10 +106,10 @@ Luồng cài từ iPhone hỗ trợ sang máy mới đã được người dùng
 
 ## Cập nhật phiên bản bằng tài khoản của bạn
 
-Gói này kèm iSideload 1.2.5 có chức năng tải IPA mới từ GitHub, kiểm tra checksum rồi ký và cài đè bằng nguồn gia hạn của bản đang cài. Sau khi cài, đăng nhập cùng Apple ID đã dùng ký trên máy tính, chọn Tài khoản gia hạn trong tab Ứng dụng rồi thử Làm mới iSideload.
+Gói này kèm iSideload 1.2.6 có chức năng tải IPA mới từ GitHub, kiểm tra checksum rồi ký và cài đè bằng nguồn gia hạn của bản đang cài. Sau khi cài, đăng nhập cùng Apple ID đã dùng ký trên máy tính, chọn Tài khoản gia hạn trong tab Ứng dụng rồi thử Làm mới iSideload.
 
 Vào Cài đặt → Cập nhật iSideload → Kiểm tra phiên bản mới ngay. Có thể bật Tự tải, ký và cập nhật khi mở app (mặc định tắt). Apple ID cần Remote Pairing và LocalDevVPN. Chứng chỉ có sẵn vẫn cần profile phù hợp và xác nhận cài của iOS. Mở lại app để kiểm tra phiên bản sau khi cài đè; iOS không bảo đảm cài âm thầm khi app đóng.
 
 Nếu bản đầu được ký bằng tài khoản người hỗ trợ, vào Tài khoản → Thiết lập iSideload bằng tài khoản này để tạo bản Cá nhân của bạn trước. Cập nhật phiên bản giữ đúng App ID/Team đang cài; đổi chủ sở hữu là luồng riêng.
 
-Từ build 10: bỏ chốt chặn 3 app theo lịch sử cục bộ; Apple/thiết bị quyết định quota. Xem [giải thích giới hạn](INSTALL-LIMITS.md). Chưa kiểm chứng cài đủ 6 app trên iPhone bằng hai tài khoản.
+Từ bản 1.2.6: vào Cài đặt → Quản lý chứng chỉ phát triển để chọn Apple ID/Team và thu hồi chứng chỉ cũ; thao tác quay về từ VPN vẫn cho chọn Thu hồi và ký tiếp. Tác vụ nền không tự thu hồi chứng chỉ còn hạn.
