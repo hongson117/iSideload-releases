@@ -112,7 +112,11 @@ jobs:
             /tmp/guest-tests
             python3 -m venv /tmp/ic-python
             /tmp/ic-python/bin/python -m pip install --quiet pyyaml
+            EXPECTED_VERSION=$(/tmp/ic-python/bin/python -c "import yaml; print(yaml.safe_load(open('project-icontainer.yml'))['targets']['iContainer']['settings']['base']['MARKETING_VERSION'])")
+            echo "SOURCE_VERSION=$EXPECTED_VERSION" >> "$GITHUB_ENV"
             /tmp/ic-python/bin/python scripts/configure_icontainer.py
+            GENERATED_VERSION=$(/tmp/ic-python/bin/python -c "import yaml; print(yaml.safe_load(open('project-icontainer.yml'))['targets']['iContainer']['settings']['base']['MARKETING_VERSION'])")
+            [[ "$EXPECTED_VERSION" == "$GENERATED_VERSION" ]]
             python3 scripts/generate_notices.py
             brew install xcodegen
             xcodegen generate --spec project-icontainer.yml
@@ -144,6 +148,7 @@ jobs:
           python3 - <<'PY'
           import os,json,pathlib,plistlib
           info=plistlib.loads(pathlib.Path('out/Payload/iContainer.app/Info.plist').read_bytes())
+          assert info['CFBundleShortVersionString']==os.environ['SOURCE_VERSION'], 'Packaged version differs from committed target'
           pathlib.Path('publish/BUILD-SOURCE.json').write_text(json.dumps({'source_commit':os.environ['SOURCE_SHA'],'build':str(info['CFBundleVersion']),'product':'iContainer','version':info['CFBundleShortVersionString'],'unsigned':True}))
           pathlib.Path('publish/ThirdPartyNotices.txt').write_bytes(pathlib.Path('out/Payload/iContainer.app/ThirdPartyNotices.txt').read_bytes())
           PY

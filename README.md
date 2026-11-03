@@ -122,8 +122,8 @@ Khi gặp quota ngay trong lượt ký, chọn chứng chỉ cũ ở hộp tho�
 
 ## iContainer 0.1.2 — sửa chữ ký khi chạy app bên trong Container
 
-- [IPA iContainer 0.1.2 build 1003](https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.2-b1003/iContainer.ipa)
-- [Trang phát hành và checksum](https://github.com/hongson117/iSideload-releases/releases/tag/icontainer-v0.1.2-b1003)
+- [IPA iContainer 0.1.2 build 1004](https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.2-b1004/iContainer.ipa)
+- [Trang phát hành và checksum](https://github.com/hongson117/iSideload-releases/releases/tag/icontainer-v0.1.2-b1004)
 - [Workflow Build iContainer](https://github.com/hongson117/iSideload-releases/actions/workflows/build-icontainer.yml)
 
 Sau khi cập nhật: **Container → chọn app cũ → Chuẩn bị lại → chọn đúng nguồn ký của iContainer → Chạy**. Bản chạy cũ được yêu cầu chuẩn bị lại để tạo chữ ký đủ XML/DER, sửa lỗi `code signature invalid` sau bản sửa duplicate LC_RPATH; app gốc và vùng dữ liệu được giữ nguyên. Không cần xóa hay nhập lại app chỉ để áp dụng bản sửa này.
