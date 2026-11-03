@@ -38,7 +38,7 @@ struct AccountView: View {
                         Button { email = ""; adding = true } label: { Label("Thêm Apple ID", systemImage: "person.badge.plus") }
                     }
                 } header: { Text("Apple ID") } footer: {
-                    Text("Apple ID miễn phí: iOS giới hạn 3 app tự ký trên mỗi máy (tính cả iSideload); mỗi Apple ID có 10 App ID mỗi 7 ngày. Thêm tài khoản không bảo đảm tăng số app trên máy. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
+                    Text("Apple ID miễn phí: iOS giới hạn 3 app tự ký trên mỗi máy (tính cả iContainer); mỗi Apple ID có 10 App ID mỗi 7 ngày. Thêm tài khoản không bảo đảm tăng số app trên máy. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
                 }
 
                 Section {

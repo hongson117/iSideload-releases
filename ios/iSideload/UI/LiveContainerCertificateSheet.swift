@@ -12,7 +12,7 @@ struct LiveContainerCertificateSheet: View {
             Form {
                 Section {
                     Text("Nguồn chứng chỉ: \(file.sourceLabel)").font(.headline)
-                    Text("Có nhiều bản LiveContainer được quản lý nên iSideload không tự gửi qua liên kết để tránh chọn nhầm bản nhận. Hãy nhập file dưới đây vào đúng bản vừa ký bằng nguồn này.")
+                    Text("Có nhiều bản LiveContainer được quản lý nên iContainer không tự gửi qua liên kết để tránh chọn nhầm bản nhận. Hãy nhập file dưới đây vào đúng bản vừa ký bằng nguồn này.")
                 }
                 Section("1. Lưu file chứng chỉ") {
                     ShareLink(item: file.url) { Label("Lưu file .p12 vào Tệp", systemImage: "square.and.arrow.up") }

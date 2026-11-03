@@ -1,0 +1,82 @@
+name: iContainer private preview
+on:
+  push:
+    branches: [feat/icontainer]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: {workspaces: core}
+      - run: cargo test --locked --manifest-path core/Cargo.toml
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: {targets: aarch64-apple-ios}
+      - uses: Swatinem/rust-cache@v2
+        with: {workspaces: core, key: ios}
+      - name: Build shared signing core
+        run: |
+          export IPHONEOS_DEPLOYMENT_TARGET=17.0
+          export ISL_GIT_SHA=${GITHUB_SHA::7}
+          export RUSTFLAGS="--remap-path-prefix=${GITHUB_WORKSPACE}=/src --remap-path-prefix=${HOME}/.cargo=/deps/cargo"
+          cargo build --locked --release --target aarch64-apple-ios --manifest-path core/Cargo.toml
+      - name: Generate independent target and notices
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/configure_icontainer.py
+          python3 scripts/generate_notices.py
+          brew install xcodegen
+          xcodegen generate --spec project-icontainer.yml
+      - name: Regression tests for lifecycle and pairing
+        run: |
+          swiftc -parse-as-library ios/iSideload/Core/Models.swift ios/iSideload/Core/InstalledAppState.swift tests/InstalledAppStateTests.swift -o /tmp/lifecycle-tests
+          /tmp/lifecycle-tests
+          swiftc -parse-as-library ios/iSideload/Core/PairingRecord.swift tests/PairingRecordTests.swift -o /tmp/pair-tests
+          /tmp/pair-tests
+      - name: Build unsigned iContainer
+        run: |
+          xcodebuild -project iContainer.xcodeproj -scheme iContainer -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION=${{ github.run_number }} CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > /tmp/ic-build.log 2>&1 || { tail -100 /tmp/ic-build.log; exit 1; }
+          tail -8 /tmp/ic-build.log
+      - name: Build original smoke guest and verify Mach-O transformation
+        run: |
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          mkdir -p demo/Payload/ContainerDemo.app
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -fobjc-arc -framework UIKit -framework Foundation -Wl,-headerpad,4096 tests/ContainerDemo/main.m -o demo/Payload/ContainerDemo.app/ContainerDemo
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          p={'CFBundleIdentifier':'com.hongson117.icontainer.demo','CFBundleName':'ContainerDemo','CFBundleDisplayName':'iContainer Demo','CFBundleExecutable':'ContainerDemo','CFBundlePackageType':'APPL','CFBundleShortVersionString':'1.0','CFBundleVersion':'1','CFBundleSupportedPlatforms':['iPhoneOS'],'UIDeviceFamily':[1,2],'LSRequiresIPhoneOS':True}
+          Path('demo/Payload/ContainerDemo.app/Info.plist').write_bytes(plistlib.dumps(p))
+          PY
+          rustc scripts/verify_container_demo.rs -o /tmp/verify-demo
+          /tmp/verify-demo demo/Payload/ContainerDemo.app/ContainerDemo /tmp/ContainerDemo.dylib
+          xcrun otool -hv /tmp/ContainerDemo.dylib
+          (cd demo && zip -qry ../iContainer-Demo.ipa Payload)
+      - name: Package and audit private IPA
+        run: |
+          APP=build/Build/Products/Release-iphoneos/iContainer.app
+          /usr/libexec/PlistBuddy -c "Set :ISLGitSHA ${GITHUB_SHA::7}" "$APP/Info.plist"
+          mkdir -p out/Payload
+          cp -R "$APP" out/Payload/
+          (cd out && zip -qry ../iContainer.ipa Payload)
+          python3 scripts/audit_release.py --self-test
+          python3 scripts/audit_release.py iContainer.ipa --expected-sha "${GITHUB_SHA::7}" --output icontainer-audit.json
+          shasum -a 256 iContainer.ipa iContainer-Demo.ipa > iContainer-SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iContainer-preview-${{ github.run_number }}
+          path: |
+            iContainer.ipa
+            iContainer-Demo.ipa
+            icontainer-audit.json
+            iContainer-SHA256SUMS.txt
+            docs/ICONTAINER.md
+            docs/ICONTAINER-PROVENANCE.md

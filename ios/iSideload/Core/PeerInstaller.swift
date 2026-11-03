@@ -53,7 +53,7 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
 
     private func publish(_ data: [String: Any]) {
         guard let port = data["port"] as? Int, let name = data["name"] as? String else { return }
-        hostName = data["host_name"] as? String ?? "iSideload - Cai may khac"
+        hostName = data["host_name"] as? String ?? "iContainer - Cai may khac"
         let service = NetService(domain: "local.", type: "_remotepairing-pairable-host._tcp.", name: name, port: Int32(port))
         service.delegate = self
         service.setTXTRecord(NetService.data(fromTXTRecord:
@@ -112,7 +112,7 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
                                     model: result["model"] as? String ?? "", udid: result["udid"] as? String ?? "",
                                     ip: result["ip"] as? String ?? "", pairedAt: Date())
             try saveReceiver()
-            phase = .paired; stage = "Đã ghép nối. Kiểm tra đúng máy nhận rồi bấm Cài iSideload."
+            phase = .paired; stage = "Đã ghép nối. Kiểm tra đúng máy nhận rồi bấm Cài iContainer."
         } catch {
             receiver = previous; phase = previous == nil ? .idle : .paired
             self.error = publishError ?? (cancelRequested ? nil : error.localizedDescription)
@@ -135,7 +135,7 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
         }
         let events: CoreCall.Event = { [weak self] st, p in DispatchQueue.main.async { self?.event(st, p) } }
         do {
-            stage = "Đang chuẩn bị iSideload cho máy nhận…"
+            stage = "Đang chuẩn bị iContainer cho máy nhận…"
             _ = try await engine.callForPeer(["op": "pack_self", "app_path": Bundle.main.bundleURL.path,
                                              "out_path": out.path, "peer_bootstrap": true], onEvent: events)
             var req = engine.peerRequest("peer_install", account: account)
@@ -147,7 +147,7 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
             // Installation succeeded even if writing local history fails.
             try? saveReceiver()
             phase = .installed; progress = 1
-            stage = "Đã cài iSideload lên \(peer.name)."
+            stage = "Đã cài iContainer lên \(peer.name)."
         } catch {
             phase = .paired; self.error = error.localizedDescription
             stage = "Chưa cài xong. Giữ máy nhận mở khóa và kiểm tra Wi-Fi rồi thử lại."

@@ -20,7 +20,7 @@ struct SettingsView: View {
                 Section {
                     TextField(LoopbackVPN.defaultTarget, text: $engine.vpnTarget).keyboardType(.decimalPad)
                     Toggle("Chỉ bật VPN khi cài/ký lại, xong tự tắt", isOn: $vpnAutoOff)
-                } header: { Text("Địa chỉ VPN loopback") } footer: { Text("Mặc định 10.7.0.1 (LocalDevVPN). Khi bật tuỳ chọn, iSideload tự mở LocalDevVPN để bật trước mỗi lần cài/ký lại và tắt ngay khi xong (thành công hay lỗi) để không ảnh hưởng Tailscale/mạng thường. Ký lại chạy nền không bật/tắt được VPN (giới hạn iOS).") }
+                } header: { Text("Địa chỉ VPN loopback") } footer: { Text("Mặc định 10.7.0.1 (LocalDevVPN). Khi bật tuỳ chọn, iContainer tự mở LocalDevVPN để bật trước mỗi lần cài/ký lại và tắt ngay khi xong (thành công hay lỗi) để không ảnh hưởng Tailscale/mạng thường. Ký lại chạy nền không bật/tắt được VPN (giới hạn iOS).") }
                 Section {
                     Toggle("Tự ký lại mỗi ngày", isOn: $autoRefresh)
                         .onChange(of: autoRefresh) { _, on in
@@ -33,16 +33,16 @@ struct SettingsView: View {
                         .font(.footnote)
                     Button("Ký lại tất cả ngay") { Task { await engine.refreshAll(includeSelf: true, onlyDue: false, background: false) } }
                 } header: { Text("Tự ký lại") } footer: {
-                    Text("iOS tự quyết định lúc chạy nền; tác vụ nền chỉ gia hạn các app khác khi LocalDevVPN đang bật. Để gia hạn cả iSideload: mở app và bấm Ký lại tất cả, hoặc dùng Phím tắt › Tự động hóa › Hằng ngày › Chạy ngay: Ký lại tất cả app. iSideload mở LocalDevVPN nếu cần và tự ký chính nó sau cùng; app có thể tự đóng khi iOS cài đè.")
+                    Text("iOS tự quyết định lúc chạy nền; tác vụ nền chỉ gia hạn các app khác khi LocalDevVPN đang bật. Để gia hạn cả iContainer: mở app và bấm Ký lại tất cả, hoặc dùng Phím tắt › Tự động hóa › Hằng ngày › Chạy ngay: Ký lại tất cả app. iContainer mở LocalDevVPN nếu cần và tự ký chính nó sau cùng; app có thể tự đóng khi iOS cài đè.")
                 }
                 Section {
                     TextField("https://api.palera.in/genPlist", text: $otaRelay)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                 } header: { Text("Relay manifest (chứng chỉ)") } footer: {
-                    Text("App ký bằng chứng chỉ có sẵn cài kiểu KSign: không cần VPN. IPA phát từ chính iSideload (127.0.0.1), chỉ manifest đi qua relay HTTPS này. Để trống = mặc định; tự host: thư mục relay/ trong repo.")
+                    Text("App ký bằng chứng chỉ có sẵn cài kiểu KSign: không cần VPN. IPA phát từ chính iContainer (127.0.0.1), chỉ manifest đi qua relay HTTPS này. Để trống = mặc định; tự host: thư mục relay/ trong repo.")
                 }
                 Section("Phiên bản") {
-                    Text("iSideload \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") · core \(CoreCall.version) · \(Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? "")")
+                    Text("iContainer \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "") · core \(CoreCall.version) · \(Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? "")")
                     Button("Giấy phép phần mềm nguồn mở") { notices = true }
                 }
             }

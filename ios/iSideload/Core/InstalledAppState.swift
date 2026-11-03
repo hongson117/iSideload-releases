@@ -47,7 +47,7 @@ struct InstalledAppState {
         return (try? PropertyListSerialization.propertyList(from: content, options: [], format: nil)) as? [String: Any]
     }
 
-    /// Upsert only the exact running bundle. Other iSideload identities and other
+    /// Upsert only the exact running bundle. Other iContainer identities and other
     /// apps are retained. Existing IPA/account/history values survive a launch.
     func reconcile(_ apps: [SideloadedApp], signer: String? = nil) -> [SideloadedApp] {
         let matches = apps.filter { $0.bundleID == bundleID }

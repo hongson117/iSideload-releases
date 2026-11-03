@@ -210,9 +210,9 @@ struct AddSourceSheet: View {
                 if let r = resolved { Section { Label("Đã thêm: \(r)", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.footnote) } }
                 Section("Hướng dẫn") {
                     Text("• Nguồn là link JSON theo chuẩn AltStore/SideStore (danh sách app + link tải IPA).")
-                    Text("• Có thể dán link trang web: iSideload sẽ tự thử /source.json, /apps.json, /repo.json, /altstore.json và tìm link nguồn trong trang.")
+                    Text("• Có thể dán link trang web: iContainer sẽ tự thử /source.json, /apps.json, /repo.json, /altstore.json và tìm link nguồn trong trang.")
                     Text("• Nút “Add to AltStore/SideStore” trên web thường chứa link nguồn — nhấn giữ để sao chép rồi dán vào đây.")
-                    Text("• iSideload không kèm sẵn nguồn nào. Chỉ thêm nguồn bạn tin tưởng và cài app bạn có quyền sử dụng.")
+                    Text("• iContainer không kèm sẵn nguồn nào. Chỉ thêm nguồn bạn tin tưởng và cài app bạn có quyền sử dụng.")
                 }.font(.footnote).foregroundStyle(.secondary)
             }
             .navigationTitle("Thêm nguồn").navigationBarTitleDisplayMode(.inline)

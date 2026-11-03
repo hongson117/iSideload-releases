@@ -22,7 +22,11 @@ final class Engine: ObservableObject {
     @Published var liveContainerCertificateFile: LiveContainerCertificateFile?
     @Published var busy = false
     @Published var peerBusy = false
+    #if ICONTAINER
+    @Published var selectedTab = 5
+    #else
     @Published var selectedTab = 0
+    #endif
     @Published var stage = ""
     @Published var progress: Double = 0
     @Published var prompt: CorePrompt?
@@ -183,6 +187,23 @@ final class Engine: ObservableObject {
     }
 
     // Peer jobs share only the signing account and prompt UI, never this phone's app list or pairing file.
+    #if ICONTAINER
+    func containerOperation(_ request: [String: Any]) async throws -> [String: Any] {
+        try await run(request)
+    }
+
+    func prepareContainerGuest(_ request: [String: Any], signer: String) async throws {
+        guard signers.contains(signer) else { throw CoreError(message: "Chọn nguồn ký hợp lệ trong tab Tài khoản.") }
+        let certificate = try await run(base("export_cert", signer: signer))
+        var r = request
+        r["p12_base64"] = certificate["p12_base64"]
+        r["password"] = certificate["password"]
+        r["signer"] = signer
+        r["host_path"] = Bundle.main.bundleURL.path
+        _ = try await run(r)
+    }
+    #endif
+
     func peerRequest(_ op: String, account: String = "") -> [String: Any] {
         base(op, signer: account.isEmpty ? nil : "apple:" + account)
     }
@@ -366,7 +387,7 @@ final class Engine: ObservableObject {
             let otaIPA = FileManager.default.temporaryDirectory.appendingPathComponent("ota-\(UUID().uuidString).ipa")
             if who != "cert" && !vpnActive { throw CoreError(message: "Không thấy thiết bị qua LocalDevVPN (10.7.0.1). Hãy bật LocalDevVPN.") }
             if who == "cert" && UIApplication.shared.applicationState != .active {
-                throw CoreError(message: "App ký bằng chứng chỉ cần mở iSideload để cài lại (iOS hiện hộp thoại Cài đặt).")
+                throw CoreError(message: "App ký bằng chứng chỉ cần mở iContainer để cài lại (iOS hiện hộp thoại Cài đặt).")
             }
             if who == "cert" { req["ota"] = true; req["ipa_out"] = otaIPA.path }
             defer { try? FileManager.default.removeItem(at: otaIPA) }
@@ -412,26 +433,26 @@ final class Engine: ObservableObject {
         vpnJobDone()
     }
 
-    /// Re-sign and re-install iSideload itself from its own running bundle (no PC needed).
+    /// Re-sign and re-install iContainer itself from its own running bundle (no PC needed).
     /// iOS terminates the app while installation_proxy replaces it; reopen afterwards.
     func refreshSelf(signer: String? = nil) async {
         guard !busy else { return }
         errorText = nil
         let who = signer ?? selfApp.map(signerOf) ?? defaultSigner
         guard signers.contains(who) else {
-            errorText = "Chọn tài khoản ký cho iSideload: đăng nhập Apple ID trong tab Tài khoản, hoặc nhập chứng chỉ của bạn."; return
+            errorText = "Chọn tài khoản ký cho iContainer: đăng nhập Apple ID trong tab Tài khoản, hoặc nhập chứng chỉ của bạn."; return
         }
         if who != "cert" {
-            guard hasPairing else { errorText = "Máy này chưa tự ghép nối. Vào Thiết bị › Ghép nối ngay trên máy, rồi thử Làm mới iSideload."; return }
+            guard hasPairing else { errorText = "Máy này chưa tự ghép nối. Vào Thiết bị › Ghép nối ngay trên máy, rồi thử Làm mới iContainer."; return }
             if !vpnActive { pendingVPNAction = .refreshSelf(who); LoopbackVPN.turnOn(); return }
         }
         syncSelfRecord(signer: who)
-        let out = Self.ipaDir.appendingPathComponent("iSideload-self.ipa")
+        let out = Self.ipaDir.appendingPathComponent("iContainer-self.ipa")
         try? FileManager.default.createDirectory(at: Self.ipaDir, withIntermediateDirectories: true)
         try? FileManager.default.removeItem(at: out)
         do {
             _ = try await run(["op": "pack_self", "app_path": Bundle.main.bundleURL.path, "out_path": out.path])
-        } catch { errorText = "Không đóng gói được iSideload: \(error)"; return }
+        } catch { errorText = "Không đóng gói được iContainer: \(error)"; return }
         infoText = nil
         // iOS usually kills the app when the install finishes: the push happens on next launch.
         markLCCertPending()
@@ -441,7 +462,7 @@ final class Engine: ObservableObject {
         // iOS replaces (and kills) the running app; the connection often drops right after the upload.
         if progress >= 0.7, let e = errorText?.lowercased(), ["socket", "io failed", "broken pipe", "connection", "reset", "eof"].contains(where: { e.contains($0) }) {
             errorText = nil
-            infoText = "Đã gửi bản ký lại. iOS đang thay iSideload — mở lại app để xác nhận."
+            infoText = "Đã gửi bản ký lại. iOS đang thay iContainer — mở lại app để xác nhận."
         } else if errorText != nil {
             UserDefaults.standard.removeObject(forKey: "selfUpdatePending")
         }
@@ -458,11 +479,11 @@ final class Engine: ObservableObject {
               expiry > Date(), let created = state.createdAt,
               created.timeIntervalSince1970 >= t - 120,
               previousExpiry == 0 || expiry.timeIntervalSince1970 > previousExpiry else {
-            infoText = "Chưa xác nhận được hạn ký mới của iSideload. Hãy kiểm tra ngày hết hạn trong tab Ứng dụng và thử lại nếu cần."
+            infoText = "Chưa xác nhận được hạn ký mới của iContainer. Hãy kiểm tra ngày hết hạn trong tab Ứng dụng và thử lại nếu cần."
             return
         }
         syncSelfRecord()
-        infoText = "Đã ký lại iSideload ✓ · hết hạn " + expiry.formatted(date: .abbreviated, time: .omitted)
+        infoText = "Đã ký lại iContainer ✓ · hết hạn " + expiry.formatted(date: .abbreviated, time: .omitted)
     }
 
     // MARK: In-app pairing (iOS 27)
@@ -484,7 +505,7 @@ final class Engine: ObservableObject {
                 if let pin = obj["pin"] as? String {
                     self.pairingPIN = pin
                     let c = UNMutableNotificationContent()
-                    c.title = "Mã ghép nối iSideload"; c.body = pin; c.sound = .default
+                    c.title = "Mã ghép nối iContainer"; c.body = pin; c.sound = .default
                     UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "isl-pin", content: c, trigger: nil))
                 }
             }
@@ -516,7 +537,7 @@ final class Engine: ObservableObject {
 
     var isideloadBundleID: String { Bundle.main.bundleIdentifier ?? "" }
 
-    /// Re-signs due apps from stored IPAs (others first, iSideload itself last). Returns success.
+    /// Re-signs due apps from stored IPAs (others first, iContainer itself last). Returns success.
     @discardableResult
     func refreshAll(includeSelf: Bool, onlyDue: Bool, background: Bool, onlySelf: Bool = false, signerFilter: String? = nil) async -> Bool {
         guard !busy else { return false }
@@ -528,7 +549,7 @@ final class Engine: ObservableObject {
         let needVPN = requested.contains { signerOf($0) != "cert" }
         if needVPN && !vpnActive {
             if !background { pendingVPNAction = .refreshAll(includeSelf: includeSelf, onlyDue: onlyDue, onlySelf: onlySelf, signer: signerFilter); LoopbackVPN.turnOn(); return false }
-            AutoRefresh.notify("iSideload chưa ký lại", "LocalDevVPN chưa bật. Bật VPN rồi chạy lại.")
+            AutoRefresh.notify("iContainer chưa ký lại", "LocalDevVPN chưa bật. Bật VPN rồi chạy lại.")
             return false
         }
         var ok: [String] = [], failed: [String] = []
@@ -544,9 +565,9 @@ final class Engine: ObservableObject {
         let summary = (ok.isEmpty ? "" : "Đã ký " + ok.joined(separator: "; ") + ". ")
             + (failed.isEmpty ? "" : "Lỗi: " + failed.joined(separator: "; "))
         if includeSelf && selfDue {
-            AutoRefresh.notify("iSideload đang tự ký lại", summary + " iSideload sẽ tự thoát khi cài xong.")
+            AutoRefresh.notify("iContainer đang tự ký lại", summary + " iContainer sẽ tự thoát khi cài xong.")
             await refreshSelf()   // process is usually terminated here on success
-            if let e = errorText { AutoRefresh.notify("iSideload ký lại thất bại", e); return false }
+            if let e = errorText { AutoRefresh.notify("iContainer ký lại thất bại", e); return false }
         } else {
             AutoRefresh.notify(failed.isEmpty ? "Ký lại xong" : "Ký lại có lỗi", summary.isEmpty ? "Không có app nào cần ký lại." : summary)
         }
@@ -593,7 +614,7 @@ final class Engine: ObservableObject {
     }
     // MARK: Uninstall
     @Published var uninstallFailed: SideloadedApp?
-    /// Remove from iSideload's list: stops re-signing it and frees its slot (slots are counted from this list).
+    /// Remove from iContainer's list: stops re-signing it and frees its slot (slots are counted from this list).
     func removeFromList(_ app: SideloadedApp) {
         guard !isSelf(app) else { return }
         apps.removeAll { $0.bundleID == app.bundleID }; save()
@@ -602,7 +623,7 @@ final class Engine: ObservableObject {
     }
     /// Uninstall from the device via installation_proxy (needs LocalDevVPN like install), then drop from the list.
     func uninstall(_ app: SideloadedApp) async {
-        guard !isSelf(app) else { errorText = "iSideload quản lý việc gia hạn cho chính nó. Muốn gỡ hoàn toàn, hãy gỡ từ màn hình chính của iOS."; return }
+        guard !isSelf(app) else { errorText = "iContainer quản lý việc gia hạn cho chính nó. Muốn gỡ hoàn toàn, hãy gỡ từ màn hình chính của iOS."; return }
         guard hasPairing else { uninstallFailed = app; return }
         if !vpnActive {
             if UIApplication.shared.applicationState == .active { pendingVPNAction = .uninstall(app); LoopbackVPN.turnOn(); return }
@@ -717,12 +738,19 @@ final class Engine: ObservableObject {
 
     /// After a successful re-sign: remember to push the current certificate to LiveContainer.
     func markLCCertPending() {
+        #if ICONTAINER
+        return
+        #else
         if liveContainerInstalled != nil { UserDefaults.standard.set(true, forKey: Self.lcPendingKey) }
+        #endif
     }
 
     /// Pushes the certificate if a re-sign left it pending. Only works in the foreground
     /// (URLs can't be opened from a background task); otherwise it waits for the next launch/foreground.
     func pushPendingLCCert() async {
+        #if ICONTAINER
+        return
+        #else
         guard UserDefaults.standard.bool(forKey: Self.lcPendingKey) else { return }
         guard liveContainerInstalled != nil else { UserDefaults.standard.set(false, forKey: Self.lcPendingKey); return }
         guard UIApplication.shared.applicationState == .active, !busy, !liveContainerInstallActive,
@@ -735,6 +763,7 @@ final class Engine: ObservableObject {
             try sendCertToLiveContainer(r, sourceSigner: signer)
             UserDefaults.standard.set(false, forKey: Self.lcPendingKey)
         } catch { errorText = "Chưa gửi được chứng chỉ sang LiveContainer: \(error.localizedDescription)" }
+        #endif
     }
 
     /// Exports the certificate this Apple ID signs with (.p12 + password) and opens
@@ -788,7 +817,7 @@ final class Engine: ObservableObject {
     var liveContainerInstalled: SideloadedApp? { LiveContainerSigning.latestInstalled(in: apps, activeBundleID: liveContainerActiveBundleID) }
 
     func handleURL(_ url: URL) {
-        if url.scheme == "isideload" {
+        if url.scheme == "icontainer" {
             if url.host == "vpn-ready" || url.host == nil || url.host == "" { Task { await resumeAfterVPN() }; return }
             if url.host == "refresh" { Task { await refreshAll(includeSelf: true, onlyDue: false, background: false) } }
             else if url.host == "refresh-apps" { Task { await refreshAll(includeSelf: false, onlyDue: false, background: false) } }

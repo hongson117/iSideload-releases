@@ -17,25 +17,25 @@ struct DeviceView: View {
             Form {
                 connectionSection
                 Section {
-                    Button("Làm mới iSideload") { Task { await engine.refreshSelf() } }
+                    Button("Làm mới iContainer") { Task { await engine.refreshSelf() } }
                         .disabled(engine.busy || !engine.canSign)
                     if !engine.canSign {
                         Button("Đăng nhập Apple ID hoặc nhập chứng chỉ") { engine.selectedTab = 3 }
                     }
-                } header: { Text("Gia hạn iSideload") } footer: {
-                    Text("Sau khi kiểm tra kết nối thành công, bấm Làm mới để thử gia hạn. iSideload có thể tự đóng khi iOS cài đè; mở lại để xem hạn ký mới.")
+                } header: { Text("Gia hạn iContainer") } footer: {
+                    Text("Sau khi kiểm tra kết nối thành công, bấm Làm mới để thử gia hạn. iContainer có thể tự đóng khi iOS cài đè; mở lại để xem hạn ký mới.")
                 }
                 pairingSection
                 Section {
                     DisclosureGroup("Vì sao mở lại app thấy chưa kiểm tra?") {
-                        Text("Trạng thái kiểm tra được đặt lại khi mở lại hoặc cập nhật iSideload. File ghép đôi vẫn được giữ nếu mục trên báo Đã có file. Chỉ cần bật LocalDevVPN và bấm Kiểm tra kết nối; chưa cần tạo hay nhập lại file.")
+                        Text("Trạng thái kiểm tra được đặt lại khi mở lại hoặc cập nhật iContainer. File ghép đôi vẫn được giữ nếu mục trên báo Đã có file. Chỉ cần bật LocalDevVPN và bấm Kiểm tra kết nối; chưa cần tạo hay nhập lại file.")
                     }
                     DisclosureGroup("Đã cài bằng Windows hoặc Mac?") {
                         Text("Nếu bộ cài RC2 đã báo XONG, file ghép đôi đã nằm trong app. Bật LocalDevVPN rồi kiểm tra kết nối ở đầu màn hình này.")
                     }
                     DisclosureGroup("Đã cài bằng Sideloadly hoặc chưa có file?") {
                         Text("Dùng bộ cài Windows/macOS và chọn 2 để thiết lập ghép đôi cho app đã cài. iOS 27+ cũng có thể tự ghép nối ở phần Thiết lập bên trên. Giữ Wi-Fi bật và iPhone mở khóa khi thiết lập.")
-                        Link("Xem hướng dẫn bộ cài trên máy tính", destination: URL(string: "https://github.com/hongson117/iSideload-releases")!)
+                        Link("Xem hướng dẫn bộ cài trên máy tính", destination: URL(string: "https://github.com/hongson117/iContainer-releases")!)
                     }
                 } header: { Text("Hướng dẫn nhanh") }
                 Section {
@@ -66,7 +66,7 @@ struct DeviceView: View {
                     (engine.pairingCheckError != nil || !engine.hasPairing ? "exclamationmark.triangle" : "doc.badge.checkmark"))
                 .foregroundStyle(statusColor)
             if engine.pairingVerified {
-                Text("Lần kiểm tra vừa rồi đã thành công. Bạn có thể chuyển sang Làm mới iSideload bên dưới. Nếu vừa đổi hoặc tắt VPN, hãy kiểm tra lại.")
+                Text("Lần kiểm tra vừa rồi đã thành công. Bạn có thể chuyển sang Làm mới iContainer bên dưới. Nếu vừa đổi hoặc tắt VPN, hãy kiểm tra lại.")
                     .font(.footnote)
                 if !engine.deviceLine.isEmpty { Text(engine.deviceLine).font(.footnote).foregroundStyle(.secondary) }
             } else if engine.pairingCheckError != nil {
@@ -79,7 +79,7 @@ struct DeviceView: View {
                 Text("File đã sẵn trong app. Lần mở này chưa kiểm tra kết nối. Bật LocalDevVPN rồi bấm Kiểm tra kết nối thiết bị; chưa cần ghép đôi lại.")
                     .font(.footnote)
             } else {
-                Text("Mở phần Thiết lập file ghép đôi bên dưới. Nếu đã có iSideload qua Sideloadly, có thể dùng bộ cài Windows/macOS, chọn 2 để bổ sung file.")
+                Text("Mở phần Thiết lập file ghép đôi bên dưới. Nếu đã có iContainer qua Sideloadly, có thể dùng bộ cài Windows/macOS, chọn 2 để bổ sung file.")
                     .font(.footnote)
             }
             Label(engine.vpnInterfaceUp ? "Đã phát hiện VPN đang bật" : "Bước 1: bật LocalDevVPN",
@@ -97,7 +97,7 @@ struct DeviceView: View {
             .buttonStyle(.borderedProminent)
             .disabled(engine.busy || !engine.hasPairing)
         } header: { Text("Kết nối máy này") } footer: {
-            Text("VPN bật là bước chuẩn bị; nút Kiểm tra mới xác nhận iSideload kết nối được tới iPhone. Phần này dùng khi cài/gia hạn bằng Apple ID.")
+            Text("VPN bật là bước chuẩn bị; nút Kiểm tra mới xác nhận iContainer kết nối được tới iPhone. Phần này dùng khi cài/gia hạn bằng Apple ID.")
         }
     }
 
@@ -114,7 +114,7 @@ struct DeviceView: View {
                 }.disabled(engine.busy || engine.pairingActive)
                 if engine.pairingActive {
                     if engine.pairingPIN.isEmpty {
-                        Text("Mở Cài đặt › Quyền riêng tư & Bảo mật › Chế độ nhà phát triển › Thiết bị khác, chọn iSideload. Giữ Wi-Fi bật.")
+                        Text("Mở Cài đặt › Quyền riêng tư & Bảo mật › Chế độ nhà phát triển › Thiết bị khác, chọn iContainer. Giữ Wi-Fi bật.")
                             .font(.footnote)
                     } else {
                         Text("Nhập mã này trên iPhone:").font(.footnote)

@@ -20,7 +20,7 @@ struct AppsView: View {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "iphone.and.arrow.forward").font(.title).foregroundStyle(Theme.accent)
                             VStack(alignment: .leading, spacing: 5) {
-                                Text("iSideload · máy này").font(.headline)
+                                Text("iContainer · máy này").font(.headline)
                                 Text("Phiên bản \(app.version)").font(.caption).foregroundStyle(.secondary)
                                 if let expiry = app.expires {
                                     Text("Hết hạn: " + expiry.formatted(date: .abbreviated, time: .shortened))
@@ -42,21 +42,22 @@ struct AppsView: View {
                         }
                         Button {
                             Task { await engine.refreshSelf() }
-                        } label: { Label("Làm mới iSideload", systemImage: "arrow.clockwise") }
+                        } label: { Label("Làm mới iContainer", systemImage: "arrow.clockwise") }
                         .disabled(engine.busy || !engine.canSign)
-                        Button("Ký lại tất cả app (iSideload sau cùng)") {
+                        Button("Ký lại tất cả app (iContainer sau cùng)") {
                             Task { await engine.refreshAll(includeSelf: true, onlyDue: false, background: false) }
                         }.disabled(engine.busy || !engine.canSign)
-                    } header: { Text("Gia hạn iSideload") } footer: {
-                        Text("Không cần giữ IPA gốc. iSideload đóng gói chính bản đang chạy để làm mới; app có thể tự đóng khi iOS cài đè. Mở lại và kiểm tra hạn ký mới.")
+                    } header: { Text("Gia hạn iContainer") } footer: {
+                        Text("Không cần giữ IPA gốc. iContainer đóng gói chính bản đang chạy để làm mới; app có thể tự đóng khi iOS cài đè. Mở lại và kiểm tra hạn ký mới.")
                     }
                 }
                 Section {
                     Button { picking = true } label: { Label("Chọn file IPA để cài", systemImage: "plus.app") }
                         .buttonStyle(GradientButtonStyle()).listRowBackground(Color.clear)
                 } footer: {
-                    Text("Apple ID miễn phí: tối đa 3 app sideload cùng lúc (tính cả iSideload), 10 App ID mỗi 7 ngày, app hết hạn sau 7 ngày — bấm Làm mới trước khi hết hạn.")
+                    Text("Apple ID miễn phí: tối đa 3 app sideload cùng lúc (tính cả iContainer), 10 App ID mỗi 7 ngày, app hết hạn sau 7 ngày — bấm Làm mới trước khi hết hạn.")
                 }
+                #if !ICONTAINER
                 Section {
                     let lc = engine.liveContainerInstalled
                     Button(lc == nil ? "Cài LiveContainer" :
@@ -72,6 +73,7 @@ struct AppsView: View {
                     Text("Mỗi lần cài/cài lại đều hỏi nguồn ký: chọn Apple ID hoặc chứng chỉ .p12 đã nhập. LiveContainer nhận đúng chứng chỉ của nguồn bạn chọn. Đổi nguồn có thể tạo bản app khác; dữ liệu bản cũ không tự chuyển sang bản mới.")
                 }
                 .task { await engine.checkLiveContainer() }
+                #endif
                 if engine.apps.isEmpty && engine.signerGroups.isEmpty { Section("Đã sideload") { Text("Chưa có app nào.").foregroundStyle(.secondary) } }
                 ForEach(engine.signerGroups, id: \.self) { sg in
                     let list = engine.apps.filter { !engine.isSelf($0) && engine.signerOf($0) == sg }
@@ -88,7 +90,7 @@ struct AppsView: View {
                     } header: { header(sg, list) }
                 }
             }
-            .navigationTitle("iSideload")
+            .navigationTitle("iContainer")
             .onAppear { engine.syncSelfRecord() }
             .refreshable { await engine.refreshList() }
             .sheet(isPresented: $picking) { DocumentPicker { engine.importIPA(from: $0) } }
@@ -116,7 +118,7 @@ struct AppsView: View {
                     Button("Chỉ xoá khỏi danh sách") { engine.removeFromList(a); engine.infoText = "Đã xoá \(a.name) khỏi danh sách" }
                 }
                 Button("Huỷ", role: .cancel) {}
-            } message: { Text("Dữ liệu của app sẽ bị xoá. iSideload ngừng ký lại app này và trả lại 1 slot.") }
+            } message: { Text("Dữ liệu của app sẽ bị xoá. iContainer ngừng ký lại app này và trả lại 1 slot.") }
             .alert("Profile chỉ cho 1 app", isPresented: Binding(get: { engine.explicitWarn != nil }, set: { if !$0 { engine.explicitWarn = nil } })) {
                 Button("Vẫn cài (thay app cũ)", role: .destructive) { Task { await engine.confirmExplicit() } }
                 Button("Huỷ", role: .cancel) { engine.explicitWarn = nil }

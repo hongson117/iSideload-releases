@@ -3,7 +3,7 @@ import Security
 
 /// Apple ID password storage. AfterFirstUnlock so background refresh can read it.
 enum Keychain {
-    private static let service = "com.hongson117.isideload.appleid"
+    private static let service = "com.hongson117.icontainer.appleid"
 
     static func save(_ password: String, for account: String) {
         delete(account)

@@ -5,12 +5,12 @@ import UIKit
 import UserNotifications
 
 /// Daily re-sign. iOS gives no guaranteed background installs, so three triggers share one
-/// routine: a BGAppRefreshTask (best effort), the URL isideload://refresh, and App Intents
-/// for a Shortcuts personal automation. Other apps are refreshed first, iSideload last,
+/// routine: a BGAppRefreshTask (best effort), the URL icontainer://refresh, and App Intents
+/// for a Shortcuts personal automation. Other apps are refreshed first, iContainer last,
 /// because replacing itself terminates the process.
 enum AutoRefresh {
-    static let taskID = "com.hongson117.isideload.refresh"
-    static let procID = "com.hongson117.isideload.resign"
+    static let taskID = "com.hongson117.icontainer.refresh"
+    static let procID = "com.hongson117.icontainer.resign"
     static var enabled: Bool { UserDefaults.standard.bool(forKey: "autoRefresh") }
     static var thresholdDays: Int { max(0, UserDefaults.standard.object(forKey: "refreshDays") as? Int ?? 2) }
     static var lastRun: Date? { UserDefaults.standard.object(forKey: "lastRefresh") as? Date }
@@ -55,7 +55,7 @@ enum AutoRefresh {
             guard t > 60 else { continue }
             let n = UNMutableNotificationContent()
             n.title = "App sideload sắp hết hạn (\(text))"
-            n.body = "Mở iSideload để ký lại (cần LocalDevVPN). Nếu tự ký lại nền đã chạy, bỏ qua thông báo này."
+            n.body = "Mở iContainer để ký lại (cần LocalDevVPN). Nếu tự ký lại nền đã chạy, bỏ qua thông báo này."
             n.sound = .default
             c.add(UNNotificationRequest(identifier: id, content: n, trigger: UNTimeIntervalNotificationTrigger(timeInterval: t, repeats: false)))
         }
@@ -69,7 +69,7 @@ enum AutoRefresh {
 }
 
 struct RefreshSelfIntent: AppIntent {
-    static var title: LocalizedStringResource = "Ký lại iSideload"
+    static var title: LocalizedStringResource = "Ký lại iContainer"
     static var openAppWhenRun = true
     @MainActor func perform() async throws -> some IntentResult {
         _ = await Engine.shared.refreshAll(includeSelf: true, onlyDue: false, background: false, onlySelf: true)
@@ -91,7 +91,7 @@ struct ISLShortcuts: AppShortcutsProvider {
         AppShortcut(intent: RefreshAllIntent(), phrases: ["Ký lại tất cả app bằng \(.applicationName)"],
                     shortTitle: "Ký lại tất cả app", systemImageName: "arrow.triangle.2.circlepath")
         AppShortcut(intent: RefreshSelfIntent(), phrases: ["Ký lại \(.applicationName)"],
-                    shortTitle: "Ký lại iSideload", systemImageName: "iphone.and.arrow.forward")
+                    shortTitle: "Ký lại iContainer", systemImageName: "iphone.and.arrow.forward")
     }
 }
 

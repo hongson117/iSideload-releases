@@ -1,7 +1,9 @@
 import SwiftUI
 
+#if !ICONTAINER
 @main
-struct iSideloadApp: App {
+#endif
+struct iContainerApp: App {
     @StateObject private var license: LicenseManager
     @StateObject private var engine = Engine.shared
     @Environment(\.scenePhase) private var phase

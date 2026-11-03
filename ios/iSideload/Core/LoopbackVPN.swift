@@ -4,11 +4,11 @@ import UIKit
 
 /// The device reaches its own lockdownd at 10.7.0.1 through a loopback VPN whose
 /// provider reflects packets back into the device (swap src/dst IPv4). Free Apple IDs
-/// cannot sign Network Extensions, so by default iSideload uses the App Store app
+/// cannot sign Network Extensions, so by default iContainer uses the App Store app
 /// "LocalDevVPN"; the bundled Tunnel/ provider is for paid developer accounts.
 enum LoopbackVPN {
     static let appStoreURL = URL(string: "https://apps.apple.com/app/id6755608044")!
-    static let enableURL = URL(string: "localdevvpn://enable?scheme=isideload")!
+    static let enableURL = URL(string: "localdevvpn://enable?scheme=icontainer")!
     static let defaultTarget = "10.7.0.1"
 
     @MainActor static var helperInstalled: Bool { UIApplication.shared.canOpenURL(URL(string: "localdevvpn://")!) }
@@ -57,7 +57,7 @@ enum LoopbackVPN {
         return err == 0 || err == ECONNREFUSED
     }
 
-    static let disableURL = URL(string: "localdevvpn://disable?scheme=isideload")!
+    static let disableURL = URL(string: "localdevvpn://disable?scheme=icontainer")!
     /// Turn LocalDevVPN off again (foreground only — iOS can't open URLs from a background task).
     @MainActor static func turnOff() { if helperInstalled { UIApplication.shared.open(disableURL) } }
     @MainActor static func turnOn() { UIApplication.shared.open(helperInstalled ? enableURL : appStoreURL) }

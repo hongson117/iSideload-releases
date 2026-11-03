@@ -116,7 +116,7 @@ struct SourceEntry: Codable, Hashable { var url: String; var resolved: String?; 
 
     nonisolated static func get(_ u: URL) async throws -> Data {
         var r = URLRequest(url: u, timeoutInterval: 60)
-        r.setValue("iSideload/1.0 (AltStore-compatible)", forHTTPHeaderField: "User-Agent")
+        r.setValue("iContainer/1.0 (AltStore-compatible)", forHTTPHeaderField: "User-Agent")
         r.setValue("application/json, text/html;q=0.8, */*;q=0.5", forHTTPHeaderField: "Accept")
         let (d, resp) = try await URLSession.shared.data(for: r)
         if let h = resp as? HTTPURLResponse, h.statusCode >= 400 { throw CoreError(message: "HTTP \(h.statusCode)") }

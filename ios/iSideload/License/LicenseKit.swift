@@ -1,4 +1,4 @@
-// LicenseKit — activation-code licensing for HongSon's apps (TVSideload, iSideload).
+// LicenseKit — activation-code licensing for HongSon's apps (TVSideload, iContainer).
 // Server: https://tvsideload-license.hongson1812.workers.dev  (POST /activate, POST /check)
 // License = base64url(JSON payload) + "." + base64url(Ed25519 signature)
 // payload = {code, app, device_id, exp (ms, 0 = never), issued_at (ms)}

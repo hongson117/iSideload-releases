@@ -29,7 +29,7 @@ const DEFAULT_ANISETTE: &[&str] = &[
     "https://ani.npeg.us",
     "https://ani.sidestore.io",
 ];
-pub(crate) const HOST_NAME: &str = "iSideload";
+pub(crate) const HOST_NAME: &str = "iContainer";
 
 pub(crate) fn s<'a>(req: &'a Value, key: &str) -> &'a str {
     req.get(key).and_then(Value::as_str).unwrap_or("")
@@ -108,6 +108,9 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "clear_imported_cert" => crate::imported::clear(&req),
         "inspect" => inspect(&req),
         "pack_self" => pack_self(&req),
+        "container_import" => crate::container::import(&req),
+        "container_prepare" => crate::container::prepare(&req),
+        "container_remove" => crate::container::remove(&req),
         "pair_host" => device::host_pairing(s(&req, "pairing_path"), ui)
             .await
             .map(|udid| json!({"ok": true, "udid": udid})),
@@ -339,7 +342,7 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     if self_refresh {
         let installed_id = s(req, "installed_bundle_id");
         let actual = inspect_ipa(&ipa)?;
-        if !(installed_id == "com.hongson117.isideload" || installed_id.starts_with("com.hongson117.isideload."))
+        if !(installed_id == "com.hongson117.icontainer" || installed_id.starts_with("com.hongson117.icontainer."))
             || actual["bundle_id"].as_str() != Some(installed_id) {
             return Err("Bản đóng gói không khớp iSideload đang chạy. Hãy mở lại app rồi thử làm mới.".into());
         }
@@ -517,11 +520,14 @@ fn pack_self(req: &Value) -> Result<Value, String> {
                 if rel == "Info.plist" && req.get("peer_bootstrap").and_then(Value::as_bool).unwrap_or(false) {
                     let mut info: plist::Dictionary = plist::from_bytes(&data).map_err(|e| e.to_string())?;
                     let old = info.get("CFBundleIdentifier").and_then(plist::Value::as_string).unwrap_or("");
-                    if old != "com.hongson117.isideload" && !old.starts_with("com.hongson117.isideload.") {
+                    let family = ["com.hongson117.isideload", "com.hongson117.icontainer"].into_iter()
+                        .find(|base| old == *base || old.starts_with(&format!("{base}.")))
+                        .ok_or("Chỉ đóng gói ứng dụng của chính dự án để cài cho máy khác.")?;
+                    if family.is_empty() {
                         return Err("Chỉ đóng gói iSideload để cài cho máy khác.".into());
                     }
                     // Drop the source phone's team suffix before signing for the receiving phone.
-                    info.insert("CFBundleIdentifier".into(), plist::Value::String("com.hongson117.isideload".into()));
+                    info.insert("CFBundleIdentifier".into(), plist::Value::String(family.into()));
                     data.clear();
                     plist::to_writer_xml(&mut data, &info).map_err(|e| e.to_string())?;
                 }

@@ -10,6 +10,8 @@ mod license;
 mod ops;
 mod imported;
 mod peer;
+mod container;
+mod container_macho;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::OnceLock;

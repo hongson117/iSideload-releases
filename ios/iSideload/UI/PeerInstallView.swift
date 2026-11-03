@@ -10,7 +10,7 @@ struct PeerInstallView: View {
         Form {
             Section {
                 Label("Hai máy cùng Wi-Fi", systemImage: "wifi")
-                Text("Máy nhận cần iOS/iPadOS 27 trở lên, đã bật Chế độ nhà phát triển và giữ màn hình mở khóa. Giữ iSideload mở trên máy này trong suốt quá trình.")
+                Text("Máy nhận cần iOS/iPadOS 27 trở lên, đã bật Chế độ nhà phát triển và giữ màn hình mở khóa. Giữ iContainer mở trên máy này trong suốt quá trình.")
                 Text("Dùng Wi-Fi trực tiếp giữa hai máy. LocalDevVPN không cần cho lượt cài này; nếu VPN chặn mạng cục bộ, hãy tắt trước khi bắt đầu.")
                     .font(.footnote).foregroundStyle(.secondary)
             } header: { Text("Chuẩn bị") }
@@ -33,7 +33,7 @@ struct PeerInstallView: View {
                     .disabled(engine.busy)
                 }
             } header: { Text("1. Ghép nối máy nhận") } footer: {
-                Text("Không cần RC Pair trên máy nhận. Nếu không thấy tên: kiểm tra quyền Mạng cục bộ của iSideload và mạng Wi-Fi không bật cách ly thiết bị.")
+                Text("Không cần RC Pair trên máy nhận. Nếu không thấy tên: kiểm tra quyền Mạng cục bộ của iContainer và mạng Wi-Fi không bật cách ly thiết bị.")
             }
 
             if let peer = installer.receiver, installer.phase != .pairing {
@@ -50,7 +50,7 @@ struct PeerInstallView: View {
                         Text("Quay lại tab Tài khoản để đăng nhập Apple ID, rồi trở lại đây. Kết nối vừa ghép đã được lưu.")
                             .foregroundStyle(.orange)
                     }
-                    Button(peer.installedAt == nil ? "Cài iSideload lên máy này" : "Cài lại iSideload lên máy này") {
+                    Button(peer.installedAt == nil ? "Cài iContainer lên máy này" : "Cài lại iContainer lên máy này") {
                         confirmInstall = true
                     }.disabled(installer.active || !engine.signedAccounts.contains(account))
                 } header: { Text("2. Xác nhận máy nhận và cài") } footer: {
@@ -75,7 +75,7 @@ struct PeerInstallView: View {
                 Section {
                     Label("Cài thành công", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Text("Trên máy nhận: Cài đặt › Cài đặt chung › VPN & Quản lý thiết bị › tin cậy tài khoản nhà phát triển.")
-                    Text("Mở iSideload trên máy nhận, đăng nhập Apple ID của người nhận. Để tự ký lại: cài LocalDevVPN và ghép nối ngay trong iSideload ở tab Thiết bị.")
+                    Text("Mở iContainer trên máy nhận, đăng nhập Apple ID của người nhận. Để tự ký lại: cài LocalDevVPN và ghép nối ngay trong iContainer ở tab Thiết bị.")
                 } header: { Text("3. Hoàn tất trên máy nhận") }
             }
 
@@ -90,7 +90,7 @@ struct PeerInstallView: View {
         .navigationBarBackButtonHidden(installer.active)
         .toolbar(.hidden, for: .tabBar)
         .onAppear { if account.isEmpty { account = engine.signedAccounts.first ?? "" } }
-        .confirmationDialog("Cài iSideload lên \(installer.receiver?.name ?? "máy nhận")?",
+        .confirmationDialog("Cài iContainer lên \(installer.receiver?.name ?? "máy nhận")?",
                             isPresented: $confirmInstall, titleVisibility: .visible) {
             Button("Ký và cài bằng \(account)") { Task { await installer.install(account: account) } }
             Button("Hủy", role: .cancel) {}
