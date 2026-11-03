@@ -30,6 +30,10 @@ final class Engine: ObservableObject {
     @Published var infoText: String?
     @Published var pendingIPA: URL?
     @Published var preparedOwnerInstallation: [String: Any]?
+    @Published var appUpdate: AppUpdateRelease?
+    @Published var checkingAppUpdate = false
+    @Published var updatingApp = false
+    @Published var updateStatus = "Chưa kiểm tra phiên bản mới."
 
     nonisolated(unsafe) private var answer: String?
     private let answered = DispatchSemaphore(value: 0)
@@ -57,6 +61,7 @@ final class Engine: ObservableObject {
             preparedOwnerInstallation = value
         }
         checkSelfUpdate()
+        confirmVersionUpdate()
         if hasImportedCert { Task { await loadImportedCert() } }
     }
 
@@ -205,7 +210,7 @@ final class Engine: ObservableObject {
     }
     func answerPrompt(_ a: String?) { answer = a; prompt = nil; answered.signal() }
 
-    private func run(_ req: [String: Any]) async throws -> [String: Any] {
+    func run(_ req: [String: Any]) async throws -> [String: Any] {
         guard !peerBusy else { throw CoreError(message: "Đang hỗ trợ iPhone khác. Hãy hoàn tất thao tác đó trước.") }
         busy = true; stage = ""; progress = 0
         defer { busy = false }
@@ -440,7 +445,7 @@ final class Engine: ObservableObject {
         await install(ipa: u, upgrade: up, signer: sg); explicitOK = false; vpnJobDone()
     }
 
-    func install(ipa: URL, upgrade: Bool = false, signer: String? = nil, selfRefresh: Bool = false) async {
+    func install(ipa: URL, upgrade: Bool = false, signer: String? = nil, selfRefresh: Bool = false, versionUpdate: AppUpdateRelease? = nil) async {
         guard canSign else { errorText = "Hãy đăng nhập Apple ID hoặc nhập chứng chỉ trước (tab Tài khoản)."; return }
         // Imported certificate = KSign-style OTA install, never VPN. Only Apple ID signing needs pairing + LocalDevVPN.
         let early = signer ?? apps.first { $0.ipaFile == ipa.lastPathComponent }.map(signerOf) ?? defaultSigner
@@ -449,7 +454,8 @@ final class Engine: ObservableObject {
             // Real reachability first (62078 connect/refused ≈ 1 s). Only hand off to LocalDevVPN when it's really down.
             if !vpnActive {
                 if UIApplication.shared.applicationState == .active && (UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true) {
-                    if selfRefresh { pendingVPNAction = .refreshSelf(signer) }
+                    if let release = versionUpdate { pendingVPNAction = .versionUpdate(ipa, early, release) }
+                    else if selfRefresh { pendingVPNAction = .refreshSelf(signer) }
                     else { pendingVPNAction = .install(ipa, upgrade, signer) }
                     LoopbackVPN.turnOn(); return
                 }
@@ -737,6 +743,7 @@ final class Engine: ObservableObject {
     enum VPNAction {
         case refreshAll(includeSelf: Bool, onlyDue: Bool = false, onlySelf: Bool = false, signer: String? = nil)
         case refreshSelf(String?)
+        case versionUpdate(URL, String, AppUpdateRelease)
         case install(URL, Bool, String?)
         case liveContainerInstall(LiveContainerInstallPlan)
         case uninstall(SideloadedApp)
@@ -752,6 +759,7 @@ final class Engine: ObservableObject {
         case .refreshAll(let s, let due, let own, let signer):
             await refreshAll(includeSelf: s, onlyDue: due, background: false, onlySelf: own, signerFilter: signer)
         case .refreshSelf(let signer): await refreshSelf(signer: signer)
+        case .versionUpdate(let url, let signer, let release): await completeVersionUpdate(ipa: url, signer: signer, release: release)
         case .install(let u, let up, let sg): await install(ipa: u, upgrade: up, signer: sg)
         case .liveContainerInstall(let plan): await completeLiveContainerInstall(plan)
         case .uninstall(let app): await uninstall(app)
@@ -761,8 +769,12 @@ final class Engine: ObservableObject {
 
     /// On open/foreground: re-sign anything expiring within 2 days (VPN needed).
     func foregroundCheck() async {
-        guard !peerBusy else { return }
+        guard !peerBusy, !busy, !updatingApp else { return }
+        let resuming = pendingVPNAction != nil
         await resumeAfterVPN()
+        if resuming { return }
+        await checkAppVersion()
+        if await automaticVersionUpdateIfReady() { return }
         guard UserDefaults.standard.object(forKey: "fgRefresh") as? Bool ?? true, !busy, canSign,
               hasPairing || defaultSigner == "cert" else { return }
         let urgent = apps.contains { ($0.daysLeft ?? 99) < 2 }

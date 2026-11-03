@@ -112,6 +112,7 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "clear_imported_cert" => crate::imported::clear(&req),
         "inspect" => inspect(&req),
         "pack_self" => pack_self(&req),
+        "prepare_self_update" => crate::self_update::prepare(&req),
         "container_import" => crate::container::import(&req),
         "container_prepare" => crate::container::prepare(&req),
         "container_remove" => crate::container::remove(&req),

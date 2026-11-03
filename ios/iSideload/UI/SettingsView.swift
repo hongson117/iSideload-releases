@@ -8,10 +8,27 @@ struct SettingsView: View {
     @AppStorage("fgRefresh") private var fgRefresh = true
     @AppStorage("vpnAutoOff") private var vpnAutoOff = true
     @AppStorage("otaRelay") private var otaRelay = ""
+    @AppStorage("checkAppVersions") private var checkAppVersions = true
+    @AppStorage("autoInstallAppUpdates") private var autoInstallAppUpdates = false
     @State private var notices = false
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Text("Đang cài: \(engine.installedVersion) · build \(engine.installedBuild)")
+                    Toggle("Kiểm tra phiên bản mới khi mở app", isOn: $checkAppVersions)
+                    Toggle("Tự tải, ký và cập nhật khi mở app", isOn: $autoInstallAppUpdates)
+                    Button(engine.checkingAppUpdate ? "Đang kiểm tra…" : "Kiểm tra phiên bản mới ngay") {
+                        Task { await engine.checkAppVersion(manual: true) }
+                    }.disabled(engine.checkingAppUpdate || engine.busy)
+                    Text(engine.updateStatus).font(.footnote)
+                    if let release = engine.appUpdate {
+                        Button("Tải, ký và cập nhật \(release.label)") { Task { await engine.updateApplication() } }
+                            .disabled(engine.busy || engine.peerBusy || engine.updatingApp)
+                    }
+                } header: { Text("Cập nhật iContainer") } footer: {
+                    Text("Tải bản chính thức từ GitHub, kiểm tra SHA-256 rồi ký bằng nguồn gia hạn của bản đang cài; giữ App ID và dữ liệu. Apple ID cần ghép đôi và LocalDevVPN; chứng chỉ cần xác nhận cài của iOS. App có thể tự đóng khi cài đè. Tự cập nhật chạy khi mở app; iOS không bảo đảm cài âm thầm khi app đã đóng. Gia hạn chữ ký ở mục Tự ký lại bên dưới.")
+                }
                 Section {
                     TextField("https://ani.jkcoxson.com", text: $engine.anisetteURL).keyboardType(.URL).textInputAutocapitalization(.never)
                 } header: { Text("Máy chủ anisette") } footer: {
