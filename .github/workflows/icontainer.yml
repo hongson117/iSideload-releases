@@ -57,7 +57,7 @@ jobs:
           p={'CFBundleIdentifier':'com.hongson117.icontainer.demo','CFBundleName':'ContainerDemo','CFBundleDisplayName':'iContainer Demo','CFBundleExecutable':'ContainerDemo','CFBundlePackageType':'APPL','CFBundleShortVersionString':'1.0','CFBundleVersion':'1','CFBundleSupportedPlatforms':['iPhoneOS'],'UIDeviceFamily':[1,2],'LSRequiresIPhoneOS':True}
           Path('demo/Payload/ContainerDemo.app/Info.plist').write_bytes(plistlib.dumps(p))
           PY
-          rustc scripts/verify_container_demo.rs -o /tmp/verify-demo
+          rustc --edition=2021 scripts/verify_container_demo.rs -o /tmp/verify-demo
           /tmp/verify-demo demo/Payload/ContainerDemo.app/ContainerDemo /tmp/ContainerDemo.dylib
           xcrun otool -hv /tmp/ContainerDemo.dylib
           (cd demo && zip -qry ../iContainer-Demo.ipa Payload)

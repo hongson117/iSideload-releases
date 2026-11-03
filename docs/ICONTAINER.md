@@ -34,7 +34,7 @@ existing LiveContainer installation or delete its data for this preview.
    For self-refresh with Apple ID, import a compatible Remote Pairing record and
    enable LocalDevVPN; verify the device connection. Alternatively import the
    P12/provisioning profiles used to sign the host.
-3. Container → Nhập IPA → select `iContainer-Demo.ipa`.
+3. Ứng dụng → Mở Container → Nhập IPA → select `iContainer-Demo.ipa`.
 4. Chuẩn bị → explicitly choose the host's signing identity. A certificate
    mismatch is rejected. If the desktop sideloader used a different certificate,
    refresh iContainer using the selected Apple ID first, reopen, then prepare the
