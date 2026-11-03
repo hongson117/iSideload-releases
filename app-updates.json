@@ -9,11 +9,11 @@
       "bytes": 6164555
     },
     "icontainer": {
-      "version": "0.1.1",
-      "build": "1003",
-      "url": "https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.1-b1003/iContainer.ipa",
-      "sha256": "a4948f6d76533a5b1519d494f04f019ee7856be6c3728ea36ff9cf8ab728fde3",
-      "bytes": 4425644
+      "version": "0.1.2",
+      "build": "1004",
+      "url": "https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.2-b1004/iContainer.ipa",
+      "sha256": "ada1ba8907967d882005a8b9cfef5e060e39fef95110902a70c0bc08701dface",
+      "bytes": 4425641
     }
   }
 }
