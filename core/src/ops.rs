@@ -47,8 +47,9 @@ pub fn hint_vi(m: &str) -> String {
         "Sai Apple ID hoặc mật khẩu."
     } else if l.contains("-80045") || l.contains("anisette") || l.contains("-45025") {
         "Máy chủ anisette bị Apple từ chối hoặc không phản hồi. Đổi Anisette URL trong Cài đặt (để trống = tự chọn)."
-    } else if l.contains("maximum number of apps") || l.contains("3 active") || l.contains("app limit") {
-        "Apple ID miễn phí chỉ cài tối đa 3 app cùng lúc (tính cả iSideload). Gỡ bớt một app đã sideload rồi thử lại."
+    } else if l.contains("maximum number of apps") || l.contains("3 active") || l.contains("app limit")
+        || (l.contains("maximum number") && l.contains("apps") && l.contains("free developer profile")) {
+        "iOS đã đủ 3 app dùng chứng chỉ nhà phát triển miễn phí trên máy này. Các tài khoản khác nhau vẫn dùng chung giới hạn này. Gỡ một app không cần dùng rồi thử lại; không cần tạo lại ghép nối."
     } else if l.contains("app id") && (l.contains("limit") || l.contains("maximum") || l.contains("10")) {
         "Apple ID miễn phí chỉ tạo được 10 App ID mỗi 7 ngày. Đợi hết hạn hoặc dùng lại app đã cài (Làm mới)."
     } else if l.contains("certificate") && (l.contains("maximum") || l.contains("too many")) {
@@ -729,6 +730,10 @@ mod hint_tests {
     fn hints() {
         assert!(super::hint_vi("Apple ID sign-in failed: -22406").contains("mật khẩu"));
         assert!(super::hint_vi("x -80045 y").contains("anisette"));
+        let full = "Install failed: Lỗi khi chờ iOS cài ứng dụng (Remote Pairing) — Application verification failed: This device has reached the maximum number of installed apps using a free developer profile";
+        let message = super::hint_vi(full);
+        assert!(message.contains("đủ 3 app"));
+        assert!(!message.contains("File ghép nối không hợp lệ"));
         assert!(super::hint_vi("Hết thời gian chờ kết nối tới 10.7.0.1").contains("VPN"));
     }
 }

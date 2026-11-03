@@ -170,7 +170,7 @@ final class Engine: ObservableObject {
             }
         }
         let e = String(s.dropFirst(6))
-        return "\(e) · \(slotsUsed(s))/3 app · App ID \(appIDsUsed(e))/10 trong 7 ngày"
+        return "\(e) · \(slotsUsed(s)) app đã ghi nhận · App ID \(appIDsUsed(e))/10 trong 7 ngày"
     }
 
     var pairingKind: PairingRecord.Kind? {
@@ -327,9 +327,7 @@ final class Engine: ObservableObject {
               let account = preparedOwnerInstallation?["apple_id"] as? String,
               signedAccounts.contains(account) else { return }
         await installNow(file, signer: "apple:" + account)
-        if errorText == nil {
-            infoText = "Đã gửi bản iContainer cá nhân tới iOS. Mở bản mới để đăng nhập tài khoản của bạn và kiểm tra gia hạn trước khi bỏ bản khởi tạo."
-        }
+
     }
 
     func importCert(p12: URL?, password: String, profiles: [URL], replaceProfiles: Bool = false) async {

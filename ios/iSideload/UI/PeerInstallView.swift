@@ -76,7 +76,7 @@ struct PeerInstallView: View {
 
             if installer.phase == .installed {
                 Section {
-                    Label(installer.receiverSetupVerified ? "Cài và thiết lập thành công" : "Đã cài · cần hoàn tất thiết lập", systemImage: installer.receiverSetupVerified ? "checkmark.circle.fill" : "exclamationmark.triangle").foregroundStyle(installer.receiverSetupVerified ? .green : .orange)
+                    Label(installer.receiverSetupVerified ? (installer.receiverNeedsPersonalSetup ? "Đã cài bản khởi tạo" : "Cài và thiết lập thành công") : "Đã cài · cần hoàn tất thiết lập", systemImage: installer.receiverSetupVerified ? "checkmark.circle.fill" : "exclamationmark.triangle").foregroundStyle(installer.receiverSetupVerified ? .green : .orange)
                     Text("Trên máy nhận: Cài đặt › Cài đặt chung › VPN & Quản lý thiết bị › tin cậy tài khoản nhà phát triển.")
                     Text(installer.receiverNeedsPersonalSetup ? "Mở iContainer trên máy nhận, đăng nhập Apple ID riêng rồi chọn Thiết lập iContainer bằng tài khoản này. Cài bản cá nhân trước khi dùng tài khoản đó để tự gia hạn." : "Mở iContainer trên máy nhận và đăng nhập đúng Apple ID đã chọn ở bước cài. Bản đã thiết lập thành công có sẵn khóa ký và ghép nối; cài LocalDevVPN rồi Kiểm tra kết nối để tự gia hạn.")
                 } header: { Text("3. Hoàn tất trên máy nhận") }
