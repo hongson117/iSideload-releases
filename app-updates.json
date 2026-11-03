@@ -7,6 +7,13 @@
       "url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.6-rc1/iSideload.ipa",
       "sha256": "d7a55ad5c8d62fda53f8e5bf50f872b280e5f93b7eaa0f2920c12c060c1ba05b",
       "bytes": 6164555
+    },
+    "icontainer": {
+      "version": "0.1.1",
+      "build": "1002",
+      "url": "https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.1-b1002/iContainer.ipa",
+      "sha256": "fc062d531fedb63103d4ee97e0367710aaa00f4fca7c96f80e9b5b68cd20e013",
+      "bytes": 4422731
     }
   }
 }
