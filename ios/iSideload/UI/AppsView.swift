@@ -54,6 +54,9 @@ struct AppsView: View {
                 Section {
                     Button { picking = true } label: { Label("Chọn file IPA để cài", systemImage: "plus.app") }
                         .buttonStyle(GradientButtonStyle()).listRowBackground(Color.clear)
+                    NavigationLink { PeerInstallView() } label: {
+                        Label("Cài cho iPhone khác", systemImage: "iphone.gen3.radiowaves.left.and.right")
+                    }.disabled(engine.busy || engine.peerBusy)
                 } footer: {
                     Text("Apple ID miễn phí: tối đa 3 app sideload cùng lúc (tính cả iContainer), 10 App ID mỗi 7 ngày, app hết hạn sau 7 ngày — bấm Làm mới trước khi hết hạn.")
                 }

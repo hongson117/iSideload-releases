@@ -15,6 +15,7 @@ struct DeviceView: View {
     var body: some View {
         NavigationStack {
             Form {
+                peerInstallSection
                 connectionSection
                 Section {
                     Button("Làm mới iContainer") { Task { await engine.refreshSelf() } }
@@ -37,13 +38,6 @@ struct DeviceView: View {
                         Text("Xuất Remote Pairing của chính iPhone này bằng công cụ ghép nối trên máy tính rồi nhập vào iContainer. iOS 27+ có thể thử Ghép nối ngay trên máy ở phần Thiết lập. Giữ Wi-Fi bật và iPhone mở khóa.")
                     }
                 } header: { Text("Hướng dẫn nhanh") }
-                Section {
-                    NavigationLink { PeerInstallView() } label: {
-                        Label("Cài cho iPhone khác", systemImage: "iphone.gen3.radiowaves.left.and.right")
-                    }.disabled(engine.busy)
-                } footer: {
-                    Text("Máy nhận cần iOS 27+ và cùng Wi-Fi. Chức năng này dùng để hỗ trợ iPhone khác; không phải bước kiểm tra kết nối của máy này.")
-                }
             }
             .navigationTitle("Thiết bị")
             .sheet(isPresented: $picking) { DocumentPicker { engine.importPairing(from: $0) } }
@@ -53,6 +47,17 @@ struct DeviceView: View {
                 else if engine.hasPairing { managingPairing = false }
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in tick += 1 }
+        }
+    }
+
+    private var peerInstallSection: some View {
+        Section {
+            NavigationLink { PeerInstallView() } label: {
+                Label("Cài cho iPhone khác", systemImage: "iphone.gen3.radiowaves.left.and.right")
+                    .font(.headline)
+            }.disabled(engine.busy || engine.peerBusy)
+        } header: { Text("Hỗ trợ máy khác") } footer: {
+            Text("Máy nhận cần iOS 27+ và cùng Wi-Fi. Chọn Apple ID ký của người nhận; không cần RC Pair trên máy nhận.")
         }
     }
 

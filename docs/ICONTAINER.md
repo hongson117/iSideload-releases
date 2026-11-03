@@ -5,6 +5,20 @@ in-process arm64 IPA loader and keeps the existing Apple ID / imported-certifica
 signing, device pairing, independent-app installation and self-refresh features.
 This is not a renamed LiveContainer IPA or a port of the tvOS ZSign wrapper.
 
+## Familiar sideloader features
+
+The five tabs remain Ứng dụng, Nguồn, Thiết bị, Tài khoản and Cài đặt.
+Tài khoản always exposes the add-account action, supports a second Apple ID and
+further accounts, and has explicit re-login/main-account controls. A failed login
+does not close the form or discard a previously stored password.
+
+Cài cho iPhone khác is available beside the IPA picker in Ứng dụng and at the top
+of Thiết bị. The inherited peer flow retains the iOS 27+ same-Wi-Fi requirement,
+separate receiver pairing records, explicit signing-account choice and receiver
+confirmation. It packs only the iContainer application bundle, never host account
+data or guest working data. Hardware validation of this variant's peer flow is
+still separate from the earlier iSideload hardware tests.
+
 ## State of verification
 
 The CI artifact is unsigned. Build, archive validation, Mach-O transformation and
