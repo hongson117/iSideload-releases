@@ -115,8 +115,8 @@ final class Engine: ObservableObject {
         save()
     }
     var defaultSigner: String { signers.contains(installSigner) ? installSigner : (signers.first ?? "") }
-    /// Apps signed by this signer that occupy a free-account slot (3 per Apple ID per device).
-    func slotsUsed(_ s: String) -> Int { apps.filter { signerOf($0) == s }.count }
+    /// Locally recorded apps for display only. Never use this count to deny an install.
+    func recordedAppCount(_ s: String) -> Int { apps.filter { signerOf($0) == s }.count }
     /// App IDs created in the last 7 days by this Apple ID (counted locally, approximate).
     func appIDsUsed(_ email: String) -> Int {
         let log = UserDefaults.standard.dictionary(forKey: "appIDLog") as? [String: [Double]] ?? [:]
@@ -169,13 +169,13 @@ final class Engine: ObservableObject {
     func signerSummary(_ s: String) -> String {
         if s == "cert" {
             switch importedWildcard {
-            case .some(true): return "Chứng chỉ có sẵn · \(slotsUsed(s)) app · không giới hạn (profile wildcard)"
-            case .some(false): return "Chứng chỉ có sẵn · \(slotsUsed(s)) app · không giới hạn (giữ bundle ID gốc)"
-            case .none: return "Chứng chỉ có sẵn · \(slotsUsed(s)) app"
+            case .some(true): return "Chứng chỉ có sẵn · \(recordedAppCount(s)) app đã ghi nhận · profile wildcard"
+            case .some(false): return "Chứng chỉ có sẵn · \(recordedAppCount(s)) app đã ghi nhận · giữ bundle ID gốc"
+            case .none: return "Chứng chỉ có sẵn · \(recordedAppCount(s)) app đã ghi nhận"
             }
         }
         let e = String(s.dropFirst(6))
-        return "\(e) · \(slotsUsed(s)) app đã ghi nhận · App ID \(appIDsUsed(e))/10 trong 7 ngày"
+        return "\(e) · \(recordedAppCount(s)) app đã ghi nhận · App ID \(appIDsUsed(e))/10 trong 7 ngày"
     }
 
     var pairingKind: PairingRecord.Kind? {
@@ -474,9 +474,9 @@ final class Engine: ObservableObject {
                let old = apps.first(where: { signerOf($0) == "cert" && $0.bundleID != bundle }) {
                 explicitReplaces = old.name; explicitWarn = (ipa, upgrade, signer ?? who); return
             }
-            if who.hasPrefix("apple:"), prev == nil || signerOf(prev!) != who, slotsUsed(who) >= 3 {
-                throw CoreError(message: "\(signerLabel(who)) đã dùng 3/3 app trên máy này. Chọn tài khoản khác hoặc gỡ bớt app.")
-            }
+            // Device/profile limits are enforced by Apple and installd. Local history can
+            // be incomplete and cannot tell the account's membership or platform policy.
+            // Attempt the selected signer and preserve the actual service error on failure.
             var req = base("install", signer: who); req["ipa_path"] = ipa.path; req["upgrade"] = upgrade
             if selfRefresh { req["self_refresh"] = true; req["installed_bundle_id"] = isideloadBundleID }
             req["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""

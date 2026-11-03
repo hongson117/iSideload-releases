@@ -68,7 +68,7 @@ struct AppsView: View {
                         Label("Cài cho iPhone khác", systemImage: "iphone.gen3.radiowaves.left.and.right")
                     }.disabled(engine.busy || engine.peerBusy)
                 } footer: {
-                    Text("Apple ID miễn phí: tối đa 3 app sideload cùng lúc (tính cả iContainer), 10 App ID mỗi 7 ngày, app hết hạn sau 7 ngày — bấm Làm mới trước khi hết hạn.")
+                    Text("Chọn Apple ID hoặc chứng chỉ khi cài. iContainer không tự chặn theo số app đã ghi nhận; giới hạn thực tế do Apple và thiết bị xác nhận. Apple ID miễn phí thường có 10 App ID mỗi 7 ngày; xem hạn ký và Làm mới trước khi hết hạn.")
                 }
                 #if ICONTAINER
                 Section {
@@ -169,7 +169,7 @@ struct AppsView: View {
             } else {
                 let e = String(sg.dropFirst(6))
                 Label(e, systemImage: "person.crop.circle")
-                Text("Team \(engine.team(of: sg).isEmpty ? "?" : engine.team(of: sg)) · \(engine.slotsUsed(sg)) app đã ghi nhận · còn \(max(0, 10 - engine.appIDsUsed(e)))/10 App ID (7 ngày)" + (exp.map { " · cert/profile hết hạn " + $0.formatted(date: .abbreviated, time: .omitted) } ?? "")).font(.caption2)
+                Text("Team \(engine.team(of: sg).isEmpty ? "?" : engine.team(of: sg)) · \(engine.recordedAppCount(sg)) app đã ghi nhận · còn \(max(0, 10 - engine.appIDsUsed(e)))/10 App ID (7 ngày)" + (exp.map { " · cert/profile hết hạn " + $0.formatted(date: .abbreviated, time: .omitted) } ?? "")).font(.caption2)
                 if !engine.signers.contains(sg) { Text("Chưa đăng nhập — đăng nhập lại để làm mới").font(.caption2).foregroundStyle(.red) }
             }
         }

@@ -70,7 +70,7 @@ struct AccountView: View {
                         Label(engine.accounts.isEmpty ? "Thêm Apple ID" : "Thêm Apple ID khác", systemImage: "person.badge.plus")
                     }.disabled(engine.busy)
                 } header: { Text("Apple ID · \(engine.accounts.count) tài khoản") } footer: {
-                    Text("Có thể thêm Apple ID thứ hai và các tài khoản khác bằng nút Thêm Apple ID khác. Khi cài hoặc ký lại, chọn tài khoản muốn dùng. Apple ID miễn phí: iOS giới hạn 3 app tự ký trên mỗi máy (tính cả iContainer); mỗi Apple ID có 10 App ID mỗi 7 ngày. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
+                    Text("Có thể thêm Apple ID thứ hai và các tài khoản khác bằng nút Thêm Apple ID khác. Khi cài hoặc ký lại, chọn tài khoản muốn dùng. Mỗi tài khoản có nguồn ký và quota App ID riêng. iContainer cho thử cài bằng tài khoản đã chọn; Apple và thiết bị quyết định giới hạn thực tế. Apple ID miễn phí thường có 10 App ID mỗi 7 ngày. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
                 }
 
                 if let result = engine.preparedOwnerInstallation, let file = engine.preparedOwnerIPA {
