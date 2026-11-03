@@ -3,10 +3,10 @@
   "apps": {
     "isideload": {
       "version": "1.2.5",
-      "build": "8",
-      "url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc1/iSideload.ipa",
-      "sha256": "c1f753a50336e6a72491126bb406e529a44f000601aed38311a4b9304895425f",
-      "bytes": 6144224
+      "build": "10",
+      "url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.5-rc2/iSideload.ipa",
+      "sha256": "33978ac77e09be84a1d48ff4bd407640fbfd2f50fa46eee2d1c9eeb1c99170f3",
+      "bytes": 6142470
     }
   }
 }

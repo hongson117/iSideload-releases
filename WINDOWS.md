@@ -91,3 +91,5 @@ Gói này kèm iSideload 1.2.5 có chức năng tải IPA mới từ GitHub, ki�
 Vào Cài đặt → Cập nhật iSideload → Kiểm tra phiên bản mới ngay. Có thể bật Tự tải, ký và cập nhật khi mở app (mặc định tắt). Apple ID cần Remote Pairing và LocalDevVPN. Chứng chỉ có sẵn vẫn cần profile phù hợp và xác nhận cài của iOS. Mở lại app để kiểm tra phiên bản sau khi cài đè; iOS không bảo đảm cài âm thầm khi app đóng.
 
 Nếu bản đầu được ký bằng tài khoản người hỗ trợ, vào Tài khoản → Thiết lập iSideload bằng tài khoản này để tạo bản Cá nhân của bạn trước. Cập nhật phiên bản giữ đúng App ID/Team đang cài; đổi chủ sở hữu là luồng riêng.
+
+Từ build 10: bỏ chốt chặn 3 app theo lịch sử cục bộ; Apple/thiết bị quyết định quota. Xem [giải thích giới hạn](INSTALL-LIMITS.md). Chưa kiểm chứng cài đủ 6 app trên iPhone bằng hai tài khoản.
