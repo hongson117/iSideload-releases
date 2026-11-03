@@ -20,7 +20,7 @@ Nếu AI chỉ trò chuyện hoặc Terminal của AI chạy trong cloud/sandbox
 | Chưa có iSideload, cài từ đầu | **1** | Người dùng nhập trực tiếp vào Terminal của bộ cài |
 | Đã có iSideload qua Sideloadly/công cụ khác, chỉ cần ghép đôi | **2** | Không yêu cầu đăng nhập để ký lại app |
 
-Windows: mở `Cai-iSideload.bat` trong thư mục `isl-windows` sau khi giải nén. Mac: mở `Cai-iSideload.command` trong thư mục `iSideload-macOS`. Gói đã kèm IPA 1.2.3 build 36; không cần tải IPA riêng cho hai luồng này.
+Windows: mở `Cai-iSideload.bat` trong thư mục `isl-windows` sau khi giải nén. Mac: mở `Cai-iSideload.command` trong thư mục `iSideload-macOS`. Gói đã kèm IPA 1.2.5 build 8; không cần tải IPA riêng cho hai luồng này.
 
 ## Quy trình để AI hỗ trợ
 
@@ -68,7 +68,7 @@ macOS:
 
 ## Giới hạn của bản phát hành
 
-1.2.3 RC1 là bản thử. Build Windows/macOS, kiểm thử chép/khôi phục file, launcher và self-test đã qua; Windows lựa chọn 2 đã được xác nhận với bản ghi có sẵn trên iPhone thật: xác minh USB và kiểm tra LocalDevVPN đều thành công. Lượt này chưa thử tạo bản ghi mới; cài từ đầu bằng lựa chọn 1 và USB trên Mac vẫn cần xác nhận. File ghép đôi được tạo riêng khi chạy, không có bản ghi dùng chung trong ZIP. Hai bộ cài không tự đăng nhập tài khoản vào app iPhone; người dùng đăng nhập trong app sau khi cài để tự gia hạn.
+1.2.5 RC1 là bản thử. Build Windows/macOS, kiểm thử chép/khôi phục file, launcher và self-test đã qua; Windows lựa chọn 2 đã được xác nhận với bản ghi có sẵn trên iPhone thật: xác minh USB và kiểm tra LocalDevVPN đều thành công. Lượt này chưa thử tạo bản ghi mới; cài từ đầu bằng lựa chọn 1 và USB trên Mac vẫn cần xác nhận. File ghép đôi được tạo riêng khi chạy, không có bản ghi dùng chung trong ZIP. Hai bộ cài không tự đăng nhập tài khoản vào app iPhone; người dùng đăng nhập trong app sau khi cài để tự gia hạn.
 
 
 ## Trong iSideload 1.2.3
@@ -78,4 +78,12 @@ macOS:
 - **Cài/cài lại LiveContainer:** chọn rõ Apple ID hoặc chứng chỉ .p12 đã nhập. Nguồn được giữ qua bước bật VPN và dùng cho chứng chỉ chuyển sang LiveContainer.
 - **Nhiều bản LiveContainer:** dùng hướng dẫn lưu/nhập .p12 vào đúng bản trong app. Đổi nguồn ký có thể tạo bản khác; dữ liệu bản cũ không tự chuyển sang bản mới.
 
-Công cụ `--version` vẫn báo desktop installer 1.2.2; manifest phiên bản 1.2.3-rc1 chỉ gói phân phối kèm app iPhone 1.2.3 build 36. Đây không phải lỗi sai phiên bản.
+Công cụ `--version` vẫn báo desktop installer 1.2.2; manifest phiên bản 1.2.5-rc1 chỉ gói phân phối kèm app iPhone 1.2.5 build 8. Đây không phải lỗi sai phiên bản.
+
+## Cập nhật phiên bản bằng tài khoản của bạn
+
+Gói này kèm iSideload 1.2.5 có chức năng tải IPA mới từ GitHub, kiểm tra checksum rồi ký và cài đè bằng nguồn gia hạn của bản đang cài. Sau khi cài, đăng nhập cùng Apple ID đã dùng ký trên máy tính, chọn Tài khoản gia hạn trong tab Ứng dụng rồi thử Làm mới iSideload.
+
+Vào Cài đặt → Cập nhật iSideload → Kiểm tra phiên bản mới ngay. Có thể bật Tự tải, ký và cập nhật khi mở app (mặc định tắt). Apple ID cần Remote Pairing và LocalDevVPN. Chứng chỉ có sẵn vẫn cần profile phù hợp và xác nhận cài của iOS. Mở lại app để kiểm tra phiên bản sau khi cài đè; iOS không bảo đảm cài âm thầm khi app đóng.
+
+Nếu bản đầu được ký bằng tài khoản người hỗ trợ, vào Tài khoản → Thiết lập iSideload bằng tài khoản này để tạo bản Cá nhân của bạn trước. Cập nhật phiên bản giữ đúng App ID/Team đang cài; đổi chủ sở hữu là luồng riêng.
