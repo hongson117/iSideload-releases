@@ -3,6 +3,7 @@ use idevice::{
     IdeviceError, IdeviceService,
     afc::{AfcClient, errors::AfcError, opcode::AfcFopenMode},
     house_arrest::HouseArrestClient,
+    lockdown::LockdownClient,
     provider::IdeviceProvider,
     remote_pairing::{RemotePairingLockdownService, RpPairingFile},
 };
@@ -126,9 +127,35 @@ async fn verify_record(provider: &impl IdeviceProvider, record: &mut RpPairingFi
     }).await
 }
 
+/// Prepare the daemon's network listener through the already-trusted USB session.
+/// Creating a record over USB alone does not check this independent device setting.
+async fn prepare_wireless(provider: &impl IdeviceProvider, expected: &str) -> Result<(), String> {
+    bounded(async {
+        let mut lockdown = LockdownClient::connect(provider).await.map_err(|e| e.to_string())?;
+        let pairing = provider.get_pairing_file().await.map_err(|e| e.to_string())?;
+        lockdown.start_session(&pairing).await.map_err(|e| e.to_string())?;
+        let udid = lockdown.get_value(Some("UniqueDeviceID"), None).await.map_err(|e| e.to_string())?;
+        if udid.as_string() != Some(expected) { return Err("Thiết bị USB đã thay đổi; chưa sửa cấu hình kết nối.".into()); }
+        let domain = Some("com.apple.mobile.wireless_lockdown");
+        let current = lockdown.get_value(Some("EnableWifiDebugging"), domain).await.ok();
+        if current.as_ref().and_then(|v| v.as_boolean()) != Some(true) {
+            println!("Đang chuẩn bị kết nối phát triển qua Wi-Fi cho iPhone đã Tin cậy…");
+            lockdown.set_value("EnableWifiDebugging", plist::Value::Boolean(true), domain)
+                .await.map_err(|e| format!("Chưa bật được kết nối phát triển qua Wi-Fi: {e}"))?;
+        }
+        let confirmed = lockdown.get_value(Some("EnableWifiDebugging"), domain).await
+            .map_err(|e| format!("Không xác nhận được cấu hình Wi-Fi: {e}"))?;
+        if confirmed.as_boolean() != Some(true) {
+            return Err("iPhone chưa xác nhận cho phép kết nối phát triển qua Wi-Fi; chưa báo hoàn tất ghép đôi.".into());
+        }
+        Ok(())
+    }).await
+}
+
 pub async fn setup(provider: &impl IdeviceProvider, bundle_id: &str, udid: &str) -> Result<(), String> {
     if !app_id_matches(bundle_id) { return Err("Ứng dụng nhận không phải iSideload.".into()); }
     verify_device(provider, udid).await?;
+    prepare_wireless(provider, udid).await?;
     let mut afc = bounded(async {
         HouseArrestClient::connect(provider).await.map_err(|e| format!("Không mở được thư mục iSideload qua USB: {e}"))?
             .vend_documents(bundle_id).await.map_err(|e| format!("Không truy cập được iSideload vừa cài: {e}. Giữ máy mở khóa và đóng hẳn iSideload rồi chạy lại chế độ sửa ghép đôi."))

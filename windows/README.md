@@ -14,7 +14,7 @@ Bộ cài Windows 1.2.2 có hai chế độ: cài iSideload kèm Remote Pairing,
 2. Nhập Apple ID sẽ dùng để ký và gia hạn trên iPhone, mật khẩu được ẩn, rồi mã 2FA nếu Apple yêu cầu.
 3. Công cụ ký và cài iSideload qua USB. Nếu có nhiều iPhone, phải chọn đúng số thiết bị.
 4. Nếu Chế độ nhà phát triển chưa bật, công cụ hướng dẫn mở **Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển**. Bật, khởi động lại và xác nhận trên iPhone. Giữ cáp; nhấn Enter trên máy tính sau khi hoàn tất. Công cụ tự tìm lại đúng iPhone.
-5. Giữ máy mở khóa và đóng hẳn iSideload trong lúc công cụ tạo Remote Pairing. Công cụ xác minh bản ghi với iPhone, chép vào iSideload, đọc lại và xác minh lần cuối.
+5. Giữ máy mở khóa và đóng hẳn iSideload trong lúc công cụ tạo Remote Pairing. Công cụ chuẩn bị và kiểm tra cấu hình kết nối phát triển qua Wi-Fi, xác minh bản ghi với iPhone, chép vào iSideload, đọc lại và xác minh lần cuối.
 6. Chỉ khi hiện **XONG: iSideload đã có file Remote Pairing…** thì bước này mới hoàn tất. Không cần xuất/nhập file ghép đôi bằng tay.
 7. Trên iPhone, tin cậy tài khoản nhà phát triển tại **Cài đặt → Cài đặt chung → VPN & Quản lý thiết bị** nếu được yêu cầu.
 8. Mở iSideload và đăng nhập cùng Apple ID để gia hạn. Kết nối Wi-Fi có Internet, cài **LocalDevVPN** từ App Store, bật VPN, quay lại **Thiết bị → Kiểm tra kết nối thiết bị**, rồi thử **Làm mới iSideload**.

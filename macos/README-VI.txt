@@ -1,6 +1,6 @@
 iSideload macOS 1.2.2 — CÀI APP VÀ TỰ THIẾT LẬP FILE GHÉP ĐÔI
 Gói Universal: Mac Apple Silicon + Intel, macOS 11+. iPhone/iPad cần iOS/iPadOS 17.4+ cho thiết lập Remote Pairing tự động.
-Tải: https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc1/isl-macos-universal.zip
+Tải: https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-macos-universal.zip
 
 TRONG GÓI
 Cai-iSideload.command, isl-mac Universal, iSideload.ipa 1.2.2 build 35, README-VI.txt, ThirdPartyNotices.txt và SHA256SUMS.txt.
@@ -17,7 +17,7 @@ CÁCH 1 — CÀI TỪ ĐẦU, APP CÓ SẴN FILE GHÉP ĐÔI
 2. Chọn 1. Nếu có nhiều iPhone, chọn đúng số/UDID.
 3. Nhập Apple ID, mật khẩu (ẩn khi gõ), mã 2FA nếu được hỏi. Có thể nhập sms để yêu cầu mã SMS; Enter trống tại bước 2FA để hủy.
 4. Công cụ ký và cài app. Nếu Chế độ nhà phát triển chưa bật, làm theo hướng dẫn: Cài đặt > Quyền riêng tư & Bảo mật > Chế độ nhà phát triển > Bật. Giữ cáp, khởi động lại và xác nhận Bật trên iPhone khi được yêu cầu; xong nhấn Enter trên Mac.
-5. Giữ iPhone mở khóa, đóng hẳn iSideload trong khi thiết lập. Công cụ tạo Remote Pairing qua USB, xác minh với iPhone, chép vào app, đọc lại và xác minh lần cuối.
+5. Giữ iPhone mở khóa, đóng hẳn iSideload trong khi thiết lập. Công cụ chuẩn bị kết nối phát triển qua Wi-Fi, tạo Remote Pairing qua USB, xác minh với iPhone, chép vào app, đọc lại và xác minh lần cuối.
 6. Chờ thông báo XONG: iSideload đã có file Remote Pairing… Không cần tự xuất/nhập file bằng idevice_pair hay ứng dụng khác.
 7. Trên iPhone, tin cậy tài khoản nhà phát triển tại Cài đặt > Cài đặt chung > VPN & Quản lý thiết bị nếu được yêu cầu.
 8. Mở iSideload, đăng nhập cùng Apple ID, kết nối Wi-Fi có Internet. Cài/bật LocalDevVPN, quay lại Thiết bị > Kiểm tra kết nối thiết bị, rồi thử Làm mới iSideload.
