@@ -11,7 +11,7 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 idevice = { version = "0.1.61", default-features = false, features = [
-  "afc", "installation_proxy", "tcp", "ring", "remote_pairing", "rsd", "tunnel_tcp_stack",
+  "afc", "house_arrest", "installation_proxy", "tcp", "ring", "remote_pairing", "rsd", "tunnel_tcp_stack",
 ] }
 isideload = { version = "0.4.6", default-features = false, features = ["install", "fs-storage", "tokio-mt"] }
 rootcause = "0.12.0"

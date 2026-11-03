@@ -42,7 +42,7 @@ struct PeerInstallView: View {
                     LabeledContent("Thiết bị", value: peer.model)
                     LabeledContent("IP Wi-Fi", value: peer.ip)
                     Text(peer.udid).font(.caption.monospaced()).textSelection(.enabled)
-                    Picker("Apple ID ký", selection: $account) {
+                    Picker("Apple ID của người nhận", selection: $account) {
                         Text("Chọn tài khoản").tag("")
                         ForEach(engine.signedAccounts, id: \.self) { Text($0).tag($0) }
                     }.disabled(installer.active)
@@ -54,7 +54,7 @@ struct PeerInstallView: View {
                         confirmInstall = true
                     }.disabled(installer.active || !engine.signedAccounts.contains(account))
                 } header: { Text("2. Xác nhận máy nhận và cài") } footer: {
-                    Text("Chọn Apple ID sẽ dùng lâu dài để gia hạn trên máy nhận. Nếu người nhận dùng tài khoản riêng, hãy thêm tài khoản đó ở tab Tài khoản trước khi cài. App mới không được thêm vào danh sách của máy hỗ trợ.")
+                    Text("Chọn đúng Apple ID của người nhận để ký bản cài đầu tiên. Sau khi cài, người nhận đăng nhập chính tài khoản này để tự gia hạn. Nếu chưa có, thêm ở tab Tài khoản trước khi cài. App mới không được thêm vào danh sách của máy hỗ trợ.")
                 }
             }
 
@@ -73,9 +73,9 @@ struct PeerInstallView: View {
 
             if installer.phase == .installed {
                 Section {
-                    Label("Cài thành công", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    Label(installer.receiverSetupVerified ? "Cài và thiết lập thành công" : "Đã cài · cần hoàn tất thiết lập", systemImage: installer.receiverSetupVerified ? "checkmark.circle.fill" : "exclamationmark.triangle").foregroundStyle(installer.receiverSetupVerified ? .green : .orange)
                     Text("Trên máy nhận: Cài đặt › Cài đặt chung › VPN & Quản lý thiết bị › tin cậy tài khoản nhà phát triển.")
-                    Text("Mở iContainer trên máy nhận, đăng nhập Apple ID của người nhận. Để tự ký lại: cài LocalDevVPN và ghép nối ngay trong iContainer ở tab Thiết bị.")
+                    Text("Mở iContainer trên máy nhận và đăng nhập đúng Apple ID đã chọn ở bước cài. Bản đã thiết lập thành công có sẵn khóa ký và ghép nối; cài LocalDevVPN rồi Kiểm tra kết nối để tự gia hạn.")
                 } header: { Text("3. Hoàn tất trên máy nhận") }
             }
 
@@ -89,11 +89,11 @@ struct PeerInstallView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(installer.active)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear { if account.isEmpty { account = engine.signedAccounts.first ?? "" } }
+        .onAppear { if account.isEmpty { account = installer.receiver?.installAccount ?? "" } }
         .confirmationDialog("Cài iContainer lên \(installer.receiver?.name ?? "máy nhận")?",
                             isPresented: $confirmInstall, titleVisibility: .visible) {
             Button("Ký và cài bằng \(account)") { Task { await installer.install(account: account) } }
             Button("Hủy", role: .cancel) {}
-        } message: { Text("Máy nhận: \(installer.receiver?.ip ?? ""). Giữ cả hai máy mở khóa và cùng Wi-Fi cho đến khi cài xong.") }
+        } message: { Text("Máy nhận: \(installer.receiver?.ip ?? ""). Apple ID người nhận: \(account). Người nhận sẽ dùng chính tài khoản này để tự gia hạn. Đổi tài khoản khi cài lại có thể tạo bản app riêng; bản cũ không tự bị gỡ. Giữ cả hai máy mở khóa và cùng Wi-Fi cho đến khi cài xong.") }
     }
 }

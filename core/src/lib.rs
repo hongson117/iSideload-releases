@@ -13,6 +13,8 @@ mod peer;
 mod container;
 mod container_macho;
 mod self_refresh;
+mod owner_setup;
+mod receiver_setup;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::OnceLock;

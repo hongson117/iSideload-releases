@@ -9,6 +9,9 @@ struct PeerReceiver: Codable {
     let ip: String
     let pairedAt: Date
     var installedAt: Date?
+    var installAccount: String?
+    var installedBundleID: String?
+    var installedTeamID: String?
 
     var recordURL: URL { Engine.storage.appendingPathComponent("peer-pairings/\(sessionID).plist") }
     var metadataURL: URL { Engine.storage.appendingPathComponent("peer-pairings/\(sessionID).json") }
@@ -24,6 +27,7 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
     @Published var progress = 0.0
     @Published var error: String?
     @Published var receiver: PeerReceiver?
+    @Published var receiverSetupVerified = false
     private var sessionID = ""
     private var advertisement: NetService?
     private var cancelRequested = false
@@ -123,7 +127,7 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
     func install(account: String) async {
         let engine = Engine.shared
         guard !engine.busy, !active, let peer = receiver, engine.signedAccounts.contains(account) else { return }
-        phase = .installing; error = nil; progress = 0
+        phase = .installing; error = nil; progress = 0; receiverSetupVerified = false
         engine.peerBusy = true; engine.busy = true
         let idle = UIApplication.shared.isIdleTimerDisabled
         UIApplication.shared.isIdleTimerDisabled = true
@@ -141,13 +145,20 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
             var req = engine.peerRequest("peer_install", account: account)
             req["session_id"] = peer.sessionID; req["target"] = peer.ip
             req["expected_udid"] = peer.udid; req["ipa_path"] = out.path
-            req["upgrade"] = peer.installedAt != nil
-            _ = try await engine.callForPeer(req, onEvent: events)
+            req["upgrade"] = peer.installedAt != nil && peer.installAccount == account
+            if peer.installAccount == account, let team = peer.installedTeamID { req["preferred_team_id"] = team }
+            let result = try await engine.callForPeer(req, onEvent: events)
             receiver?.installedAt = Date()
+            receiver?.installAccount = account
+            receiver?.installedBundleID = result["bundle_id"] as? String
+            receiver?.installedTeamID = result["team_id"] as? String
+            receiverSetupVerified = result["recipient_setup_verified"] as? Bool == true
             // Installation succeeded even if writing local history fails.
             try? saveReceiver()
             phase = .installed; progress = 1
             stage = "Đã cài iContainer lên \(peer.name)."
+            if receiverSetupVerified { stage += " Đã thiết lập khóa ký và ghép nối cho tài khoản người nhận." }
+            else { error = "App đã cài, nhưng thiết lập tự gia hạn chưa hoàn tất: \(result["recipient_setup_error"] as? String ?? "chưa xác minh dữ liệu thiết lập"). Giữ máy nhận mở khóa rồi cài lại bằng cùng tài khoản để thử lại." }
         } catch {
             phase = .paired; self.error = error.localizedDescription
             stage = "Chưa cài xong. Giữ máy nhận mở khóa và kiểm tra Wi-Fi rồi thử lại."

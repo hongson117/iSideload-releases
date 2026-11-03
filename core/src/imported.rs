@@ -311,7 +311,7 @@ fn pick<'a>(usable: &'a [&'a Prof], bundle: &str) -> Option<&'a Prof> {
 }
 
 /// Pack a signed .app into Payload/<name>.app inside a stored-deflate IPA, keeping unix modes and symlinks.
-fn zip_payload(app_dir: &std::path::Path, out: &std::path::Path) -> Result<(), String> {
+pub(crate) fn zip_payload(app_dir: &std::path::Path, out: &std::path::Path) -> Result<(), String> {
     use std::io::Write;
     use std::os::unix::fs::PermissionsExt;
     let f = std::fs::File::create(out).map_err(|e| format!("Không tạo được IPA: {e}"))?;

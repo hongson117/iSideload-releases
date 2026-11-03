@@ -5,6 +5,7 @@ struct AccountView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var adding = false
+    @State private var ownerAccount: String?
     @State private var p12: URL?
     @State private var p12Password = ""
     @State private var profiles: [URL] = []
@@ -23,6 +24,9 @@ struct AccountView: View {
                                 Spacer()
                                 Menu {
                                     Button("Đăng nhập lại") { email = a; password = ""; adding = true }
+                                    if engine.signedAccounts.contains(a) {
+                                        Button("Thiết lập iContainer bằng Apple ID này") { ownerAccount = a }
+                                    }
                                     if a != engine.appleID { Button("Đặt làm tài khoản chính") { engine.makeMain(a) } }
                                     Button("Đăng xuất", role: .destructive) { engine.signOut(a) }
                                 } label: {
@@ -31,6 +35,10 @@ struct AccountView: View {
                             }
                             Text(engine.signerSummary("apple:" + a)).font(.caption).foregroundStyle(.secondary)
                             if Keychain.load(a) == nil { Text("Cần đăng nhập lại").font(.caption).foregroundStyle(.red) }
+                            else {
+                                Button("Thiết lập iContainer bằng tài khoản này") { ownerAccount = a }
+                                    .font(.subheadline).disabled(engine.busy || engine.peerBusy)
+                            }
                         }
                         .swipeActions {
                             Button("Đăng xuất", role: .destructive) { engine.signOut(a) }
@@ -60,6 +68,16 @@ struct AccountView: View {
                     }.disabled(engine.busy)
                 } header: { Text("Apple ID · \(engine.accounts.count) tài khoản") } footer: {
                     Text("Có thể thêm Apple ID thứ hai và các tài khoản khác bằng nút Thêm Apple ID khác. Khi cài hoặc ký lại, chọn tài khoản muốn dùng. Apple ID miễn phí: iOS giới hạn 3 app tự ký trên mỗi máy (tính cả iContainer); mỗi Apple ID có 10 App ID mỗi 7 ngày. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
+                }
+
+                if let result = engine.preparedOwnerInstallation, let file = engine.preparedOwnerIPA {
+                    Section {
+                        Text(result["apple_id"] as? String ?? "").font(.headline)
+                        Text("App ID: \(result["bundle_id"] as? String ?? "")").font(.caption).textSelection(.enabled)
+                        ShareLink(item: file) { Label("Chia sẻ bản cài cho máy hỗ trợ", systemImage: "square.and.arrow.up") }
+                    } header: { Text("Bản cài của bạn đã sẵn sàng") } footer: {
+                        Text("Bản cài đã ký bằng tài khoản của bạn. Giữ bản hiện tại cho đến khi bản mới cài và mở thành công; mật khẩu không nằm trong file IPA.")
+                    }
                 }
 
                 Section {
@@ -103,6 +121,16 @@ struct AccountView: View {
                 }
             }
             .navigationTitle("Tài khoản")
+            .confirmationDialog("Thiết lập iContainer bằng tài khoản của bạn", isPresented: Binding(get: { ownerAccount != nil }, set: { if !$0 { ownerAccount = nil } }), titleVisibility: .visible) {
+                if let account = ownerAccount {
+                    Button("Chuẩn bị bản ký bằng \(account)") {
+                        ownerAccount = nil; Task { await engine.prepareOwnerInstallation(account: account) }
+                    }
+                }
+                Button("Hủy", role: .cancel) { ownerAccount = nil }
+            } message: {
+                Text("App sẽ tạo bản cài thuộc Apple ID bạn chọn. Bản đang dùng được giữ nguyên trong bước chuẩn bị. Sau khi cài bản của mình, bạn dùng chính Apple ID đó để tự gia hạn.")
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { email = ""; password = ""; adding = true } label: {

@@ -29,6 +29,7 @@ final class Engine: ObservableObject {
     @Published var errorText: String?
     @Published var infoText: String?
     @Published var pendingIPA: URL?
+    @Published var preparedOwnerInstallation: [String: Any]?
 
     nonisolated(unsafe) private var answer: String?
     private let answered = DispatchSemaphore(value: 0)
@@ -48,6 +49,13 @@ final class Engine: ObservableObject {
         if !appleID.isEmpty && !accounts.contains(appleID) { accountsRaw = ([appleID] + accounts).joined(separator: "\n") }
         hasImportedCert = FileManager.default.fileExists(atPath: Self.storage.appendingPathComponent("imported_cert/cert.p12").path)
         syncSelfRecord()
+        if (UserDefaults.standard.string(forKey: "deviceUDID") ?? "").isEmpty,
+           let udid = selfSigningIdentity?.deviceUDID { UserDefaults.standard.set(udid, forKey: "deviceUDID") }
+        if let data = try? Data(contentsOf: Self.storage.appendingPathComponent("owner-installation.json")),
+           let value = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+           value["source_bundle_id"] as? String == Bundle.main.bundleIdentifier {
+            preparedOwnerInstallation = value
+        }
         checkSelfUpdate()
         if hasImportedCert { Task { await loadImportedCert() } }
     }
@@ -91,7 +99,7 @@ final class Engine: ObservableObject {
         else if signer.hasPrefix("apple:") { teams = knownTeamIDs(for: String(signer.dropFirst(6))) }
         else { return nil }
         guard let teams, !identity.accepts(teamIDs: teams) else { return nil }
-        return "Nguồn ký đã chọn không thuộc Team của bản đang cài. " + identity.description
+        return "Tài khoản đã chọn chưa gắn với bản cài này. Vào Tài khoản → Thiết lập iContainer bằng tài khoản này. " + identity.description
     }
 
     /// Register a fresh installation without needing VPN or a device browse first.
@@ -280,6 +288,40 @@ final class Engine: ObservableObject {
     func makeMain(_ id: String) { appleID = id; teamName = ""; signedIn = Keychain.load(id) != nil }
 
     // MARK: Imported certificate (.p12 + .mobileprovision)
+    func prepareOwnerInstallation(account: String) async {
+        guard !busy && !peerBusy, signedAccounts.contains(account) else { return }
+        errorText = nil
+        let udid = UserDefaults.standard.string(forKey: "deviceUDID") ?? selfSigningIdentity?.deviceUDID ?? ""
+        guard !udid.isEmpty else {
+            errorText = "Vào Thiết bị, bật LocalDevVPN rồi Kiểm tra kết nối một lần để xác định iPhone trước khi thiết lập tài khoản của bạn."; return
+        }
+        let relative = "OwnerSetup/\(UUID().uuidString)/iContainer-personal.ipa"
+        let out = Self.docs.appendingPathComponent(relative)
+        let input = out.deletingLastPathComponent().appendingPathComponent("iContainer-bootstrap.ipa")
+        do {
+            try FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
+            _ = try await run(["op": "pack_self", "app_path": Bundle.main.bundleURL.path,
+                              "out_path": input.path, "peer_bootstrap": true, "personal_setup": true])
+            defer { try? FileManager.default.removeItem(at: input) }
+            var request = base("prepare_owner_install", signer: "apple:" + account)
+            request["ipa_path"] = input.path; request["ipa_out"] = out.path
+            request["ipa_relative_path"] = relative
+            request["source_bundle_id"] = Bundle.main.bundleIdentifier ?? ""
+            request["udid"] = udid
+            let result = try await run(request)
+            let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: Self.storage.appendingPathComponent("owner-installation.json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            preparedOwnerInstallation = result
+            infoText = "Đã chuẩn bị bản iContainer ký bằng \(account). Bản đang dùng và dữ liệu hiện tại vẫn được giữ. Bản cài sẵn sàng để cài bằng máy hỗ trợ."
+        } catch { errorText = error.localizedDescription }
+    }
+
+    var preparedOwnerIPA: URL? {
+        guard let relative = preparedOwnerInstallation?["ipa_relative_path"] as? String,
+              relative.hasPrefix("OwnerSetup/"), !relative.split(separator: "/").contains("..") else { return nil }
+        return Self.docs.appendingPathComponent(relative)
+    }
+
     func importCert(p12: URL?, password: String, profiles: [URL], replaceProfiles: Bool = false) async {
         let tmp = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)

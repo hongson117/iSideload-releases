@@ -6,13 +6,15 @@ struct SelfSigningIdentity {
     let bundleID: String
     let teamID: String
     let installerAppleID: String?
+    let deviceUDID: String?
 
     private struct Installer: Decodable {
         let bundleID: String
         let teamID: String
         let appleID: String
+        let udid: String?
         enum CodingKeys: String, CodingKey {
-            case bundleID = "bundle_id", teamID = "team_id", appleID = "apple_id"
+            case bundleID = "bundle_id", teamID = "team_id", appleID = "apple_id", udid
         }
     }
 
@@ -24,7 +26,8 @@ struct SelfSigningIdentity {
            owner.teamID.caseInsensitiveCompare(teamID) == .orderedSame,
            !owner.appleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             installerAppleID = owner.appleID
-        } else { installerAppleID = nil }
+            deviceUDID = owner.udid
+        } else { installerAppleID = nil; deviceUDID = nil }
     }
 
     func accepts(teamIDs: [String]) -> Bool {
@@ -34,6 +37,6 @@ struct SelfSigningIdentity {
     var description: String {
         var text = "Team đang ký bản này: \(teamID)."
         if let installerAppleID { text += " Tài khoản cài đặt: \(installerAppleID)." }
-        return text + " Gia hạn cần Apple ID thuộc Team này."
+        return text + " Nếu dùng Apple ID riêng khác tài khoản cài ban đầu, chọn Thiết lập iContainer bằng tài khoản của bạn trước lần gia hạn đầu tiên."
     }
 }

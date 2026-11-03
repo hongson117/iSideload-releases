@@ -93,6 +93,10 @@ pub async fn dispatch(req: Value, ui: Ui) -> Value {
         "apps" => apps(&req).await,
         "uninstall" => uninstall(&req).await,
         "install" => install(&req, ui).await,
+        "prepare_owner_install" => match crate::owner_setup::request(&req) {
+            Ok(r)=>install(&r,ui).await,
+            Err(e)=>Err(e),
+        },
         "peer_pair" => crate::peer::pair(&req, ui).await,
         "peer_cancel" => crate::peer::cancel(&req),
         "peer_install" => match crate::peer::install_request(&req) {
@@ -340,6 +344,9 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     }
     let upgrade = req.get("upgrade").and_then(Value::as_bool).unwrap_or(false);
     let self_refresh = req.get("self_refresh").and_then(Value::as_bool).unwrap_or(false);
+    let sign_only=req.get("sign_only").and_then(Value::as_bool).unwrap_or(false);
+    let owner_setup=req.get("owner_setup").and_then(Value::as_bool).unwrap_or(false);
+    if sign_only && !owner_setup {return Err("Chỉ xuất bản cài cá nhân từ luồng thiết lập iContainer.".into());}
     let installed_team = if self_refresh { Some(crate::self_refresh::installed_team(&ipa)?) } else { None };
     if self_refresh {
         let installed_id = s(req, "installed_bundle_id");
@@ -355,8 +362,12 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
 
     // 1. Reach this device through the loopback VPN first.
     let rp = device::is_rp_pairing(s(req, "pairing_path"));
-    ui.progress("Đang kết nối thiết bị qua VPN…", None);
-    let (provider, mut tunnel, dev_name, udid) = if rp {
+    if !sign_only {ui.progress("Đang kết nối thiết bị qua VPN…", None);}
+    let (provider, mut tunnel, dev_name, udid) = if sign_only {
+        let id=s(req,"udid");
+        if id.is_empty() || id.len()>64 || !id.bytes().all(|c|c.is_ascii_hexdigit() || c==b'-') {return Err("Chưa xác định được iPhone. Hãy kiểm tra kết nối thiết bị trước khi thiết lập.".into());}
+        (None,None,"iPhone".to_string(),id.to_string())
+    } else if rp {
         let (a, hs) = device::rp_tunnel(s(req, "target"), s(req, "pairing_path")).await?;
         let udid = device::rsd_prop(&hs, "UniqueDeviceID");
         if udid.is_empty() { return Err("Thiết bị không trả về UDID qua RSD.".into()); }
@@ -379,6 +390,12 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
     let refresh_team = if let Some(expected) = installed_team.as_deref() {
         let teams=dev.list_teams().await.map_err(|e|explain("Không kiểm tra được Team của Apple ID",&e))?;
         Some(crate::self_refresh::select_team(&teams,expected,s(req,"apple_id"))?)
+    } else if !s(req,"preferred_team_id").is_empty() {
+        let teams=dev.list_teams().await.map_err(|e|explain("Không kiểm tra được Team của máy nhận",&e))?;
+        Some(crate::self_refresh::select_team(&teams,s(req,"preferred_team_id"),s(req,"apple_id"))?)
+    } else if owner_setup {
+        let teams=dev.list_teams().await.map_err(|e|explain("Không lấy được Team của tài khoản người dùng",&e))?;
+        Some(crate::owner_setup::choose_team(&teams,s(req,"owner_source_team"))?)
     } else { None };
     let revoke_prompt = move |certs: Vec<DevelopmentCertificate>| -> MaxCertsCallbackFuture {
         Box::pin(async move {
@@ -416,6 +433,11 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
         .map_err(|e| explain("Signing failed", &e))?;
     let (bundle_id, name, version) = bundle_info(&signed);
     let expires = profile_expiry(&signed);
+    if sign_only {
+        let result=crate::owner_setup::write_result(req,&signed,&team.team_id,&udid);
+        let _=std::fs::remove_dir_all(&signed);
+        return result;
+    }
 
     // 5. Upload (AFC) + install (installation_proxy) on this same device.
     let label = if upgrade { "Đang làm mới app…" } else { "Đang cài app…" };
@@ -430,6 +452,21 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
             .await
             .map_err(|e| explain("Install failed", &e))?;
     }
+    let setup = if crate::owner_setup::own_id(&bundle_id) && !self_refresh {
+        use idevice::{IdeviceService,RsdService,house_arrest::HouseArrestClient};
+        ui.progress("Đang thiết lập khóa ký và ghép nối cho người nhận…",None);
+        let result=async {
+            let files=crate::receiver_setup::prepare(req,&signed,&team.team_id,&udid)?;
+            let house=if let Some((adapter,hs))=tunnel.as_mut(){
+                HouseArrestClient::connect_rsd(adapter,hs).await.map_err(|e|e.to_string())?
+            }else if let Some(provider)=provider.as_ref(){
+                HouseArrestClient::connect(provider).await.map_err(|e|e.to_string())?
+            }else{return Err("Không còn kết nối tới máy nhận.".to_string());};
+            let mut afc=house.vend_documents(&bundle_id).await.map_err(|e|e.to_string())?;
+            crate::receiver_setup::deliver(&mut afc,&files).await
+        }.await;
+        Some(result)
+    }else{None};
     let _ = std::fs::remove_dir_all(&signed);
 
     // LiveContainer needs the signing certificate for JIT-less mode: hand it back so the app can pass it on.
@@ -439,11 +476,13 @@ async fn install(req: &Value, ui: Ui) -> Result<Value, String> {
 
     Ok(json!({
         "lc_cert": lc_cert,
+        "recipient_setup_verified": setup.as_ref().map(|r|r.is_ok()),
+        "recipient_setup_error": setup.as_ref().and_then(|r|r.as_ref().err()),
         "ok": true,
         "bundle_id": bundle_id,
         "name": name,
         "version": version,
-        "team_id": team_id_of(&bundle_id),
+        "team_id": team.team_id,
         "expires": expires,
         "udid": udid,
         "device_name": dev_name,
@@ -534,6 +573,9 @@ fn pack_self(req: &Value) -> Result<Value, String> {
                         .ok_or("Chỉ đóng gói ứng dụng của chính dự án để cài cho máy khác.")?;
                     // Drop the source phone's team suffix before signing for the receiving phone.
                     info.insert("CFBundleIdentifier".into(), plist::Value::String(family.into()));
+                    let product=if family=="com.hongson117.icontainer"{"iContainer"}else{"iSideload"};
+                    let label=if req.get("personal_setup").and_then(Value::as_bool).unwrap_or(false){format!("{product} Cá nhân")}else{product.to_string()};
+                    info.insert("CFBundleDisplayName".into(),plist::Value::String(label));
                     data.clear();
                     plist::to_writer_xml(&mut data, &info).map_err(|e| e.to_string())?;
                 }
