@@ -14,6 +14,13 @@
       "url": "https://github.com/hongson117/iSideload-releases/releases/download/icontainer-v0.1.2-b1004/iContainer.ipa",
       "sha256": "ada1ba8907967d882005a8b9cfef5e060e39fef95110902a70c0bc08701dface",
       "bytes": 4425641
+    },
+    "sicontainer": {
+      "version": "0.1.0",
+      "build": "1001",
+      "url": "https://github.com/hongson117/iSideload-releases/releases/download/sicontainer-v0.1.0-b1001/SIContainer.ipa",
+      "sha256": "7231864030bb671c40d3bd7b1925815e1ba4acfe5430a446952ee625ba2f58b5",
+      "bytes": 4658015
     }
   }
 }
