@@ -60,6 +60,10 @@ Công cụ dùng lại bản ghi Remote Pairing trong app nếu iPhone vẫn ch�
 
 - CI kiểm tra build Windows, chế độ tự kiểm tra, việc chép file và khôi phục khi USB bị ngắt bằng mô phỏng. Kiểm thử tự động không thay thế xác nhận cài USB từ đầu trên iPhone thật.
 
+## Kiểm chứng trên thiết bị thật
+
+Đã xác nhận trên iPhone thật ngày 03/11/2026: Windows lựa chọn **2**, dùng lại bản ghi Remote Pairing hiện có, đọc lại/xác minh qua USB, sau đó người dùng mở iSideload và kiểm tra LocalDevVPN thành công. Lượt này không ký/cài lại app; nhánh tạo bản ghi mới, cài từ đầu bằng lựa chọn 1 và USB trên Mac vẫn cần xác nhận.
+
 ## Dùng dòng lệnh
 
 - `isl-cli.exe iSideload.ipa`: ký/cài và thiết lập ghép đôi.

@@ -17,7 +17,22 @@
       "guide": "WINDOWS.md",
       "bytes": 9954824,
       "download_url": "https://raw.githubusercontent.com/hongson117/iSideload-releases/main/isl-windows.zip",
-      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-windows.zip"
+      "release_url": "https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-windows.zip",
+      "hardware_validation": {
+        "date": "2026-11-03",
+        "platform": "windows",
+        "installer_version": "1.2.2-rc2",
+        "mode": "2 / --pair-only",
+        "usb_result": "passed on physical iPhone",
+        "existing_record_reused": true,
+        "app_record_readback_and_pair_verify": "passed",
+        "localdevvpn_check": "passed, confirmed by user after reopening iSideload",
+        "signing_or_app_installation_performed": false,
+        "new_pairing_record_creation": "not tested in this run",
+        "file_write_branch": "not independently instrumented; identical records may be left unchanged",
+        "fresh_install_mode_1": "not tested on physical iPhone",
+        "macos_usb": "not tested on physical iPhone"
+      }
     },
     "macos": {
       "file": "isl-macos-universal.zip",
@@ -43,5 +58,5 @@
     "Enable Developer Mode and confirm reboot on iPhone when needed",
     "Enter Apple ID/password/2FA directly in local installer terminal for mode 1"
   ],
-  "hardware_usb_test": "pending; CI/software checks passed"
+  "hardware_usb_test": "Windows mode 2: existing record verified over USB and LocalDevVPN check confirmed by user; first-install/new-record and macOS USB not yet verified"
 }

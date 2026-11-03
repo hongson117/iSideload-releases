@@ -68,4 +68,4 @@ macOS:
 
 ## Giới hạn của bản phát hành
 
-1.2.2 RC2 là bản thử. Build Windows/macOS, kiểm thử chép/khôi phục file, launcher và self-test đã qua; USB đầu-cuối trên iPhone thật vẫn cần xác nhận. File ghép đôi được tạo riêng khi chạy, không có bản ghi dùng chung trong ZIP. Hai bộ cài không tự đăng nhập tài khoản vào app iPhone; người dùng đăng nhập trong app sau khi cài để tự gia hạn.
+1.2.2 RC2 là bản thử. Build Windows/macOS, kiểm thử chép/khôi phục file, launcher và self-test đã qua; Windows lựa chọn 2 đã được xác nhận với bản ghi có sẵn trên iPhone thật: xác minh USB và kiểm tra LocalDevVPN đều thành công. Lượt này chưa thử tạo bản ghi mới; cài từ đầu bằng lựa chọn 1 và USB trên Mac vẫn cần xác nhận. File ghép đôi được tạo riêng khi chạy, không có bản ghi dùng chung trong ZIP. Hai bộ cài không tự đăng nhập tài khoản vào app iPhone; người dùng đăng nhập trong app sau khi cài để tự gia hạn.

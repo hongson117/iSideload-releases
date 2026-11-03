@@ -15,7 +15,7 @@ Chọn **1** để cài iSideload từ đầu kèm tự tạo/chép/xác minh fi
 
 [Checksum SHA-256](SHA256SUMS.txt) · [Thông tin gói cho AI](INSTALLERS.json) · [Trang phát hành RC2](https://github.com/hongson117/iSideload-releases/releases/tag/v1.2.2-rc2)
 
-Đây là bản thử đã qua build/kiểm thử phần mềm trên Windows và macOS. Luồng USB đầu-cuối với iPhone thật vẫn cần xác nhận. Windows EXE chưa ký Authenticode; Mac binary có chữ ký ad-hoc, chưa notarize. Xem phần mở công cụ trong hướng dẫn đúng hệ điều hành.
+Đây là bản thử đã qua build/kiểm thử phần mềm trên Windows và macOS. Đã xác nhận trên iPhone thật ngày 03/11/2026: Windows lựa chọn **2**, dùng lại bản ghi Remote Pairing hiện có, đọc lại/xác minh qua USB, sau đó người dùng mở iSideload và kiểm tra LocalDevVPN thành công. Lượt này không ký/cài lại app; nhánh tạo bản ghi mới, cài từ đầu bằng lựa chọn 1 và USB trên Mac vẫn cần xác nhận. Windows EXE chưa ký Authenticode; Mac binary có chữ ký ad-hoc, chưa notarize. Xem phần mở công cụ trong hướng dẫn đúng hệ điều hành.
 
 ## Nhờ AI cài nhanh
 
@@ -60,7 +60,7 @@ Máy nhận không cần RC Pair hay Tailscale cho lượt cài này. Máy hỗ 
 
 ## Cài lần đầu bằng máy tính
 
-**Windows 10/11 x64:** [tải isl-windows.zip (1.2.2 RC2)](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-windows.zip), giải nén toàn bộ và mở `Cai-iSideload.bat`. Chọn **1** để cài từ đầu kèm file Remote Pairing; chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi. [Hướng dẫn Windows từng bước](WINDOWS.md). Bản thử đã qua kiểm thử phần mềm; cần xác nhận USB trên iPhone thật.
+**Windows 10/11 x64:** [tải isl-windows.zip (1.2.2 RC2)](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-windows.zip), giải nén toàn bộ và mở `Cai-iSideload.bat`. Chọn **1** để cài từ đầu kèm file Remote Pairing; chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi. [Hướng dẫn Windows từng bước](WINDOWS.md). Bản thử đã qua kiểm thử phần mềm; lựa chọn 2 đã được xác nhận qua USB và kiểm tra LocalDevVPN trên iPhone có sẵn bản ghi hợp lệ. Cài từ đầu vẫn cần xác nhận.
 
 **macOS (Apple Silicon và Intel, macOS 11+):** tải [isl-macos-universal.zip](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-macos-universal.zip), giải nén, cắm iPhone bằng cáp và mở `Cai-iSideload.command`. Công cụ dùng dịch vụ USB của Apple có sẵn, không yêu cầu Homebrew/Xcode; đã kèm IPA 1.2.2 build 35. Chọn **1** để cài từ đầu kèm Remote Pairing hoặc **2** để chỉ thiết lập/sửa ghép đôi. [Xem hướng dẫn macOS từng bước](MACOS.md).
 
