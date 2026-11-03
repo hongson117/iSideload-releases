@@ -8,7 +8,7 @@ on:
       build_number:
         description: Increasing iPhone app build number
         required: true
-        default: '10'
+        default: '11'
 permissions:
   contents: read
 concurrency:
@@ -89,6 +89,8 @@ jobs:
             /tmp/choice-tests
             swiftc -parse-as-library ios/iSideload/Core/AppUpdate.swift tests/AppUpdateTests.swift -o /tmp/update-tests
             /tmp/update-tests
+            swiftc -parse-as-library ios/iSideload/Core/CoreInteractionPolicy.swift tests/CoreInteractionPolicyTests.swift -o /tmp/interaction-tests
+            /tmp/interaction-tests
             swiftc -parse-as-library ios/iSideload/Core/Models.swift ios/iSideload/Core/InstalledAppState.swift tests/InstalledAppStateTests.swift -o /tmp/lifecycle-tests
             /tmp/lifecycle-tests
             swiftc -parse-as-library ios/iSideload/Core/PairingRecord.swift tests/PairingRecordTests.swift -o /tmp/pair-tests
@@ -115,7 +117,7 @@ jobs:
           (cd publish && shasum -a 256 iSideload.ipa > SHA256SUMS.txt)
           python3 - <<'PY'
           import os,json,pathlib
-          pathlib.Path('publish/BUILD-SOURCE.json').write_text(json.dumps({'source_commit':os.environ['SOURCE_SHA'],'build':os.environ['BUILD_NUMBER'],'product':'iSideload','version':'1.2.5','unsigned':True}))
+          pathlib.Path('publish/BUILD-SOURCE.json').write_text(json.dumps({'source_commit':os.environ['SOURCE_SHA'],'build':os.environ['BUILD_NUMBER'],'product':'iSideload','version':'1.2.6','unsigned':True}))
           PY
       - uses: actions/upload-artifact@v4
         with:
