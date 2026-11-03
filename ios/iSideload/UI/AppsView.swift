@@ -45,6 +45,11 @@ struct AppsView: View {
                         if let problem = engine.selfSignerProblem(engine.signerOf(app)) {
                             Text(problem).font(.footnote).foregroundStyle(.orange)
                         }
+                        if let release = engine.appUpdate {
+                            Button { Task { await engine.updateApplication() } } label: {
+                                Label("Cập nhật phiên bản \(release.label)", systemImage: "arrow.down.app")
+                            }.disabled(engine.busy || engine.peerBusy || engine.updatingApp)
+                        }
                         Button {
                             Task { await engine.refreshSelf() }
                         } label: { Label("Làm mới iContainer", systemImage: "arrow.clockwise") }
