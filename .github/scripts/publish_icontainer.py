@@ -19,7 +19,8 @@ tag=f"icontainer-v{meta['version']}-b{meta['build']}"
 notes=root/'release-notes.md'
 notes.write_text(f"""iContainer {meta['version']} · build {meta['build']}
 
-- Sửa duplicate LC_RPATH khi mở app trong Container; bản chạy cũ cần Chuẩn bị lại, giữ app gốc và dữ liệu.
+- Sửa lỗi `code signature invalid` khi Chạy app trong Container: ký đủ XML/DER sau khi chuẩn bị mã.
+- Giữ bản sửa duplicate LC_RPATH. Sau khi cập nhật, chọn Chuẩn bị lại cho app cũ một lần; giữ app gốc và dữ liệu.
 - Kiểm tra/tải/ký và cập nhật phiên bản trong app, giữ đúng App ID/Team của bản Cá nhân.
 - Có quản lý chứng chỉ theo tài khoản; tác vụ trong app vẫn cho chọn chứng chỉ sau khi quay về từ VPN.
 
