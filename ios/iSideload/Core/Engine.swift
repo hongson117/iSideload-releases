@@ -219,6 +219,8 @@ final class Engine: ObservableObject {
     /// Signs in an Apple ID and adds it to the account list (the first one becomes the main account).
     func signIn(email: String, password: String) async {
         let id = email.trimmingCharacters(in: .whitespaces)
+        errorText = nil
+        let previousPassword = Keychain.load(id)
         Keychain.save(password, for: id)
         await guarded {
             do {
@@ -231,7 +233,11 @@ final class Engine: ObservableObject {
                 signedIn = true
                 if selfApp?.signer == nil { syncSelfRecord(signer: "apple:" + id) }
                 infoText = "Đã thêm tài khoản \(id)."
-            } catch { Keychain.delete(id); throw error }
+            } catch {
+                if let previousPassword { Keychain.save(previousPassword, for: id) }
+                else { Keychain.delete(id) }
+                throw error
+            }
         }
     }
     func signOut() { signOut(appleID) }

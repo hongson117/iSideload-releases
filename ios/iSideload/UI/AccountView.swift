@@ -20,6 +20,14 @@ struct AccountView: View {
                             HStack {
                                 Text(a).font(.headline)
                                 if a == engine.appleID { Text("chính").font(.caption2).padding(.horizontal, 6).background(Theme.accent.opacity(0.2), in: Capsule()) }
+                                Spacer()
+                                Menu {
+                                    Button("Đăng nhập lại") { email = a; password = ""; adding = true }
+                                    if a != engine.appleID { Button("Đặt làm tài khoản chính") { engine.makeMain(a) } }
+                                    Button("Đăng xuất", role: .destructive) { engine.signOut(a) }
+                                } label: {
+                                    Label("Tùy chọn tài khoản", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
+                                }.disabled(engine.busy)
                             }
                             Text(engine.signerSummary("apple:" + a)).font(.caption).foregroundStyle(.secondary)
                             if Keychain.load(a) == nil { Text("Cần đăng nhập lại").font(.caption).foregroundStyle(.red) }
@@ -32,13 +40,26 @@ struct AccountView: View {
                     if adding || engine.accounts.isEmpty {
                         TextField("Apple ID (email)", text: $email).textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never)
                         SecureField("Mật khẩu", text: $password).textContentType(.password)
-                        Button("Đăng nhập") { Task { await engine.signIn(email: email, password: password); password = ""; adding = false } }
+                        Button("Đăng nhập") {
+                            let account = email.trimmingCharacters(in: .whitespacesAndNewlines)
+                            Task {
+                                await engine.signIn(email: account, password: password)
+                                password = ""
+                                if engine.errorText == nil && engine.signedAccounts.contains(account) { adding = false }
+                            }
+                        }
                             .buttonStyle(GradientButtonStyle()).disabled(email.isEmpty || password.isEmpty || engine.busy)
-                    } else {
-                        Button { email = ""; adding = true } label: { Label("Thêm Apple ID", systemImage: "person.badge.plus") }
+                        if !engine.accounts.isEmpty {
+                            Button("Hủy thêm tài khoản", role: .cancel) { adding = false; email = ""; password = "" }
+                        }
                     }
-                } header: { Text("Apple ID") } footer: {
-                    Text("Apple ID miễn phí: iOS giới hạn 3 app tự ký trên mỗi máy (tính cả iContainer); mỗi Apple ID có 10 App ID mỗi 7 ngày. Thêm tài khoản không bảo đảm tăng số app trên máy. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
+                    Button {
+                        email = ""; password = ""; adding = true
+                    } label: {
+                        Label(engine.accounts.isEmpty ? "Thêm Apple ID" : "Thêm Apple ID khác", systemImage: "person.badge.plus")
+                    }.disabled(engine.busy)
+                } header: { Text("Apple ID · \(engine.accounts.count) tài khoản") } footer: {
+                    Text("Có thể thêm Apple ID thứ hai và các tài khoản khác bằng nút Thêm Apple ID khác. Khi cài hoặc ký lại, chọn tài khoản muốn dùng. Apple ID miễn phí: iOS giới hạn 3 app tự ký trên mỗi máy (tính cả iContainer); mỗi Apple ID có 10 App ID mỗi 7 ngày. Mỗi app nhớ tài khoản đã ký; mật khẩu lưu trong Keychain.")
                 }
 
                 Section {
