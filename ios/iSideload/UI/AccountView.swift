@@ -6,6 +6,7 @@ struct AccountView: View {
     @State private var password = ""
     @State private var adding = false
     @State private var ownerAccount: String?
+    @State private var removeAccount: String?
     @State private var p12: URL?
     @State private var p12Password = ""
     @State private var profiles: [URL] = []
@@ -28,7 +29,7 @@ struct AccountView: View {
                                         Button("Thiết lập iContainer bằng Apple ID này") { ownerAccount = a }
                                     }
                                     if a != engine.appleID { Button("Đặt làm tài khoản chính") { engine.makeMain(a) } }
-                                    Button("Đăng xuất", role: .destructive) { engine.signOut(a) }
+                                    Button("Xóa Apple ID khỏi danh sách", role: .destructive) { removeAccount = a }
                                 } label: {
                                     Label("Tùy chọn tài khoản", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
                                 }.disabled(engine.busy)
@@ -39,9 +40,11 @@ struct AccountView: View {
                                 Button("Thiết lập iContainer bằng tài khoản này") { ownerAccount = a }
                                     .font(.subheadline).disabled(engine.busy || engine.peerBusy)
                             }
+                            Button("Xóa Apple ID khỏi danh sách", role: .destructive) { removeAccount = a }
+                                .font(.caption).disabled(engine.busy || engine.peerBusy)
                         }
                         .swipeActions {
-                            Button("Đăng xuất", role: .destructive) { engine.signOut(a) }
+                            Button("Xóa Apple ID", role: .destructive) { removeAccount = a }
                             if a != engine.appleID { Button("Đặt làm chính") { engine.makeMain(a) }.tint(.blue) }
                         }
                     }
@@ -123,6 +126,14 @@ struct AccountView: View {
                 }
             }
             .navigationTitle("Tài khoản")
+            .confirmationDialog("Xóa Apple ID đã lưu?", isPresented: Binding(get: { removeAccount != nil }, set: { if !$0 { removeAccount = nil } }), titleVisibility: .visible) {
+                if let account = removeAccount {
+                    Button("Xóa \(account) khỏi danh sách", role: .destructive) { removeAccount = nil; engine.signOut(account) }
+                }
+                Button("Hủy", role: .cancel) { removeAccount = nil }
+            } message: {
+                Text("Email và mật khẩu đăng nhập đã lưu cho tài khoản này sẽ được gỡ khỏi app. Chứng chỉ và app đã cài vẫn giữ nguyên. Nếu cần gia hạn app bằng tài khoản này, bạn đăng nhập lại.")
+            }
             .confirmationDialog("Thiết lập iContainer bằng tài khoản của bạn", isPresented: Binding(get: { ownerAccount != nil }, set: { if !$0 { ownerAccount = nil } }), titleVisibility: .visible) {
                 if let account = ownerAccount {
                     Button("Chuẩn bị bản ký bằng \(account)") {

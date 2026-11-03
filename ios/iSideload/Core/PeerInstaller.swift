@@ -126,9 +126,10 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
         }
     }
 
-    func install(account: String, bootstrap: Bool = false) async {
+    func install(account: String, bootstrap: Bool = false, oneUsePassword: String? = nil) async {
         let engine = Engine.shared
-        guard !engine.busy, !active, let peer = receiver, engine.signedAccounts.contains(account) else { return }
+        guard !engine.busy, !active, let peer = receiver,
+              engine.signedAccounts.contains(account) || !(oneUsePassword ?? "").isEmpty else { return }
         phase = .installing; error = nil; progress = 0; receiverSetupVerified = false; receiverNeedsPersonalSetup = bootstrap
         engine.peerBusy = true; engine.busy = true
         let idle = UIApplication.shared.isIdleTimerDisabled
@@ -145,6 +146,7 @@ final class PeerInstaller: NSObject, ObservableObject, NetServiceDelegate {
             _ = try await engine.callForPeer(["op": "pack_self", "app_path": Bundle.main.bundleURL.path,
                                              "out_path": out.path, "peer_bootstrap": true], onEvent: events)
             var req = engine.peerRequest("peer_install", account: account)
+            if let oneUsePassword { req["apple_id"] = account; req["password"] = oneUsePassword }
             req["session_id"] = peer.sessionID; req["target"] = peer.ip
             req["expected_udid"] = peer.udid; req["ipa_path"] = out.path
             req["recipient_bootstrap"] = bootstrap

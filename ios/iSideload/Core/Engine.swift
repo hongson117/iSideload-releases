@@ -285,6 +285,11 @@ final class Engine: ObservableObject {
     func signOut(_ id: String) {
         Keychain.delete(id)
         accountsRaw = accounts.filter { $0 != id }.joined(separator: "\n")
+        var teams = UserDefaults.standard.dictionary(forKey: "teams") as? [String: String] ?? [:]
+        teams.removeValue(forKey: id); UserDefaults.standard.set(teams, forKey: "teams")
+        var memberships = UserDefaults.standard.dictionary(forKey: "accountTeamIDs") as? [String: [String]] ?? [:]
+        memberships.removeValue(forKey: id.lowercased()); UserDefaults.standard.set(memberships, forKey: "accountTeamIDs")
+        if installSigner == "apple:" + id { installSigner = "" }
         if id == appleID { appleID = signedAccounts.first ?? ""; teamName = "" }
         signedIn = !appleID.isEmpty && Keychain.load(appleID) != nil
         objectWillChange.send()

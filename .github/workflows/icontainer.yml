@@ -44,6 +44,8 @@ jobs:
           /tmp/pair-tests
           swiftc -parse-as-library ios/iSideload/Core/SelfSigningIdentity.swift tests/SelfSigningIdentityTests.swift -o /tmp/self-signing-tests
           /tmp/self-signing-tests
+          swiftc -parse-as-library ios/iSideload/Core/PeerSigningChoice.swift tests/PeerSigningChoiceTests.swift -o /tmp/peer-signing-choice-tests
+          /tmp/peer-signing-choice-tests
       - name: Build unsigned iContainer
         run: |
           xcodebuild -project iContainer.xcodeproj -scheme iContainer -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION=${{ github.run_number }} CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > /tmp/ic-build.log 2>&1 || { tail -100 /tmp/ic-build.log; exit 1; }

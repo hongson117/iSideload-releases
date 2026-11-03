@@ -6,6 +6,15 @@ struct PeerInstallView: View {
     @State private var account = ""
     @State private var confirmInstall = false
     @State private var bootstrap = false
+    @State private var useOneUse = true
+    @State private var receiverEmail = ""
+    @State private var receiverPassword = ""
+
+    private var signingChoice: PeerSigningChoice? {
+        PeerSigningChoice.resolve(useOneUse: useOneUse, saved: account, available: engine.signedAccounts,
+                                  entered: receiverEmail, password: receiverPassword)
+    }
+    private var signingAccount: String { signingChoice?.account ?? receiverEmail.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
         Form {
@@ -45,20 +54,30 @@ struct PeerInstallView: View {
                     LabeledContent("Thiết bị", value: peer.model)
                     LabeledContent("IP Wi-Fi", value: peer.ip)
                     Text(peer.udid).font(.caption.monospaced()).textSelection(.enabled)
-                    Picker(bootstrap ? "Apple ID máy hỗ trợ" : "Apple ID của người nhận", selection: $account) {
-                        Text("Chọn tài khoản").tag("")
-                        ForEach(engine.signedAccounts, id: \.self) { Text($0).tag($0) }
-                    }.disabled(installer.active)
-                    if engine.signedAccounts.isEmpty {
-                        Text("Quay lại tab Tài khoản để đăng nhập Apple ID, rồi trở lại đây. Kết nối vừa ghép đã được lưu.")
-                            .foregroundStyle(.orange)
+                    if useOneUse {
+                        TextField(bootstrap ? "Apple ID máy hỗ trợ" : "Apple ID người nhận", text: $receiverEmail)
+                            .keyboardType(.emailAddress).textInputAutocapitalization(.never).textContentType(.username)
+                        SecureField("Mật khẩu · chỉ dùng cho lượt cài này", text: $receiverPassword).textContentType(.password)
+                        Text("Không lưu mật khẩu vào Keychain hoặc danh sách tài khoản trên máy hỗ trợ. Mã 2FA được hỏi trong quá trình ký nếu Apple yêu cầu.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        if !engine.signedAccounts.isEmpty {
+                            Button("Dùng một tài khoản đã đăng nhập") { useOneUse = false; receiverPassword = "" }
+                        }
+                    } else {
+                        Picker(bootstrap ? "Apple ID máy hỗ trợ" : "Apple ID của người nhận", selection: $account) {
+                            Text("Chọn tài khoản").tag("")
+                            ForEach(engine.signedAccounts, id: \.self) { Text($0).tag($0) }
+                        }
+                        Button(bootstrap ? "Nhập Apple ID khác cho lượt cài này" : "Nhập Apple ID của người nhận ngay tại đây") {
+                            useOneUse = true; receiverEmail = ""; receiverPassword = ""
+                        }
                     }
                     Button(peer.installedAt == nil ? "Cài iContainer lên máy này" : "Cài lại iContainer lên máy này") {
                         confirmInstall = true
-                    }.disabled(installer.active || !engine.signedAccounts.contains(account))
+                    }.disabled(installer.active || signingChoice == nil)
                 } header: { Text("2. Xác nhận máy nhận và cài") } footer: {
-                    Text("Chọn đúng Apple ID của người nhận để ký bản cài đầu tiên. Sau khi cài, người nhận đăng nhập chính tài khoản này để tự gia hạn. Nếu chưa có, thêm ở tab Tài khoản trước khi cài. App mới không được thêm vào danh sách của máy hỗ trợ.")
-                }
+                    Text("Chọn hoặc nhập Apple ID người nhận ngay ở đây để ký bản cài đầu tiên. Sau khi cài, người nhận đăng nhập chính tài khoản đó để tự gia hạn. App mới không được thêm vào danh sách app của máy hỗ trợ.")
+                }.disabled(installer.active)
             }
 
             if !installer.stage.isEmpty || installer.error != nil {
@@ -95,15 +114,23 @@ struct PeerInstallView: View {
         .onAppear {
             if account.isEmpty { account = installer.receiver?.installAccount ?? "" }
             if let previous = installer.receiver?.installedBootstrap { bootstrap = previous }
+            if engine.signedAccounts.contains(account) { useOneUse = false }
+            else { useOneUse = true; receiverEmail = installer.receiver?.installAccount ?? "" }
         }
+        .onDisappear { receiverPassword = "" }
         .confirmationDialog("Cài iContainer lên \(installer.receiver?.name ?? "máy nhận")?",
                             isPresented: $confirmInstall, titleVisibility: .visible) {
-            Button("Ký và cài bằng \(account)") { Task { await installer.install(account: account, bootstrap: bootstrap) } }
+            Button("Ký và cài bằng \(signingAccount)") {
+                if let choice = signingChoice {
+                    receiverPassword = ""
+                    Task { await installer.install(account: choice.account, bootstrap: bootstrap, oneUsePassword: choice.oneUsePassword) }
+                }
+            }
             Button("Hủy", role: .cancel) {}
         } message: {
             Text(bootstrap
-                 ? "Máy nhận: \(installer.receiver?.ip ?? ""). Đây là bản khởi tạo ký bằng \(account). Người nhận đăng nhập tài khoản riêng và thiết lập bản cá nhân sau khi cài. Khóa ký của máy hỗ trợ không được chuyển sang."
-                 : "Máy nhận: \(installer.receiver?.ip ?? ""). Apple ID người nhận: \(account). Người nhận sẽ dùng chính tài khoản này để tự gia hạn. Đổi tài khoản khi cài lại có thể tạo bản app riêng; bản cũ không tự bị gỡ. Giữ cả hai máy mở khóa và cùng Wi-Fi cho đến khi cài xong.")
+                 ? "Máy nhận: \(installer.receiver?.ip ?? ""). Đây là bản khởi tạo ký bằng \(signingAccount). Người nhận đăng nhập tài khoản riêng và thiết lập bản cá nhân sau khi cài. Khóa ký của máy hỗ trợ không được chuyển sang."
+                 : "Máy nhận: \(installer.receiver?.ip ?? ""). Apple ID người nhận: \(signingAccount). Người nhận sẽ dùng chính tài khoản này để tự gia hạn. Đổi tài khoản khi cài lại có thể tạo bản app riêng; bản cũ không tự bị gỡ. Giữ cả hai máy mở khóa và cùng Wi-Fi cho đến khi cài xong.")
         }
     }
 }
