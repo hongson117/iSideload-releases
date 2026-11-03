@@ -63,7 +63,7 @@ struct AccountView: View {
                             .buttonStyle(GradientButtonStyle()).disabled(p12 == nil || profiles.isEmpty || engine.busy)
                     }
                 } header: { Text("Chứng chỉ có sẵn") } footer: {
-                    Text("Ký bằng chứng chỉ của bạn (.p12 + profile) thay cho Apple ID. Profile cần khớp chứng chỉ, còn hạn và cho phép thiết bị này. App giữ bundle ID gốc; LiveContainer nhận chứng chỉ đã dùng ký nó.")
+                    Text("Ký bằng chứng chỉ của bạn (.p12 + profile) thay cho Apple ID. Profile cần khớp chứng chỉ, còn hạn và cho phép thiết bị này. Để chuẩn bị app bên trong Container, chứng chỉ phải khớp chính xác bản iContainer đang chạy.")
                 }
 
                 Section("Chứng chỉ phát triển (tài khoản chính)") {

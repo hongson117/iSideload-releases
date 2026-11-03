@@ -21,7 +21,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: {targets: aarch64-apple-ios}
       - uses: Swatinem/rust-cache@v2
-        with: {workspaces: core, key: ios}
+        with: {workspaces: core, key: ios, cache-on-failure: true}
       - name: Build shared signing core
         run: |
           export IPHONEOS_DEPLOYMENT_TARGET=17.0

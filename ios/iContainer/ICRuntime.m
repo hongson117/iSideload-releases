@@ -129,11 +129,21 @@ static void restoreContext(void) {
 
 @interface ICReturnController : UIViewController
 @end
+@interface ICReturnWindow : UIWindow
+@end
+@implementation ICReturnWindow
+- (UIView*)hitTest:(CGPoint)point withEvent:(UIEvent*)event {
+    UIView *hit=[super hitTest:point withEvent:event];
+    if (!self.rootViewController.presentedViewController && (hit==self.rootViewController.view || hit==self)) return nil;
+    return hit;
+}
+@end
 @implementation ICReturnController
 - (void)viewDidLoad {
     [super viewDidLoad];
     UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem];
-    button.frame=self.view.bounds;button.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
+    self.view.backgroundColor=UIColor.clearColor;
+    button.frame=CGRectMake(12,70,128,38);
     [button setTitle:@"↩ iContainer" forState:UIControlStateNormal];
     button.backgroundColor=[UIColor colorWithWhite:0.12 alpha:0.88];button.tintColor=UIColor.whiteColor;button.layer.cornerRadius=18;
     [button addTarget:self action:@selector(back) forControlEvents:UIControlEventTouchUpInside];[self.view addSubview:button];
@@ -146,13 +156,15 @@ static void restoreContext(void) {
 }
 @end
 static void installReturnButton(void) {
-    // Keep a small independent window; never replace the guest's delegate/window.
+    // A transparent pass-through window leaves guest gestures intact; its full
+    // bounds also allow the confirmation alert to be presented normally.
     for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
         if (![s isKindOfClass:UIWindowScene.class]) continue;
-        returnWindow=[[UIWindow alloc] initWithWindowScene:(UIWindowScene*)s];
-        returnWindow.frame=CGRectMake(12,70,128,38);returnWindow.windowLevel=UIWindowLevelAlert+1;
-        returnWindow.rootViewController=[ICReturnController new];returnWindow.hidden=NO;return;
+        returnWindow=[[ICReturnWindow alloc] initWithWindowScene:(UIWindowScene*)s];break;
     }
+    if (!returnWindow) returnWindow=[[ICReturnWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    returnWindow.backgroundColor=UIColor.clearColor;returnWindow.windowLevel=UIWindowLevelAlert+1;
+    returnWindow.rootViewController=[ICReturnController new];returnWindow.hidden=NO;
 }
 
 int ICBootGuest(void) {
