@@ -22,9 +22,9 @@ Máy nhận không cần RC Pair hay Tailscale cho lượt cài này. Máy hỗ 
 
 ## Cài lần đầu bằng máy tính
 
-**Windows 10/11 x64:** [tải isl-windows.zip (1.2.2 RC1)](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc1/isl-windows.zip), giải nén toàn bộ và mở `Cai-iSideload.bat`. Chọn **1** để cài từ đầu kèm file Remote Pairing; chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi. [Hướng dẫn Windows từng bước](WINDOWS.md). Bản thử đã qua kiểm thử phần mềm; cần xác nhận USB trên iPhone thật.
+**Windows 10/11 x64:** [tải isl-windows.zip (1.2.2 RC2)](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-windows.zip), giải nén toàn bộ và mở `Cai-iSideload.bat`. Chọn **1** để cài từ đầu kèm file Remote Pairing; chọn **2** nếu đã có iSideload và chỉ cần thiết lập/sửa ghép đôi. [Hướng dẫn Windows từng bước](WINDOWS.md). Bản thử đã qua kiểm thử phần mềm; cần xác nhận USB trên iPhone thật.
 
-**macOS (Apple Silicon và Intel, macOS 11+):** tải [isl-macos-universal.zip](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.1/isl-macos-universal.zip), giải nén, cắm iPhone bằng cáp và mở `Cai-iSideload.command`. Công cụ dùng dịch vụ USB của Apple có sẵn, không yêu cầu Homebrew/Xcode; đã kèm đúng IPA 1.2.1. [Xem hướng dẫn macOS từng bước](MACOS.md).
+**macOS (Apple Silicon và Intel, macOS 11+):** tải [isl-macos-universal.zip](https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-macos-universal.zip), giải nén, cắm iPhone bằng cáp và mở `Cai-iSideload.command`. Công cụ dùng dịch vụ USB của Apple có sẵn, không yêu cầu Homebrew/Xcode; đã kèm IPA 1.2.2 build 35. Chọn **1** để cài từ đầu kèm Remote Pairing hoặc **2** để chỉ thiết lập/sửa ghép đôi. [Xem hướng dẫn macOS từng bước](MACOS.md).
 
 Tải `iSideload.ipa` từ trang release, dùng công cụ ký/cài iOS mà bạn tin cậy với Apple ID của chính bạn để cài lên thiết bị. Mở khóa iPhone, xác nhận Tin cậy máy tính khi được hỏi; bật Chế độ nhà phát triển và tin cậy nhà phát triển trước khi mở app.
 
