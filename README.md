@@ -113,3 +113,9 @@ Vào Cài đặt → Cập nhật iSideload → Kiểm tra phiên bản mới ng
 Nếu bản đầu được ký bằng tài khoản người hỗ trợ, vào Tài khoản → Thiết lập iSideload bằng tài khoản này để tạo bản Cá nhân của bạn trước. Cập nhật phiên bản giữ đúng App ID/Team đang cài; đổi chủ sở hữu là luồng riêng.
 
 Từ bản 1.2.6: vào Cài đặt → Quản lý chứng chỉ phát triển để chọn Apple ID/Team và thu hồi chứng chỉ cũ; thao tác quay về từ VPN vẫn cho chọn Thu hồi và ký tiếp. Tác vụ nền không tự thu hồi chứng chỉ còn hạn.
+
+## Thu hồi chứng chỉ khi hết quota
+
+Trong iSideload 1.2.6: **Cài đặt → Quản lý chứng chỉ phát triển**, chọn Apple ID/Team rồi tải danh sách. Kiểm tra tên, serial và ngày hết hạn trước khi chọn **Thu hồi chứng chỉ này**. Chứng chỉ đang ký iSideload được đánh dấu và cần xác nhận riêng.
+
+Khi gặp quota ngay trong lượt ký, chọn chứng chỉ cũ ở hộp thoại **Thu hồi và ký tiếp** để tiếp tục tác vụ đang chờ. Sau khi thu hồi thủ công trong Cài đặt, quay lại và thử ký lại. [Hướng dẫn chi tiết](CERTIFICATE-RECOVERY.md).
