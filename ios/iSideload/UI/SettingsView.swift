@@ -30,6 +30,13 @@ struct SettingsView: View {
                     Text("Tải bản chính thức từ GitHub, kiểm tra SHA-256 rồi ký bằng nguồn gia hạn của bản đang cài; giữ App ID và dữ liệu. Apple ID cần ghép đôi và LocalDevVPN; chứng chỉ cần xác nhận cài của iOS. App có thể tự đóng khi cài đè. Tự cập nhật chạy khi mở app; iOS không bảo đảm cài âm thầm khi app đã đóng. Gia hạn chữ ký ở mục Tự ký lại bên dưới.")
                 }
                 Section {
+                    NavigationLink { CertificateManagementView() } label: {
+                        Label("Quản lý chứng chỉ phát triển", systemImage: "checkmark.seal")
+                    }
+                } header: { Text("Chứng chỉ Apple ID") } footer: {
+                    Text("Chọn Apple ID và Team, xem chứng chỉ còn hạn/hết hạn, rồi thu hồi chứng chỉ cũ khi cần ký tiếp.")
+                }
+                Section {
                     TextField("https://ani.jkcoxson.com", text: $engine.anisetteURL).keyboardType(.URL).textInputAutocapitalization(.never)
                 } header: { Text("Máy chủ anisette") } footer: {
                     Text("Để trống = tự thử lần lượt ani.jkcoxson.com → mac-ani.jkcoxson.com → ani.npeg.us → ani.sidestore.io.")
@@ -64,6 +71,7 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Cài đặt")
+            .navigationDestination(isPresented: $engine.showCertificateManager) { CertificateManagementView() }
             .sheet(isPresented: $notices) {
                 NavigationStack {
                     ScrollView {

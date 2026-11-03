@@ -1,5 +1,6 @@
 //! iContainer's bounded arm64 loader preparation. Written for this project;
 //! no LiveContainer loader or ZSign sources are used here.
+use std::collections::HashSet;
 
 fn u32le(b: &[u8], at: usize) -> Result<u32, String> {
     Ok(u32::from_le_bytes(b.get(at..at + 4).ok_or("Truncated Mach-O")?.try_into().unwrap()))
@@ -87,6 +88,15 @@ fn string_command(cmd: u32, prefix: usize, value: &str) -> Vec<u8> {
     c[prefix..prefix+value.len()].copy_from_slice(value.as_bytes()); c
 }
 
+fn command_path(c: &[u8], prefix: usize) -> Result<&str, String> {
+    let offset = u32le(c, 8)? as usize;
+    if offset < prefix || offset >= c.len() { return Err("Invalid load-command path offset".into()); }
+    let tail = &c[offset..];
+    let end = tail.iter().position(|b| *b == 0).ok_or("Unterminated load-command path")?;
+    if end == 0 { return Err("Empty load-command path".into()); }
+    std::str::from_utf8(&tail[..end]).map_err(|_| "Invalid load-command path".into())
+}
+
 /// Return the original LC_MAIN entry offset. Preserve file/VM layout; refuse
 /// insufficient header padding instead of shifting executable sections.
 pub fn prepare(bytes: &[u8], main: bool) -> Result<(Vec<u8>, Option<u64>), String> {
@@ -95,6 +105,7 @@ pub fn prepare(bytes: &[u8], main: bool) -> Result<(Vec<u8>, Option<u64>), Strin
     let mut capacity = b.len();
     let mut entry = None;
     let mut out = Vec::new();
+    let mut rpaths = HashSet::new();
     for &(cmd, at, size) in &cmds {
         if cmd == 0x2c {
             if size < 24 { return Err("Truncated encryption command".into()); }
@@ -127,9 +138,7 @@ pub fn prepare(bytes: &[u8], main: bool) -> Result<(Vec<u8>, Option<u64>), Strin
         }
         if [0xc, 0x18|0x80000000, 0x1f|0x80000000, 0x20, 0x23|0x80000000, 0x8000001c].contains(&cmd) {
             let prefix = if cmd == 0x8000001c { 12 } else { 24 };
-            let p = u32le(&c, 8)? as usize;
-            let raw = c.get(p..).ok_or("Invalid dylib path offset")?;
-            let name = std::str::from_utf8(raw.split(|v| *v==0).next().unwrap_or_default()).map_err(|_| "Invalid dylib path")?;
+            let name = command_path(&c, prefix)?;
             if let Some(tail) = name.strip_prefix("@executable_path/") {
                 if main {
                     let rewritten = string_command(cmd, prefix, &format!("@loader_path/{tail}"));
@@ -138,12 +147,17 @@ pub fn prepare(bytes: &[u8], main: bool) -> Result<(Vec<u8>, Option<u64>), Strin
                 }
             }
         }
+        // Compare final paths: executable_path rewriting may make originally
+        // different commands identical. Keep the first search-path occurrence.
+        if cmd == 0x8000001c && !rpaths.insert(command_path(&c, 12)?.to_string()) { continue; }
         out.push(c);
     }
     if main {
         if u32le(&b, 12)? != 2 || entry.filter(|e| *e >= capacity as u64 && *e < b.len() as u64).is_none() { return Err("Không tìm được entry point iOS hợp lệ.".into()); }
         out.push(string_command(0xd, 24, "@rpath/iContainerGuest.dylib"));
-        out.push(string_command(0x8000001c, 12, "@loader_path/Frameworks"));
+        if rpaths.insert("@loader_path/Frameworks".to_string()) {
+            out.push(string_command(0x8000001c, 12, "@loader_path/Frameworks"));
+        }
     } else if ![6,8].contains(&u32le(&b, 12)?) { return Err("Unsupported nested Mach-O type".into()); }
     let len: usize = out.iter().map(Vec::len).sum();
     let old = u32le(&b, 20)? as usize;
@@ -169,6 +183,34 @@ mod tests {
     #[test] fn rejects_bad_command_and_entry() { let mut b=sample(); set32(&mut b,36,u32::MAX); assert!(prepare(&b,true).is_err()); let mut b=sample(); b[192..200].fill(0xff); assert!(prepare(&b,true).is_err()); }
     #[test] fn rejects_encryption_before_modification() { let mut b=sample(); set32(&mut b,184,0x2c); set32(&mut b,200,1); assert!(prepare(&b,true).unwrap_err().contains("mã hóa")); }
     #[test] fn rejects_arm64e_and_truncated_fat() { let mut b=sample(); set32(&mut b,8,2); assert!(thin_arm64(&b).is_err()); assert!(thin_arm64(&[0xca,0xfe,0xba,0xbe]).is_err()); }
+    fn with_paths(paths:&[&str], nested:bool)->Vec<u8>{
+        let mut b=sample();let base_count=if nested {1}else{2};let mut end=if nested {184}else{208};
+        for path in paths { let command=string_command(0x8000001c,12,path);b[end..end+command.len()].copy_from_slice(&command);end+=command.len(); }
+        set32(&mut b,16,base_count+paths.len() as u32);set32(&mut b,20,(end-32) as u32);
+        if nested {set32(&mut b,12,6);} b
+    }
+    fn paths(b:&[u8])->Vec<String>{commands(b).unwrap().into_iter().filter(|c|c.0==0x8000001c).map(|(_,at,size)|command_path(&b[at..at+size],12).unwrap().to_string()).collect()}
+    #[test]fn rewritten_and_existing_rpaths_are_unique_in_original_order(){
+        let b=with_paths(&["@executable_path/Frameworks","@loader_path/Frameworks","@loader_path/Other","@executable_path/Frameworks"],false);
+        let (out,entry)=prepare(&b,true).unwrap();
+        assert_eq!(paths(&out),vec!["@loader_path/Frameworks","@loader_path/Other"]);
+        assert_eq!(entry,Some(4096));assert_eq!(&out[4096..],&b[4096..]);
+        assert_eq!(prepare(&b,true).unwrap().0,out,"Re-preparing Original.app must be deterministic");
+    }
+    #[test]fn default_rpath_is_added_only_when_missing(){
+        for existing in ["@loader_path/Frameworks","@executable_path/Frameworks"]{
+            assert_eq!(paths(&prepare(&with_paths(&[existing],false),true).unwrap().0),vec!["@loader_path/Frameworks"]);
+        }
+        assert_eq!(paths(&prepare(&with_paths(&["@loader_path/Other"],false),true).unwrap().0),vec!["@loader_path/Other","@loader_path/Frameworks"]);
+    }
+    #[test]fn nested_images_also_remove_duplicate_rpaths(){
+        let b=with_paths(&["@loader_path/Frameworks","@loader_path/Frameworks"],true);
+        assert_eq!(paths(&prepare(&b,false).unwrap().0),vec!["@loader_path/Frameworks"]);
+    }
+    #[test]fn malformed_rpath_is_rejected_before_rewriting(){
+        let mut b=with_paths(&["@loader_path/Frameworks"],false);set32(&mut b,216,8);assert!(prepare(&b,true).is_err());
+        let mut b=with_paths(&["@loader_path/Frameworks"],false);let end=32+u32le(&b,20).unwrap() as usize;b[220..end].fill(b'x');assert!(prepare(&b,true).is_err());
+    }
     #[test] fn certificate_must_be_in_the_cms_slot() {
         let mut b=sample();set32(&mut b,184,0x1d);set32(&mut b,188,24);set32(&mut b,192,5000);set32(&mut b,196,40);
         let sig=&mut b[5000..5040];sig[..4].copy_from_slice(&[0xfa,0xde,0x0c,0xc0]);sig[4..8].copy_from_slice(&40u32.to_be_bytes());sig[8..12].copy_from_slice(&1u32.to_be_bytes());sig[12..16].copy_from_slice(&0x10000u32.to_be_bytes());sig[16..20].copy_from_slice(&20u32.to_be_bytes());sig[20..24].copy_from_slice(&[0xfa,0xde,0x0b,0x01]);sig[24..28].copy_from_slice(&20u32.to_be_bytes());sig[28..32].copy_from_slice(b"CERT");

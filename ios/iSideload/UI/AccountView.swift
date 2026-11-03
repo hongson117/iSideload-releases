@@ -110,18 +110,9 @@ struct AccountView: View {
                     Text("Ký bằng chứng chỉ của bạn (.p12 + profile) thay cho Apple ID. Profile cần khớp chứng chỉ, còn hạn và cho phép thiết bị này. Để chuẩn bị app bên trong Container, chứng chỉ phải khớp chính xác bản iContainer đang chạy.")
                 }
 
-                Section("Chứng chỉ phát triển (tài khoản chính)") {
-                    Button("Tải danh sách chứng chỉ") { Task { await engine.loadCerts() } }.disabled(!engine.signedIn)
-                    ForEach(engine.certs.indices, id: \.self) { i in
-                        let c = engine.certs[i]
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(c["machine"] as? String ?? "?")
-                                Text(c["serial"] as? String ?? "").font(.caption2).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Thu hồi", role: .destructive) { Task { await engine.revoke(c["serial"] as? String ?? "") } }
-                        }
+                Section("Chứng chỉ phát triển") {
+                    NavigationLink { CertificateManagementView() } label: {
+                        Label("Quản lý chứng chỉ theo Apple ID", systemImage: "checkmark.seal")
                     }
                 }
             }

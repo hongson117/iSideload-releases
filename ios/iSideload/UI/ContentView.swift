@@ -27,6 +27,9 @@ struct ContentView: View {
             if (engine.errorText ?? "").contains("LocalDevVPN") || (engine.errorText ?? "").contains("10.7.0.1") {
                 Button("Mở LocalDevVPN") { engine.errorText = nil; LoopbackVPN.turnOn() }
             }
+            if (engine.errorText ?? "").localizedCaseInsensitiveContains("chứng chỉ") || (engine.errorText ?? "").localizedCaseInsensitiveContains("certificate") {
+                Button("Quản lý chứng chỉ") { engine.errorText = nil; engine.selectedTab = 4; engine.showCertificateManager = true }
+            }
             Button("Sao chép") { UIPasteboard.general.string = engine.errorText; engine.errorText = nil }
             Button("OK", role: .cancel) { engine.errorText = nil }
         } message: { Text(engine.errorText ?? "") }

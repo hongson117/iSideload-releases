@@ -1,17 +1,6 @@
 import Foundation
 import UIKit
 
-struct ContainerGuest: Identifiable, Decodable {
-    let id: String
-    let bundleID: String
-    let name: String
-    let version: String
-    let prepared: Bool
-    let signer: String?
-    let embeddedComponents: [String]?
-    enum CodingKeys: String, CodingKey { case id, name, version, prepared, signer; case bundleID = "bundle_id", embeddedComponents = "embedded_components" }
-}
-
 @MainActor
 final class ContainerStore: ObservableObject {
     static let shared = ContainerStore()
@@ -68,6 +57,7 @@ final class ContainerStore: ObservableObject {
 
     func launch(_ guest: ContainerGuest) {
         guard !working else { return }
+        guard guest.readyToLaunch else { failure = "Chọn Chuẩn bị lại để sửa bản chạy cũ. App gốc và dữ liệu của bạn được giữ nguyên."; return }
         do {
             var error: NSError?
             guard ICQueueGuest(guest.id, &error) else {

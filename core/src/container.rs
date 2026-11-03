@@ -195,7 +195,7 @@ pub fn prepare(req:&Value)->Result<Value,String> {
             #[cfg(unix)] { use std::os::unix::fs::PermissionsExt; fs::set_permissions(&path,fs::Permissions::from_mode(0o700)).map_err(err)?; }
         }
         if entry==0 { return Err("Executable was not prepared".into()); }
-        record["id"]=json!(s(req,"guest_id")); record["prepared"]=json!(true); record["entry_offset"]=json!(entry);
+        record["id"]=json!(s(req,"guest_id")); record["prepared"]=json!(true); record["preparation_revision"]=json!(2); record["entry_offset"]=json!(entry);
         record["signer"]=json!(s(req,"signer")); record["host_bundle_id"]=json!(host_id);
         record["certificate_expires"]=json!(signer.signer_certificate().tbs_certificate.validity.not_after.to_unix_duration().as_secs());
         // The loader trusts only metadata committed next to the exact signed copy.

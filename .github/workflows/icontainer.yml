@@ -48,6 +48,10 @@ jobs:
           /tmp/peer-signing-choice-tests
           swiftc -parse-as-library ios/iSideload/Core/AppUpdate.swift tests/AppUpdateTests.swift -o /tmp/app-update-tests
           /tmp/app-update-tests
+          swiftc -parse-as-library ios/iSideload/Core/CoreInteractionPolicy.swift tests/CoreInteractionPolicyTests.swift -o /tmp/interaction-tests
+          /tmp/interaction-tests
+          swiftc -parse-as-library ios/iContainer/ContainerGuest.swift tests/ContainerGuestTests.swift -o /tmp/guest-tests
+          /tmp/guest-tests
       - name: Build unsigned iContainer
         run: |
           xcodebuild -project iContainer.xcodeproj -scheme iContainer -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION=${{ github.run_number }} CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > /tmp/ic-build.log 2>&1 || { tail -100 /tmp/ic-build.log; exit 1; }

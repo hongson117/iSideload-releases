@@ -189,17 +189,16 @@ final class Engine: ObservableObject {
 
     private func save() { if let d = try? JSONEncoder().encode(apps) { try? d.write(to: Self.appsURL) }; AutoRefresh.scheduleExpiryReminders(apps) }
 
-    private func base(_ op: String, signer: String? = nil) -> [String: Any] {
+    private func base(_ op: String, signer: String? = nil, background: Bool = false) -> [String: Any] {
         let id = signer.flatMap { $0.hasPrefix("apple:") ? String($0.dropFirst(6)) : nil } ?? appleID
         var r: [String: Any] = ["op": op, "apple_id": id, "password": Keychain.load(id) ?? "", "anisette_url": anisetteURL,
          "storage_dir": Self.storage.path, "pairing_path": Self.pairingURL.path, "target": vpnTarget,
          "license": LicenseManager.shared.license ?? "",
          "device_id": LicenseManager.deviceID,
          "build_sha": Bundle.main.infoDictionary?["ISLGitSHA"] as? String ?? "",
-         "host_path": Bundle.main.bundleURL.path,
-         "allow_certificate_prompt": UIApplication.shared.applicationState == .active]
+         "host_path": Bundle.main.bundleURL.path]
         if signer == "cert" { r["use_imported_cert"] = true }
-        return r
+        return CoreInteractionPolicy.configure(r, background: background)
     }
 
     // Prompt plumbing: the core thread blocks until the sheet answers.
@@ -216,7 +215,7 @@ final class Engine: ObservableObject {
         defer { busy = false }
         let r = await CoreCall.runAsync(req, onEvent: { s, p in
             DispatchQueue.main.async { self.stage = s; self.progress = p }
-        }, onPrompt: { [weak self] p in self?.ask(p) })
+        }, onPrompt: { [weak self] p in CoreInteractionPolicy.allowsPrompts(req) ? self?.ask(p) : nil })
         return try r.checked()
     }
 
@@ -445,7 +444,7 @@ final class Engine: ObservableObject {
         await install(ipa: u, upgrade: up, signer: sg); explicitOK = false; vpnJobDone()
     }
 
-    func install(ipa: URL, upgrade: Bool = false, signer: String? = nil, selfRefresh: Bool = false, versionUpdate: AppUpdateRelease? = nil) async {
+    func install(ipa: URL, upgrade: Bool = false, signer: String? = nil, selfRefresh: Bool = false, versionUpdate: AppUpdateRelease? = nil, background: Bool = false) async {
         guard canSign else { errorText = "Hãy đăng nhập Apple ID hoặc nhập chứng chỉ trước (tab Tài khoản)."; return }
         // Imported certificate = KSign-style OTA install, never VPN. Only Apple ID signing needs pairing + LocalDevVPN.
         let early = signer ?? apps.first { $0.ipaFile == ipa.lastPathComponent }.map(signerOf) ?? defaultSigner
@@ -453,7 +452,7 @@ final class Engine: ObservableObject {
             guard hasPairing else { errorText = "Hãy nhập file ghép nối trước (tab Thiết bị)."; return }
             // Real reachability first (62078 connect/refused ≈ 1 s). Only hand off to LocalDevVPN when it's really down.
             if !vpnActive {
-                if UIApplication.shared.applicationState == .active && (UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true) {
+                if !background && UIApplication.shared.applicationState == .active && (UserDefaults.standard.object(forKey: "vpnAutoOff") as? Bool ?? true) {
                     if let release = versionUpdate { pendingVPNAction = .versionUpdate(ipa, early, release) }
                     else if selfRefresh { pendingVPNAction = .refreshSelf(signer) }
                     else { pendingVPNAction = .install(ipa, upgrade, signer) }
@@ -477,7 +476,7 @@ final class Engine: ObservableObject {
             // Device/profile limits are enforced by Apple and installd. Local history can
             // be incomplete and cannot tell the account's membership or platform policy.
             // Attempt the selected signer and preserve the actual service error on failure.
-            var req = base("install", signer: who); req["ipa_path"] = ipa.path; req["upgrade"] = upgrade
+            var req = base("install", signer: who, background: background); req["ipa_path"] = ipa.path; req["upgrade"] = upgrade
             if selfRefresh { req["self_refresh"] = true; req["installed_bundle_id"] = isideloadBundleID }
             req["udid"] = UserDefaults.standard.string(forKey: "deviceUDID") ?? ""
             let otaIPA = FileManager.default.temporaryDirectory.appendingPathComponent("ota-\(UUID().uuidString).ipa")
@@ -515,13 +514,13 @@ final class Engine: ObservableObject {
         }
     }
 
-    func refresh(_ app: SideloadedApp) async {
-        if isSelf(app) { await refreshSelf(); return }
+    func refresh(_ app: SideloadedApp, background: Bool = false) async {
+        if isSelf(app) { await refreshSelf(background: background); return }
         guard let f = app.ipaFile, FileManager.default.fileExists(atPath: Self.ipaDir.appendingPathComponent(f).path) else {
             errorText = "Không còn file IPA gốc của \(app.name). Hãy chọn lại IPA để cài đè."; return
         }
         errorText = nil
-        await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true, signer: signerOf(app))
+        await install(ipa: Self.ipaDir.appendingPathComponent(f), upgrade: true, signer: signerOf(app), background: background)
         if errorText == nil { markLCCertPending() }
     }
 
@@ -534,7 +533,7 @@ final class Engine: ObservableObject {
 
     /// Re-sign and re-install iContainer itself from its own running bundle (no PC needed).
     /// iOS terminates the app while installation_proxy replaces it; reopen afterwards.
-    func refreshSelf(signer: String? = nil) async {
+    func refreshSelf(signer: String? = nil, background: Bool = false) async {
         guard !busy else { return }
         errorText = nil
         let who = signer ?? selfApp.map(signerOf) ?? defaultSigner
@@ -544,7 +543,10 @@ final class Engine: ObservableObject {
         if let problem = selfSignerProblem(who) { errorText = problem; return }
         if who != "cert" {
             guard hasPairing else { errorText = "Máy này chưa tự ghép nối. Vào Thiết bị › Ghép nối ngay trên máy, rồi thử Làm mới iContainer."; return }
-            if !vpnActive { pendingVPNAction = .refreshSelf(who); LoopbackVPN.turnOn(); return }
+            if !vpnActive {
+                if background { errorText = "Mở app và bật LocalDevVPN để gia hạn."; return }
+                pendingVPNAction = .refreshSelf(who); LoopbackVPN.turnOn(); return
+            }
         }
         syncSelfRecord(signer: who)
         let out = Self.ipaDir.appendingPathComponent("iContainer-self.ipa")
@@ -558,7 +560,7 @@ final class Engine: ObservableObject {
         markLCCertPending()
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "selfUpdatePending")
         UserDefaults.standard.set(selfApp?.expires?.timeIntervalSince1970 ?? 0, forKey: "selfPreviousExpiry")
-        await install(ipa: out, upgrade: true, signer: who, selfRefresh: true)
+        await install(ipa: out, upgrade: true, signer: who, selfRefresh: true, background: background)
         // iOS replaces (and kills) the running app; the connection often drops right after the upload.
         if progress >= 0.7, let e = errorText?.lowercased(), ["socket", "io failed", "broken pipe", "connection", "reset", "eof"].contains(where: { e.contains($0) }) {
             errorText = nil
@@ -656,7 +658,7 @@ final class Engine: ObservableObject {
         if !onlySelf {
             for app in requested where !isSelf(app) {
                 errorText = nil
-                await refresh(app)
+                await refresh(app, background: background)
                 if errorText == nil { ok.append(Self.doneLine(app.name, apps.first { $0.name == app.name }?.expires).replacingOccurrences(of: "Đã ký ", with: "")) } else { failed.append("\(app.name): \(errorText ?? "")") }
             }
         }
@@ -666,7 +668,7 @@ final class Engine: ObservableObject {
             + (failed.isEmpty ? "" : "Lỗi: " + failed.joined(separator: "; "))
         if includeSelf && selfDue {
             AutoRefresh.notify("iContainer đang tự ký lại", summary + " iContainer sẽ tự thoát khi cài xong.")
-            await refreshSelf()   // process is usually terminated here on success
+            await refreshSelf(background: background)   // process is usually terminated here on success
             if let e = errorText { AutoRefresh.notify("iContainer ký lại thất bại", e); return false }
         } else {
             AutoRefresh.notify(failed.isEmpty ? "Ký lại xong" : "Ký lại có lỗi", summary.isEmpty ? "Không có app nào cần ký lại." : summary)
@@ -934,8 +936,36 @@ final class Engine: ObservableObject {
 
     // MARK: Certificates
     @Published var certs: [[String: Any]] = []
-    func loadCerts() async { await guarded { certs = (try await run(base("certs"))["certs"] as? [[String: Any]]) ?? [] } }
-    func revoke(_ serial: String) async {
-        await guarded { var r = base("revoke_cert"); r["serial"] = serial; _ = try await run(r); certs.removeAll { $0["serial"] as? String == serial } }
+    @Published var certificateAccount = ""
+    @Published var certificateTeam = ""
+    @Published var certificateTeams: [[String: Any]] = []
+    @Published var showCertificateManager = false
+    func loadCerts(account: String? = nil, team: String = "") async {
+        guard !busy, !peerBusy else { return }
+        let who = account ?? appleID
+        guard signedAccounts.contains(who) else { errorText = "Đăng nhập Apple ID muốn quản lý chứng chỉ trước."; return }
+        errorText = nil; infoText = nil
+        certs = []; certificateAccount = who; certificateTeam = ""; certificateTeams = []
+        await guarded {
+            var request = base("certs", signer: "apple:" + who)
+            if !team.isEmpty { request["certificate_team_id"] = team }
+            let result = try await run(request)
+            certificateTeam = result["team"] as? String ?? ""
+            certificateTeams = result["teams"] as? [[String: Any]] ?? []
+            certs = result["certs"] as? [[String: Any]] ?? []
+        }
+    }
+    func revoke(_ serial: String, account: String, team: String, allowCurrent: Bool) async {
+        guard !busy, !peerBusy, signedAccounts.contains(account), !team.isEmpty else { return }
+        errorText = nil; infoText = nil
+        await guarded {
+            var request = base("revoke_cert", signer: "apple:" + account)
+            request["serial"] = serial; request["certificate_team_id"] = team; request["allow_current"] = allowCurrent
+            _ = try await run(request)
+            if certificateAccount == account && certificateTeam == team {
+                certs.removeAll { $0["serial"] as? String == serial }
+            }
+            infoText = "Đã thu hồi chứng chỉ đã chọn của " + account + ". Bạn có thể quay lại và ký tiếp."
+        }
     }
 }

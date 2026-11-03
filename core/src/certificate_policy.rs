@@ -15,7 +15,7 @@ fn protected(req:&Value,team:&str)->HashSet<String>{
         .filter_map(plist::Value::as_data).filter_map(|b|Certificate::from_der(b).ok())
         .map(|c|normalize(&c.tbs_certificate.serial_number.as_bytes().iter().map(|b|format!("{b:02X}")).collect::<String>())).collect()
 }
-fn selection(answer:&str,rows:&[Value])->Result<Vec<String>,String>{
+pub(crate) fn selection(answer:&str,rows:&[Value])->Result<Vec<String>,String>{
     let v:Value=serde_json::from_str(answer).map_err(|_|"Lựa chọn chứng chỉ không hợp lệ.")?;
     let selected=v["serials"].as_array().ok_or("Chưa chọn chứng chỉ.")?;
     let allow=v["allow_current"].as_bool().unwrap_or(false);
@@ -28,9 +28,26 @@ fn selection(answer:&str,rows:&[Value])->Result<Vec<String>,String>{
     }
     if result.is_empty(){return Err("Chưa chọn chứng chỉ cần thu hồi.".into());}Ok(result)
 }
+pub(crate) fn current_team(req:&Value)->Option<String>{
+    let path=Path::new(s(req,"host_path")).join("embedded.mobileprovision");
+    std::fs::read(path).ok().and_then(|b|apple_codesign_quick::ProvisioningProfile::parse(&b).ok()).map(|p|p.team_id().to_string())
+}
+pub(crate) fn rows(req:&Value,team:&str,certs:&[DevelopmentCertificate])->Vec<Value>{
+    let protected=protected(req,team);
+    let now=SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    certs.iter().filter(|c|c.serial_number.as_ref().is_some_and(|s|!s.is_empty())).map(|c|{
+        let mut row=crate::ops::cert_json(c);
+        row["protected"]=json!(protected.contains(&normalize(c.serial_number.as_deref().unwrap())));
+        row["expired"]=json!(row["expires"].as_u64().is_some_and(|t|t>0 && t<=now));row
+    }).collect()
+}
 pub fn behavior(req:&Value,ui:Ui,team:&str)->MaxCertsBehavior<MaxCertsCallbackBox>{
     let protected=protected(req,team);let account=s(req,"apple_id").to_string();let team=team.to_string();
-    let interactive=req.get("allow_certificate_prompt").and_then(Value::as_bool).unwrap_or(true);
+    let interactive=match s(req,"interaction_mode") {
+        "foreground"=>true,
+        "background"=>false,
+        _=>req.get("allow_certificate_prompt").and_then(Value::as_bool).unwrap_or(true),
+    };
     MaxCertsBehavior::Prompt(Box::new(move |certs:Vec<DevelopmentCertificate>|->MaxCertsCallbackFuture{
         let protected=protected.clone();let account=account.clone();let team=team.clone();
         Box::pin(async move{
@@ -81,7 +98,7 @@ pub fn behavior(req:&Value,ui:Ui,team:&str)->MaxCertsBehavior<MaxCertsCallbackBo
             assert!(cap>=answer.len());std::ptr::copy_nonoverlapping(answer.as_ptr().cast(),out,answer.len());0
         }
         let ui=Ui::new(None,Some(prompt),std::ptr::null_mut());
-        let policy=behavior(&json!({"apple_id":"owner@example.com"}),ui,"TEAM123456");
+        let policy=behavior(&json!({"apple_id":"owner@example.com","interaction_mode":"foreground","allow_certificate_prompt":false}),ui,"TEAM123456");
         let MaxCertsBehavior::Prompt(callback)=policy else{panic!("quota policy must prompt")};
         assert_eq!(callback(vec![certificate("ABC")]).await.unwrap(),Some(vec!["ABC".into()]));
     }
@@ -93,6 +110,11 @@ pub fn behavior(req:&Value,ui:Ui,team:&str)->MaxCertsBehavior<MaxCertsCallbackBo
     }
     #[tokio::test]async fn background_quota_does_not_wait_for_an_invisible_dialog(){
         let policy=behavior(&json!({"apple_id":"owner@example.com","allow_certificate_prompt":false}),Ui::new(None,None,std::ptr::null_mut()),"TEAM123456");
+        let MaxCertsBehavior::Prompt(callback)=policy else{panic!("recovery policy")};
+        assert!(callback(vec![certificate("LIVE")]).await.unwrap_err().to_string().contains("Mở app"));
+    }
+    #[tokio::test]async fn explicit_background_mode_wins_over_a_stale_true_flag(){
+        let policy=behavior(&json!({"interaction_mode":"background","allow_certificate_prompt":true}),Ui::new(None,None,std::ptr::null_mut()),"TEAM123456");
         let MaxCertsBehavior::Prompt(callback)=policy else{panic!("recovery policy")};
         assert!(callback(vec![certificate("LIVE")]).await.unwrap_err().to_string().contains("Mở app"));
     }

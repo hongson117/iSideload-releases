@@ -15,7 +15,7 @@ target['settings']['base'].update({
     'INFOPLIST_FILE':'ios/iContainer/Info.plist',
     'SWIFT_OBJC_BRIDGING_HEADER':'ios/iContainer/BridgingHeader.h',
     'SWIFT_ACTIVE_COMPILATION_CONDITIONS':'$(inherited) ICONTAINER',
-    'MARKETING_VERSION':'0.1.0',
+    'MARKETING_VERSION':'0.1.1',
     'CLANG_ENABLE_OBJC_ARC':'YES',
 })
 project={'name':'iContainer','options':base['options'],'settings':base['settings'],'targets':{'iContainer':target}}
@@ -27,4 +27,4 @@ info['NSLocalNetworkUsageDescription']='iContainer dùng mạng cục bộ để
 info['BGTaskSchedulerPermittedIdentifiers']=['com.hongson117.icontainer.refresh','com.hongson117.icontainer.resign']
 (root/'ios/iContainer/Info.plist').write_bytes(plistlib.dumps(info))
 (root/'ios/iContainer/BridgingHeader.h').write_text('#import "isideload.h"\n#import "ICRuntime.h"\n',encoding='utf-8')
-print(json.dumps({'target':'iContainer','bundle_id':'com.hongson117.icontainer','version':'0.1.0','source':'project-icontainer.yml'}))
+print(json.dumps({'target':'iContainer','bundle_id':'com.hongson117.icontainer','version':'0.1.1','source':'project-icontainer.yml'}))

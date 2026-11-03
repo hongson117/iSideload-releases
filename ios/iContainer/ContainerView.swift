@@ -11,7 +11,7 @@ struct ContainerView: View {
     var body: some View {
             List {
                 Section {
-                    Label("iContainer · bản thử 0.1", systemImage: "shippingbox.fill").font(.headline)
+                    Label("iContainer · bản thử 0.1.1", systemImage: "shippingbox.fill").font(.headline)
                     Text("Một app chứa chức năng ký của iSideload và chạy app bên trong. Chưa kiểm chứng trên iPhone thật.").font(.footnote).foregroundStyle(.secondary)
                     Button { picking = true } label: { Label("Nhập IPA vào Container", systemImage: "plus.app") }
                 } footer: {
@@ -45,10 +45,14 @@ struct ContainerView: View {
                                 Label("IPA có extension/Watch · chạy app chính trên iPhone", systemImage: "info.circle")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
+                            if guest.prepared && !guest.readyToLaunch {
+                                Text("Cần Chuẩn bị lại sau khi cập nhật iContainer; giữ nguyên dữ liệu app.")
+                                    .font(.caption).foregroundStyle(.orange)
+                            }
                             HStack {
                                 Button(guest.prepared ? "Chuẩn bị lại" : "Chuẩn bị") { preparing = guest }
                                 Spacer()
-                                Button("Chạy") { launching = guest }.disabled(!guest.prepared)
+                                Button("Chạy") { launching = guest }.disabled(!guest.readyToLaunch)
                             }.buttonStyle(.bordered)
                         }.padding(.vertical, 4)
                         .swipeActions { Button("Xóa", role: .destructive) { deleting = guest } }

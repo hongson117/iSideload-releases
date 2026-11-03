@@ -264,22 +264,33 @@ pub(crate) fn cert_json(c: &DevelopmentCertificate) -> Value {
 
 // ---- Certificates ----
 
+fn certificate_team(req:&Value,teams:&[DeveloperTeam])->Result<DeveloperTeam,String>{
+    let explicit=s(req,"certificate_team_id");
+    if !explicit.is_empty(){return crate::self_refresh::select_team(teams,explicit,s(req,"apple_id"));}
+    crate::owner_setup::choose_team(teams,&crate::certificate_policy::current_team(req).unwrap_or_default())
+}
 async fn certs(req: &Value, ui: Ui) -> Result<Value, String> {
     let (_a, mut dev) = sign_in(req, ui).await?;
-    let team = dev.list_teams().await.map_err(|e| explain("No developer team", &e))?
-        .into_iter().next().ok_or("This Apple ID has no developer team.")?;
-    let list = dev.list_ios_certs(&team).await.map_err(|e| explain("Couldn't list certificates", &e))?;
-    Ok(json!({"ok": true, "team": team.team_id, "certs": list.iter().map(cert_json).collect::<Vec<_>>()}))
+    let teams=dev.list_teams().await.map_err(|e|explain("Không lấy được Team",&e))?;
+    let team=certificate_team(req,&teams)?;
+    let list = dev.list_ios_certs(&team).await.map_err(|e| explain("Không tải được chứng chỉ", &e))?;
+    let rows=crate::certificate_policy::rows(req,&team.team_id,&list);
+    Ok(json!({"ok":true,"team":team.team_id,"apple_id":s(req,"apple_id"),"certs":rows,
+        "teams":teams.iter().map(|t|json!({"id":t.team_id,"name":t.name.clone().unwrap_or_else(||t.team_id.clone())})).collect::<Vec<_>>()}))
 }
 
 async fn revoke(req: &Value, ui: Ui) -> Result<Value, String> {
     let (_a, mut dev) = sign_in(req, ui).await?;
-    let team = dev.list_teams().await.map_err(|e| explain("No developer team", &e))?
-        .into_iter().next().ok_or("This Apple ID has no developer team.")?;
-    dev.revoke_development_cert(&team, s(req, "serial"), DeveloperDeviceType::Ios)
-        .await
-        .map_err(|e| explain("Revoke failed", &e))?;
-    Ok(json!({"ok": true}))
+    let teams=dev.list_teams().await.map_err(|e|explain("Không kiểm tra được Team",&e))?;
+    if s(req,"certificate_team_id").is_empty(){return Err("Tải lại danh sách chứng chỉ và chọn đúng Team trước khi thu hồi.".into());}
+    let team=certificate_team(req,&teams)?;
+    let list=dev.list_ios_certs(&team).await.map_err(|e|explain("Không kiểm tra được chứng chỉ",&e))?;
+    let rows=crate::certificate_policy::rows(req,&team.team_id,&list);
+    let answer=json!({"serials":[s(req,"serial")],"allow_current":req["allow_current"].as_bool().unwrap_or(false)}).to_string();
+    let serial=crate::certificate_policy::selection(&answer,&rows)?.remove(0);
+    dev.revoke_development_cert(&team,&serial,DeveloperDeviceType::Ios)
+        .await.map_err(|e|explain("Thu hồi chứng chỉ thất bại",&e))?;
+    Ok(json!({"ok":true,"serial":serial,"team":team.team_id}))
 }
 
 // ---- LiveContainer certificate export ----
@@ -738,5 +749,15 @@ mod hint_tests {
         assert!(!app_id.contains("Thiết bị đã từ chối"));
         assert!(!message.contains("File ghép nối không hợp lệ"));
         assert!(super::hint_vi("Hết thời gian chờ kết nối tới 10.7.0.1").contains("VPN"));
+    }
+}
+#[cfg(test)]mod certificate_manager_tests {
+    use super::*;
+    fn team(id:&str)->DeveloperTeam{DeveloperTeam{name:None,team_id:id.into(),r#type:None,status:None}}
+    #[test]fn manual_management_uses_selected_team_instead_of_first_membership(){
+        let teams=vec![team("FIRST12345"),team("OTHER12345")];
+        let req=json!({"apple_id":"owner@example.com","certificate_team_id":"OTHER12345"});
+        assert_eq!(certificate_team(&req,&teams).unwrap().team_id,"OTHER12345");
+        assert!(certificate_team(&req,&[team("FIRST12345")]).is_err());
     }
 }
