@@ -21,6 +21,8 @@ echo [1] Cài từ đầu: ký, cài iSideload và tự thiết lập file ghép
 echo [2] Đã có iSideload: chỉ thiết lập hoặc sửa file ghép đôi
 echo.
 choice /C 12 /N /M "Chọn 1 hoặc 2: "
+if errorlevel 3 goto cancelled
+if not errorlevel 1 goto cancelled
 if errorlevel 2 (
   "%~dp0isl-cli.exe" --pair-only
 ) else (
@@ -31,3 +33,6 @@ echo.
 if not "%ISL_RESULT%"=="0" echo Chưa hoàn tất. Đọc dòng lỗi phía trên; app đã cài có thể tiếp tục bằng chế độ 2.
 pause
 exit /b %ISL_RESULT%
+:cancelled
+echo Đã hủy. Chưa bắt đầu cài hay thiết lập ghép đôi.
+exit /b 1

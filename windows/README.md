@@ -17,7 +17,7 @@ Bộ cài Windows 1.2.2 có hai chế độ: cài iSideload kèm Remote Pairing,
 5. Giữ máy mở khóa và đóng hẳn iSideload trong lúc công cụ tạo Remote Pairing. Công cụ xác minh bản ghi với iPhone, chép vào iSideload, đọc lại và xác minh lần cuối.
 6. Chỉ khi hiện **XONG: iSideload đã có file Remote Pairing…** thì bước này mới hoàn tất. Không cần xuất/nhập file ghép đôi bằng tay.
 7. Trên iPhone, tin cậy tài khoản nhà phát triển tại **Cài đặt → Cài đặt chung → VPN & Quản lý thiết bị** nếu được yêu cầu.
-8. Mở iSideload và đăng nhập cùng Apple ID để gia hạn. Cài **LocalDevVPN** từ App Store, bật VPN, quay lại **Thiết bị → Kiểm tra kết nối thiết bị**, rồi thử **Làm mới iSideload**.
+8. Mở iSideload và đăng nhập cùng Apple ID để gia hạn. Kết nối Wi-Fi có Internet, cài **LocalDevVPN** từ App Store, bật VPN, quay lại **Thiết bị → Kiểm tra kết nối thiết bị**, rồi thử **Làm mới iSideload**.
 
 Máy tính xác minh ghép đôi qua USB; bước kiểm tra trong app xác nhận thêm đường LocalDevVPN hoạt động sau khi rút cáp. Tailscale không cần cho cài lần đầu qua cáp hoặc tự gia hạn bằng LocalDevVPN.
 
