@@ -648,11 +648,12 @@ mod tests {
     #[test]
     fn peer_bootstrap_normalizes_only_exported_bundle_and_never_packs_account_data() {
         use std::io::Read;
+        for (app_name, family) in [("iSideload.app", "com.hongson117.isideload"), ("iContainer.app", "com.hongson117.icontainer")] {
         let root = temp("peer-pack");
-        let app = root.join("iSideload.app");
+        let app = root.join(app_name);
         std::fs::create_dir(&app).unwrap();
         let mut info = plist::Dictionary::new();
-        info.insert("CFBundleIdentifier".into(), "com.hongson117.isideload.OLDTEAM123.OLDTEAM123".into());
+        info.insert("CFBundleIdentifier".into(), format!("{family}.OLDTEAM123.OLDTEAM123").into());
         info.insert("CFBundleVersion".into(), "42".into());
         plist::to_file_xml(app.join("Info.plist"), &info).unwrap();
         std::fs::write(root.join("private-account-data"), b"must not travel").unwrap();
@@ -663,10 +664,11 @@ mod tests {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(out).unwrap()).unwrap();
         assert_eq!(zip.len(), 1);
         let mut bytes = Vec::new();
-        zip.by_name("Payload/iSideload.app/Info.plist").unwrap().read_to_end(&mut bytes).unwrap();
+        zip.by_name(&format!("Payload/{app_name}/Info.plist")).unwrap().read_to_end(&mut bytes).unwrap();
         let exported: plist::Dictionary = plist::from_bytes(&bytes).unwrap();
-        assert_eq!(exported["CFBundleIdentifier"].as_string(), Some("com.hongson117.isideload"));
+        assert_eq!(exported["CFBundleIdentifier"].as_string(), Some(family));
         assert_eq!(exported["CFBundleVersion"].as_string(), Some("42"));
+        }
     }
 }
 

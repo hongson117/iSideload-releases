@@ -187,8 +187,8 @@ pub async fn host_pairing(out_path: &str, ui: crate::bridge::Ui) -> Result<Strin
         .await
         .map_err(|e| format!("Không mở được cổng ghép nối: {e}"))?;
     let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-    let mut identity = RpPairingFile::generate("iSideload");
-    let info = PairableHostInfo::generate("iSideload", "Mac17,7");
+    let mut identity = RpPairingFile::generate(crate::ops::HOST_NAME);
+    let info = PairableHostInfo::generate(crate::ops::HOST_NAME, "Mac17,7");
     let service = identity.identifier().to_string();
     let txt: serde_json::Map<String, serde_json::Value> = info
         .mdns_txt_records(&service)
@@ -196,11 +196,11 @@ pub async fn host_pairing(out_path: &str, ui: crate::bridge::Ui) -> Result<Strin
         .map(|(k, v)| (k, serde_json::Value::String(v)))
         .collect();
     ui.event(serde_json::json!({"advertise": {"port": port, "name": service, "txt": txt}}));
-    ui.progress("Mở Cài đặt › Quyền riêng tư & Bảo mật › Chế độ nhà phát triển › Thiết bị khác, chọn iSideload", None);
+    ui.progress(&format!("Mở Cài đặt › Quyền riêng tư & Bảo mật › Chế độ nhà phát triển › Thiết bị khác, chọn {}", crate::ops::HOST_NAME), None);
 
     let (stream, _) = tokio::time::timeout(Duration::from_secs(300), listener.accept())
         .await
-        .map_err(|_| "Hết 5 phút mà iPhone chưa kết nối. Thử lại và chọn iSideload trong Thiết bị khác.".to_string())?
+        .map_err(|_| format!("Hết 5 phút mà iPhone chưa kết nối. Thử lại và chọn {} trong Thiết bị khác.", crate::ops::HOST_NAME))?
         .map_err(|e| e.to_string())?;
     let mut host = PairableHost::new(RpPairingSocket::new_device(stream), info);
     let peer = tokio::time::timeout(

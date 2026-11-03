@@ -103,6 +103,13 @@ struct AccountView: View {
                 }
             }
             .navigationTitle("Tài khoản")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { email = ""; password = ""; adding = true } label: {
+                        Label("Thêm Apple ID", systemImage: "person.badge.plus")
+                    }.disabled(engine.busy)
+                }
+            }
             .task { await engine.loadImportedCert() }
             .sheet(item: $picker) { k in
                 DocumentPicker { u in

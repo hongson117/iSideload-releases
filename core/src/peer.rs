@@ -63,7 +63,7 @@ pub async fn pair(req: &Value, ui: Ui) -> Result<Value, String> {
         let listener = tokio::net::TcpListener::bind(("0.0.0.0", 0)).await.map_err(|e| e.to_string())?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
         // Unique host identity; never the name used by host_pairing for this phone.
-        let host_name = format!("iSideload - Cai may khac {}", &id[..8]);
+        let host_name = format!("{} - Cai may khac {}", crate::ops::HOST_NAME, &id[..8]);
         let mut identity = RpPairingFile::generate(&host_name);
         let info = PairableHostInfo::generate(&host_name, "Mac17,7");
         let service = identity.identifier().to_string();
