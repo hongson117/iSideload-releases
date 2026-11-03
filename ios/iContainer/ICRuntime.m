@@ -9,6 +9,8 @@
 #import <dlfcn.h>
 #import <unistd.h>
 #import <sys/stat.h>
+#import <stdlib.h>
+#import <string.h>
 
 static NSString *rootPath;
 static NSBundle *guestBundle;

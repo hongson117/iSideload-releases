@@ -65,7 +65,10 @@ final class ContainerStore: ObservableObject {
     func launch(_ guest: ContainerGuest) {
         guard !working else { return }
         do {
-            _ = try ICQueueGuest(guest.id)
+            var error: NSError?
+            guard ICQueueGuest(guest.id, &error) else {
+                throw CoreError(message: error?.localizedDescription ?? "Không tạo được yêu cầu mở app.")
+            }
             readyToReopen = true
         } catch { failure = error.localizedDescription }
     }
