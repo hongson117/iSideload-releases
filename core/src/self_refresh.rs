@@ -38,4 +38,14 @@ mod tests {
         assert!(e.contains("không thuộc Team A5CFR7SJU8"));
         assert!(select_team(&[],"A5CFR7SJU8","a").is_err());
     }
+    #[test]fn reused_keys_are_matched_by_public_key_and_expiry_not_helper_name(){
+        use x509_cert::{Certificate,der::Decode};
+        use isideload::sideload::cert_identity::{CertificateIdentity,APPLE_WWDR_G3_CERTIFICATE_DER};
+        let cert=Certificate::from_der(APPLE_WWDR_G3_CERTIFICATE_DER).unwrap();
+        let public=cert.tbs_certificate.subject_public_key_info.subject_public_key.as_bytes().unwrap();
+        let valid=cert.tbs_certificate.validity.not_before.to_unix_duration().as_secs()+60;
+        assert!(CertificateIdentity::certificate_matches_public_key(&cert,public,valid));
+        assert!(!CertificateIdentity::certificate_matches_public_key(&cert,b"different key",valid));
+        assert!(!CertificateIdentity::certificate_matches_public_key(&cert,public,cert.tbs_certificate.validity.not_after.to_unix_duration().as_secs()+1));
+    }
 }

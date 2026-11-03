@@ -119,8 +119,9 @@ impl CertificateIdentity {
     ) -> Result<Self, Report> {
         let pr = Self::retrieve_private_key(apple_email, storage).await?;
 
-        let found = Self::find_matching(&pr, machine_name, developer_session, team).await;
-        if let Ok(Some((cert, x509_cert))) = found {
+        let found = Self::find_matching(&pr, machine_name, developer_session, team).await
+            .context("Failed to check existing signing certificates; no new certificate was requested")?;
+        if let Some((cert, x509_cert)) = found {
             info!("Found matching certificate");
             return Ok(Self {
                 machine_id: cert.machine_id.clone().unwrap_or_default(),
@@ -130,9 +131,6 @@ impl CertificateIdentity {
             });
         }
 
-        if let Err(e) = found {
-            error!("Failed to check for matching certificate: {:?}", e);
-        }
         info!("Requesting new certificate");
         let (cert, x509_cert) = Self::request_certificate(
             &pr,
@@ -246,9 +244,17 @@ impl CertificateIdentity {
         Ok(private_key)
     }
 
+    /// A machine label is descriptive. Reuse is bound to the authenticated
+    /// team's certificate, the exact private key's public key and validity.
+    pub fn certificate_matches_public_key(cert: &Certificate, expected: &[u8], now: u64) -> bool {
+        cert.tbs_certificate.subject_public_key_info.subject_public_key.as_bytes()==Some(expected)
+            && cert.tbs_certificate.validity.not_before.to_unix_duration().as_secs()<=now
+            && cert.tbs_certificate.validity.not_after.to_unix_duration().as_secs()>now
+    }
+
     async fn find_matching(
         private_key: &RsaPrivateKey,
-        machine_name: &str,
+        _machine_name: &str,
         developer_session: &mut DeveloperSession,
         team: &DeveloperTeam,
     ) -> Result<Option<(DevelopmentCertificate, Certificate)>, Report> {
@@ -263,22 +269,13 @@ impl CertificateIdentity {
             .iter()
             .filter(|c| {
                 c.cert_content.is_some()
-                    && c.machine_name.as_deref().unwrap_or("") == machine_name
-                    && c.machine_id.is_some()
             })
         {
             let x509_cert =
                 Certificate::from_der(cert.cert_content.as_ref().ok_or_report()?.as_ref())?;
 
-            let apple_public_key_der = x509_cert
-                .tbs_certificate
-                .subject_public_key_info
-                .subject_public_key
-                .as_bytes()
-                .ok_or_report()?
-                .to_vec();
-
-            if public_key_der == apple_public_key_der {
+            let now=std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_secs();
+            if Self::certificate_matches_public_key(&x509_cert,&public_key_der,now) {
                 return Ok(Some((cert.clone(), x509_cert)));
             }
         }
