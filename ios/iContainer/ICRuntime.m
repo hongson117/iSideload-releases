@@ -17,6 +17,8 @@ static NSDictionary *guestInfo;
 static NSString *guestData;
 static IMP originalMainBundle, originalInfo, originalObject, originalForClass;
 static IMP originalURLs, originalURL;
+static IMP originalDefaults;
+static NSUserDefaults *guestDefaults;
 static UIWindow *returnWindow;
 
 NSString *ICContainerRoot(void) {
@@ -95,6 +97,7 @@ static NSURL *URLForDirectory(id self, SEL cmd, NSSearchPathDirectory dir, NSSea
     NSURL *url=(domain & NSUserDomainMask) ? directoryURL(dir) : nil;
     return url ?: ((id (*)(id,SEL,NSUInteger,NSUInteger,id,BOOL,NSError **))originalURL)(self,cmd,dir,domain,appropriate,create,error);
 }
+static NSUserDefaults *standardDefaults(id self, SEL cmd) { return guestDefaults; }
 static void installContext(void) {
     hostBundle=NSBundle.mainBundle;
     originalMainBundle=method_setImplementation(class_getClassMethod(NSBundle.class,@selector(mainBundle)),(IMP)mainBundle);
@@ -103,6 +106,11 @@ static void installContext(void) {
     originalForClass=method_setImplementation(class_getClassMethod(NSBundle.class,@selector(bundleForClass:)),(IMP)bundleForClass);
     originalURLs=method_setImplementation(class_getInstanceMethod(NSFileManager.class,@selector(URLsForDirectory:inDomains:)),(IMP)URLsForDirectory);
     originalURL=method_setImplementation(class_getInstanceMethod(NSFileManager.class,@selector(URLForDirectory:inDomain:appropriateForURL:create:error:)),(IMP)URLForDirectory);
+    // Separate the usual preferences API. Direct CFPreferences/Keychain calls
+    // still share the host environment and are not claimed to be isolated.
+    NSString *identity=guestData.stringByDeletingLastPathComponent.lastPathComponent;
+    guestDefaults=[[NSUserDefaults alloc] initWithSuiteName:[@"com.hongson117.icontainer.guest." stringByAppendingString:identity]];
+    originalDefaults=method_setImplementation(class_getClassMethod(NSUserDefaults.class,@selector(standardUserDefaults)),(IMP)standardDefaults);
     setenv("HOME",guestData.fileSystemRepresentation,1);
     setenv("CFFIXED_USER_HOME",guestData.fileSystemRepresentation,1);
     setenv("TMPDIR",[guestData stringByAppendingPathComponent:@"tmp"].fileSystemRepresentation,1);
@@ -116,6 +124,7 @@ static void restoreContext(void) {
     method_setImplementation(class_getClassMethod(NSBundle.class,@selector(bundleForClass:)),originalForClass);
     method_setImplementation(class_getInstanceMethod(NSFileManager.class,@selector(URLsForDirectory:inDomains:)),originalURLs);
     method_setImplementation(class_getInstanceMethod(NSFileManager.class,@selector(URLForDirectory:inDomain:appropriateForURL:create:error:)),originalURL);
+    method_setImplementation(class_getClassMethod(NSUserDefaults.class,@selector(standardUserDefaults)),originalDefaults);
 }
 
 @interface ICReturnController : UIViewController
@@ -160,6 +169,9 @@ int ICBootGuest(void) {
     NSData *data=app ? [NSData dataWithContentsOfFile:[app stringByAppendingPathComponent:@"iContainerLaunch.json"]] : nil;
     NSDictionary *manifest=data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
     if (![manifest isKindOfClass:NSDictionary.class] || ![manifest[@"id"] isEqual:identifier] || ![manifest[@"prepared"] boolValue]) {fail(@"Không đọc được bản app đã chuẩn bị.");return -1;}
+    if (![manifest[@"host_bundle_id"] isEqual:NSBundle.mainBundle.bundleIdentifier] || [manifest[@"certificate_expires"] doubleValue]<=[NSDate.date timeIntervalSince1970]) {
+        fail(@"Chứng chỉ hoặc danh tính host đã thay đổi/hết hạn. Chọn Chuẩn bị lại bằng nguồn ký hiện tại.");return -1;
+    }
     guestBundle=[NSBundle bundleWithPath:app];guestInfo=[NSDictionary dictionaryWithContentsOfFile:[app stringByAppendingPathComponent:@"Info.plist"]];
     NSString *exe=manifest[@"executable"];
     if (![exe isKindOfClass:NSString.class] || ![exe isEqual:exe.lastPathComponent]) {fail(@"Executable không hợp lệ.");return -1;}

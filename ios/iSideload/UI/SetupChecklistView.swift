@@ -21,7 +21,7 @@ struct SetupChecklistView: View {
                         UIApplication.shared.open(LoopbackVPN.appStoreURL)
                     }
                     step(engine.hasPairing ? "3. Kiểm tra kết nối máy này" : "3. Thiết lập file ghép đôi", done: engine.pairingVerified,
-                         detail: engine.hasPairing ? "Đã có file. Bật LocalDevVPN rồi bấm Kiểm tra kết nối ở đầu tab Thiết bị; chưa cần ghép đôi lại." : "Bộ cài Windows/Mac RC2 tự đưa file vào app. Nếu cài cách khác, vào Thiết bị để xem cách thiết lập.") {
+                         detail: engine.hasPairing ? "Đã có file. Bật LocalDevVPN rồi bấm Kiểm tra kết nối ở đầu tab Thiết bị; chưa cần ghép đôi lại." : "Bản thử iContainer cần nhập Remote Pairing ở tab Thiết bị; bộ cài iSideload cũ chưa tự chép vào app này.") {
                         engine.selectedTab = 2
                     }
                 }

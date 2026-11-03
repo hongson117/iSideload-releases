@@ -1,4 +1,15 @@
-# iSideload
+# iContainer — private preview branch
+
+This branch builds **iContainer 0.1**, an independent experimental iOS variant.
+Start with [the iContainer build/install and hardware validation guide](docs/ICONTAINER.md)
+and [component provenance / distribution requirements](docs/ICONTAINER-PROVENANCE.md).
+The private Actions workflow produces `iContainer.ipa` and an original demo guest;
+it does not publish a release or replace the stable iSideload app.
+
+The iSideload documentation below describes the base project. Its existing
+Windows/macOS packages install iSideload, not this new iContainer bundle identity.
+
+# iSideload base project
 
 ## Phát hành 1.2.3 RC1
 

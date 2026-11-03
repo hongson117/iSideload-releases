@@ -31,11 +31,10 @@ struct DeviceView: View {
                         Text("Trạng thái kiểm tra được đặt lại khi mở lại hoặc cập nhật iContainer. File ghép đôi vẫn được giữ nếu mục trên báo Đã có file. Chỉ cần bật LocalDevVPN và bấm Kiểm tra kết nối; chưa cần tạo hay nhập lại file.")
                     }
                     DisclosureGroup("Đã cài bằng Windows hoặc Mac?") {
-                        Text("Nếu bộ cài RC2 đã báo XONG, file ghép đôi đã nằm trong app. Bật LocalDevVPN rồi kiểm tra kết nối ở đầu màn hình này.")
+                        Text("Bộ cài iSideload cũ chưa tự chép file vào iContainer. Với bản thử này, xuất Remote Pairing cho chính iPhone này rồi dùng nút Nhập file ghép nối bên trên.")
                     }
                     DisclosureGroup("Đã cài bằng Sideloadly hoặc chưa có file?") {
-                        Text("Dùng bộ cài Windows/macOS và chọn 2 để thiết lập ghép đôi cho app đã cài. iOS 27+ cũng có thể tự ghép nối ở phần Thiết lập bên trên. Giữ Wi-Fi bật và iPhone mở khóa khi thiết lập.")
-                        Link("Xem hướng dẫn bộ cài trên máy tính", destination: URL(string: "https://github.com/hongson117/iContainer-releases")!)
+                        Text("Xuất Remote Pairing của chính iPhone này bằng công cụ ghép nối trên máy tính rồi nhập vào iContainer. iOS 27+ có thể thử Ghép nối ngay trên máy ở phần Thiết lập. Giữ Wi-Fi bật và iPhone mở khóa.")
                     }
                 } header: { Text("Hướng dẫn nhanh") }
                 Section {
@@ -79,7 +78,7 @@ struct DeviceView: View {
                 Text("File đã sẵn trong app. Lần mở này chưa kiểm tra kết nối. Bật LocalDevVPN rồi bấm Kiểm tra kết nối thiết bị; chưa cần ghép đôi lại.")
                     .font(.footnote)
             } else {
-                Text("Mở phần Thiết lập file ghép đôi bên dưới. Nếu đã có iContainer qua Sideloadly, có thể dùng bộ cài Windows/macOS, chọn 2 để bổ sung file.")
+                Text("Mở phần Thiết lập file ghép đôi bên dưới để nhập Remote Pairing của chính iPhone này, hoặc tự ghép nối trên iOS 27+.")
                     .font(.footnote)
             }
             Label(engine.vpnInterfaceUp ? "Đã phát hiện VPN đang bật" : "Bước 1: bật LocalDevVPN",

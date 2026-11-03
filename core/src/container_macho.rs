@@ -131,7 +131,11 @@ pub fn prepare(bytes: &[u8], main: bool) -> Result<(Vec<u8>, Option<u64>), Strin
             let raw = c.get(p..).ok_or("Invalid dylib path offset")?;
             let name = std::str::from_utf8(raw.split(|v| *v==0).next().unwrap_or_default()).map_err(|_| "Invalid dylib path")?;
             if let Some(tail) = name.strip_prefix("@executable_path/") {
-                if main { c = string_command(cmd, prefix, &format!("@loader_path/{tail}")); }
+                if main {
+                    let rewritten = string_command(cmd, prefix, &format!("@loader_path/{tail}"));
+                    let version_fields=c[12..prefix].to_vec();
+                    c=rewritten;c[12..prefix].copy_from_slice(&version_fields);
+                }
             }
         }
         out.push(c);
@@ -142,8 +146,8 @@ pub fn prepare(bytes: &[u8], main: bool) -> Result<(Vec<u8>, Option<u64>), Strin
         out.push(string_command(0x8000001c, 12, "@loader_path/Frameworks"));
     } else if ![6,8].contains(&u32le(&b, 12)?) { return Err("Unsupported nested Mach-O type".into()); }
     let len: usize = out.iter().map(Vec::len).sum();
-    if capacity > b.len() || 32+len > capacity { return Err("Mach-O không đủ header padding cho bản thử iContainer.".into()); }
     let old = u32le(&b, 20)? as usize;
+    if capacity > b.len() || 32+len.max(old) > capacity { return Err("Mach-O không đủ header padding cho bản thử iContainer.".into()); }
     b[32..32+old.max(len)].fill(0);
     let mut pos = 32;
     for c in &out { b[pos..pos+c.len()].copy_from_slice(c); pos += c.len(); }
@@ -165,4 +169,10 @@ mod tests {
     #[test] fn rejects_bad_command_and_entry() { let mut b=sample(); set32(&mut b,36,u32::MAX); assert!(prepare(&b,true).is_err()); let mut b=sample(); b[192..200].fill(0xff); assert!(prepare(&b,true).is_err()); }
     #[test] fn rejects_encryption_before_modification() { let mut b=sample(); set32(&mut b,184,0x2c); set32(&mut b,200,1); assert!(prepare(&b,true).unwrap_err().contains("mã hóa")); }
     #[test] fn rejects_arm64e_and_truncated_fat() { let mut b=sample(); set32(&mut b,8,2); assert!(thin_arm64(&b).is_err()); assert!(thin_arm64(&[0xca,0xfe,0xba,0xbe]).is_err()); }
+    #[test] fn certificate_must_be_in_the_cms_slot() {
+        let mut b=sample();set32(&mut b,184,0x1d);set32(&mut b,188,24);set32(&mut b,192,5000);set32(&mut b,196,40);
+        let sig=&mut b[5000..5040];sig[..4].copy_from_slice(&[0xfa,0xde,0x0c,0xc0]);sig[4..8].copy_from_slice(&40u32.to_be_bytes());sig[8..12].copy_from_slice(&1u32.to_be_bytes());sig[12..16].copy_from_slice(&0x10000u32.to_be_bytes());sig[16..20].copy_from_slice(&20u32.to_be_bytes());sig[20..24].copy_from_slice(&[0xfa,0xde,0x0b,0x01]);sig[24..28].copy_from_slice(&20u32.to_be_bytes());sig[28..32].copy_from_slice(b"CERT");
+        assert!(signature_contains(&b,b"CERT").unwrap());b[6000..6005].copy_from_slice(b"OTHER");assert!(!signature_contains(&b,b"OTHER").unwrap());
+        b[5024..5028].copy_from_slice(&u32::MAX.to_be_bytes());assert!(signature_contains(&b,b"CERT").is_err());
+    }
 }

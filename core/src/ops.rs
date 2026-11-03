@@ -523,9 +523,6 @@ fn pack_self(req: &Value) -> Result<Value, String> {
                     let family = ["com.hongson117.isideload", "com.hongson117.icontainer"].into_iter()
                         .find(|base| old == *base || old.starts_with(&format!("{base}.")))
                         .ok_or("Chỉ đóng gói ứng dụng của chính dự án để cài cho máy khác.")?;
-                    if family.is_empty() {
-                        return Err("Chỉ đóng gói iSideload để cài cho máy khác.".into());
-                    }
                     // Drop the source phone's team suffix before signing for the receiving phone.
                     info.insert("CFBundleIdentifier".into(), plist::Value::String(family.into()));
                     data.clear();

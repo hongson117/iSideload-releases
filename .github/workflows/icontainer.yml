@@ -30,8 +30,9 @@ jobs:
           cargo build --locked --release --target aarch64-apple-ios --manifest-path core/Cargo.toml
       - name: Generate independent target and notices
         run: |
-          python3 -m pip install --quiet pyyaml
-          python3 scripts/configure_icontainer.py
+          python3 -m venv /tmp/ic-python
+          /tmp/ic-python/bin/python -m pip install --quiet pyyaml
+          /tmp/ic-python/bin/python scripts/configure_icontainer.py
           python3 scripts/generate_notices.py
           brew install xcodegen
           xcodegen generate --spec project-icontainer.yml
