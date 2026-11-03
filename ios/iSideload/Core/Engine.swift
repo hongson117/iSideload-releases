@@ -22,11 +22,7 @@ final class Engine: ObservableObject {
     @Published var liveContainerCertificateFile: LiveContainerCertificateFile?
     @Published var busy = false
     @Published var peerBusy = false
-    #if ICONTAINER
-    @Published var selectedTab = 5
-    #else
     @Published var selectedTab = 0
-    #endif
     @Published var stage = ""
     @Published var progress: Double = 0
     @Published var prompt: CorePrompt?

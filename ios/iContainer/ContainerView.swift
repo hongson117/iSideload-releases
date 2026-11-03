@@ -9,14 +9,13 @@ struct ContainerView: View {
     @State private var deleting: ContainerGuest?
 
     var body: some View {
-        NavigationStack {
             List {
                 Section {
                     Label("iContainer · bản thử 0.1", systemImage: "shippingbox.fill").font(.headline)
                     Text("Một app chứa chức năng ký của iSideload và chạy app bên trong. Chưa kiểm chứng trên iPhone thật.").font(.footnote).foregroundStyle(.secondary)
                     Button { picking = true } label: { Label("Nhập IPA vào Container", systemImage: "plus.app") }
                 } footer: {
-                    Text("Nhập vào Container không cài thêm icon và không dùng thêm slot. Dùng tab Cài app để cài độc lập ra màn hình chính.")
+                    Text("Nhập vào Container không cài thêm icon và không dùng thêm slot. Quay về tab Ứng dụng để cài độc lập ra màn hình chính.")
                 }
                 if let own = engine.selfApp {
                     Section("Gia hạn iContainer") {
@@ -52,7 +51,7 @@ struct ContainerView: View {
                     Text("App chạy chung tiến trình và quyền truy cập của iContainer. Chỉ mở IPA bạn tin cậy; bản thử chưa bảo đảm cách ly tài khoản, Keychain hoặc toàn bộ đường dẫn dữ liệu.").font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("iContainer")
+            .navigationTitle("Container")
             .disabled(store.working || engine.busy || engine.peerBusy)
             .refreshable { store.reload(); engine.syncSelfRecord() }
             .sheet(isPresented: $picking) { DocumentPicker { url in Task { await store.importIPA(url, engine: engine) } } }
@@ -83,6 +82,5 @@ struct ContainerView: View {
                 Button("Sao chép lỗi") { UIPasteboard.general.string = store.failure; store.failure = nil }
                 Button("OK") { store.failure = nil }
             } message: { Text(store.failure ?? "") }
-        }
     }
 }

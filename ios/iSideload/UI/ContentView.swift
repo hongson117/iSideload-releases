@@ -4,15 +4,8 @@ struct ContentView: View {
     @EnvironmentObject var engine: Engine
     var body: some View {
         TabView(selection: $engine.selectedTab) {
-            #if ICONTAINER
-            ContainerView().tabItem { Label("Container", systemImage: "shippingbox") }.tag(5)
-            AppsView().tabItem { Label("Cài app", systemImage: "square.and.arrow.down") }.tag(0)
-            #else
             AppsView().tabItem { Label("Ứng dụng", systemImage: "square.grid.2x2") }.tag(0)
-            #endif
-            #if !ICONTAINER
             SourcesView().tabItem { Label("Nguồn", systemImage: "tray.full") }.tag(1)
-            #endif
             DeviceView().tabItem { Label("Thiết bị", systemImage: "iphone") }.tag(2)
             AccountView().tabItem { Label("Tài khoản", systemImage: "person.crop.circle") }.tag(3)
             SettingsView().tabItem { Label("Cài đặt", systemImage: "gear") }.tag(4)

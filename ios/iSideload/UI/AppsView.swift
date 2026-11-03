@@ -57,7 +57,17 @@ struct AppsView: View {
                 } footer: {
                     Text("Apple ID miễn phí: tối đa 3 app sideload cùng lúc (tính cả iContainer), 10 App ID mỗi 7 ngày, app hết hạn sau 7 ngày — bấm Làm mới trước khi hết hạn.")
                 }
-                #if !ICONTAINER
+                #if ICONTAINER
+                Section {
+                    NavigationLink {
+                        ContainerView()
+                    } label: {
+                        Label("Mở Container · chạy app bên trong", systemImage: "shippingbox")
+                    }
+                } header: { Text("Container tích hợp") } footer: {
+                    Text("Nhập IPA vào iContainer để chạy bên trong, không cần cài LiveContainer riêng. Nút Chọn file IPA để cài ở trên vẫn cài app độc lập ra màn hình chính như trước.")
+                }
+                #else
                 Section {
                     let lc = engine.liveContainerInstalled
                     Button(lc == nil ? "Cài LiveContainer" :

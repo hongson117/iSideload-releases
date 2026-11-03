@@ -50,7 +50,7 @@ jobs:
         run: |
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           mkdir -p demo/Payload/ContainerDemo.app
-          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -fobjc-arc -framework UIKit -framework Foundation -Wl,-headerpad,4096 tests/ContainerDemo/main.m -o demo/Payload/ContainerDemo.app/ContainerDemo
+          xcrun clang -target arm64-apple-ios17.0 -isysroot "$SDK" -fobjc-arc -framework UIKit -framework Foundation -framework CoreGraphics -Wl,-headerpad,4096 tests/ContainerDemo/main.m -o demo/Payload/ContainerDemo.app/ContainerDemo
           python3 - <<'PY'
           import plistlib
           from pathlib import Path
