@@ -1,9 +1,9 @@
 iSideload macOS 1.2.2 — CÀI APP VÀ TỰ THIẾT LẬP FILE GHÉP ĐÔI
 Gói Universal: Mac Apple Silicon + Intel, macOS 11+. iPhone/iPad cần iOS/iPadOS 17.4+ cho thiết lập Remote Pairing tự động.
-Tải: https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc2/isl-macos-universal.zip
+Tải: https://github.com/hongson117/iSideload-releases/releases/download/v1.2.3-rc1/isl-macos-universal.zip
 
 TRONG GÓI
-Cai-iSideload.command, isl-mac Universal, iSideload.ipa 1.2.2 build 35, README-VI.txt, ThirdPartyNotices.txt và SHA256SUMS.txt.
+Cai-iSideload.command, isl-mac Universal, iSideload.ipa 1.2.3 build 36, README-VI.txt, ThirdPartyNotices.txt và SHA256SUMS.txt.
 Không cần Homebrew, Xcode, Python, usbmuxd bên ngoài, RC Pair hay Tailscale cho lượt cài USB.
 
 CHUẨN BỊ
@@ -54,3 +54,6 @@ Tài liệu Apple:
 https://support.apple.com/109054
 https://support.apple.com/108643
 https://support.apple.com/guide/mac-help/mh40617/mac
+
+
+Trong iSideload 1.2.3: đã có file ghép đôi thì bấm Kiểm tra kết nối ở đầu tab Thiết bị sau khi bật LocalDevVPN. Mở lại app đặt lại trạng thái kiểm tra, không đồng nghĩa mất file. Khi cài/cài lại LiveContainer, chọn rõ Apple ID hoặc chứng chỉ đã nhập; lựa chọn được giữ qua bước bật VPN.

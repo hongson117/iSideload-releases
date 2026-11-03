@@ -20,7 +20,7 @@ jobs:
     runs-on: macos-26
     env:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
-      IPA_SHA256: 026a3f23bc37d689af53cd03a5c608b8e99e305091b86d101f33570fe6ad4227
+      IPA_SHA256: bf4b3acad2f60ea7907cabd117375947f460f835bdfd8e1049b9fc277bf7577c
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -61,7 +61,7 @@ jobs:
           cp macos/Cai-iSideload.command macos/README-VI.txt out/iSideload-macOS/
           chmod 755 out/iSideload-macOS/Cai-iSideload.command out/iSideload-macOS/isl-mac
           bash -n out/iSideload-macOS/Cai-iSideload.command
-          curl --fail --location --retry 3 https://github.com/hongson117/iSideload-releases/releases/download/v1.2.2-rc1/iSideload.ipa -o out/iSideload-macOS/iSideload.ipa
+          curl --fail --location --retry 3 https://github.com/hongson117/iSideload-releases/releases/download/v1.2.3-rc1/iSideload.ipa -o out/iSideload-macOS/iSideload.ipa
           echo "$IPA_SHA256  out/iSideload-macOS/iSideload.ipa" | shasum -a 256 -c -
           python3 scripts/generate_notices.py --manifest-path macos/Cargo.toml --platform aarch64-apple-darwin --output out/iSideload-macOS/ThirdPartyNotices.txt
           (cd out/iSideload-macOS && shasum -a 256 isl-mac iSideload.ipa Cai-iSideload.command README-VI.txt ThirdPartyNotices.txt > SHA256SUMS.txt && shasum -a 256 -c SHA256SUMS.txt)

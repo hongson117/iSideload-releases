@@ -1,12 +1,12 @@
 # iSideload
 
-## Phát hành 1.2.1
+## Phát hành 1.2.3 RC1
 
 Mã nguồn được giữ trong repository private. Bản IPA công khai và hướng dẫn cài đặt nằm tại https://github.com/hongson117/iSideload-releases/releases/latest . Không đưa Git bundle, source ZIP, pairing file hay thông tin VPS/MCP lên repository phát hành.
 
 ## Cài lần đầu từ macOS
 
-Tải `isl-macos-universal.zip` tại trang release, giải nén và mở `Cai-iSideload.command`. Gói có công cụ native Universal cho Apple Silicon + Intel (macOS 11+), kèm IPA 1.2.1. Dùng dịch vụ USB có sẵn của Apple; không cần Homebrew/Xcode. Cắm cáp dữ liệu, mở Finder và xác nhận Trust trên cả hai máy, rồi nhập Apple ID/2FA trong Terminal.
+Tải `isl-macos-universal.zip` tại trang release, giải nén và mở `Cai-iSideload.command`. Gói có công cụ native Universal cho Apple Silicon + Intel (macOS 11+), kèm IPA 1.2.3 build 36. Dùng dịch vụ USB có sẵn của Apple; không cần Homebrew/Xcode. Cắm cáp dữ liệu, mở Finder và xác nhận Trust trên cả hai máy, rồi nhập Apple ID/2FA trong Terminal.
 
 Hướng dẫn đầy đủ và xử lý Gatekeeper: `macos/README-VI.txt`. Công cụ chưa có Developer ID/notarization; không hướng dẫn tắt Gatekeeper toàn hệ thống. Build kiểm tra CLI/binary/checksum, chưa thay cho cài USB với iPhone thật.
 
@@ -24,8 +24,8 @@ Clean-room iPhone/iPad sideloader: sign IPAs with a **free Apple ID** and instal
 
 ## Use
 1. Install iSideload once (Sideloadly/AltServer/another signer); enable Developer Mode.
-2. Make a pairing file on a computer (`idevice_pair`, iloader, or Jitterbug pair) → AirDrop → **Thiết bị → Nhập file ghép nối**.
-3. Install LocalDevVPN from the App Store, turn it on.
+2. Prefer the Windows/macOS USB installer to create and deliver Remote Pairing automatically. For an existing install choose mode 2, or import a compatible Remote Pairing export. On iOS 26.4+, do not assume an older Lockdown record works over loopback VPN.
+3. Install/enable LocalDevVPN, then use **Thiết bị → Kiểm tra kết nối thiết bị** at the top. A stored pairing file or enabled VPN alone does not prove the device handshake succeeded.
 4. **Tài khoản**: sign in (2FA). **Ứng dụng**: pick an IPA → Ký và cài. Refresh before 7 days.
 
 Free-account limits: 3 active sideloaded apps (incl. iSideload), 10 App IDs / 7 days, 7-day profiles, app extensions each consume an App ID.
@@ -37,7 +37,7 @@ iSideload is **free and needs no activation code** — the ISL- license gate was
 
 ## Features
 - Self-refresh (re-signs its own bundle), `isideload://refresh` / `isideload://refresh-apps` links and Shortcuts actions for a daily re-sign automation.
-- Built-in LiveContainer install + **certificate export/auto-push**: after every successful re-sign, iSideload opens LiveContainer briefly to hand it the new certificate (JIT-less mode keeps working).
+- LiveContainer install/reinstall requires an explicit Apple ID or imported .p12 choice. The immutable install plan preserves that choice across VPN hand-off. Certificate transfer uses the selected signer; the selected LiveContainer identity remains pinned even if an older copy is refreshed. Multiple known copies use a manual certificate-import sheet to avoid an ambiguous shared URL scheme.
 
 ## Hardening
 - Release: Rust `strip = true`, `panic = "abort"`; Xcode strips all symbols.
