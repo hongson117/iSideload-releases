@@ -1,7 +1,5 @@
 name: iContainer private preview
 on:
-  push:
-    branches: [feat/icontainer]
   workflow_dispatch:
 permissions:
   contents: read
