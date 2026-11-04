@@ -12,10 +12,12 @@
   var params = new URLSearchParams(location.search);
   var guest = params.get('guest') || '';
   var name = params.get('name') || 'Ứng dụng';
+  var slot = params.get('slot') || 'runner1';
   var rawHash = location.hash || '';
   var isSetup = rawHash.indexOf('setup') !== -1;
   var armedForLaunch = !isSetup;
-  var target = guest ? ('sicontainer://launch?guest=' + encodeURIComponent(guest)) : 'sicontainer://';
+  var scheme = (slot === 'main') ? 'sicontainer' : ('sicontainer-' + slot);
+  var target = guest ? (scheme + '://launch?guest=' + encodeURIComponent(guest)) : (scheme + '://');
 
   if (name) {
     document.title = name;
@@ -42,7 +44,7 @@
   function triggerLaunch() {
     if (!guest) return;
     window.location.replace(target);
-    setTimeout(function() { window.location.href = target; }, 60);
+    setTimeout(function() { window.location.href = target; }, 50);
   }
 
   if (armedForLaunch && guest) {
@@ -82,9 +84,9 @@ a.btn{display:block;background:#0a84ff;color:#fff;text-decoration:none;padding:1
 <body>
 <div class="card">
   <img id="iconImg" style="display:none;width:72px;height:72px;border-radius:16px;margin:0 auto 10px">
-  <div class="title" id="appTitle">Đang mở ứng dụng...</div>
+  <div class="title" id="appTitle">Đang mở trực tiếp trên Phụ 1...</div>
   <div class="sub" id="appSub">Để đưa ra Màn hình chính: bấm nút <b>Chia sẻ</b> ở thanh dưới Safari → chọn <b>Thêm vào MH chính</b>.</div>
-  <a class="btn" id="openBtn" href="sicontainer://">Mở ngay</a>
+  <a class="btn" id="openBtn" href="sicontainer-runner1://">Mở trực tiếp (Phụ 1)</a>
 </div>
 <script>
 if (window.__sicName) {
