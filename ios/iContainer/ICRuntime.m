@@ -36,6 +36,8 @@ static UIWindow *returnWindow;
 static int slotAliveFD = -1;
 static int guestWriterFD = -1;
 static volatile int evictingInProgress = 0;
+static volatile int bounceOpenURLSent = 0;
+static NSString *activeBounceRequestID = nil;
 static UIBackgroundTaskIdentifier runnerBgTask = 0;
 
 static void endRunnerBackgroundStandby(void) {
@@ -425,7 +427,7 @@ NSDictionary *ICPrepareRunnerLaunch(NSString *identifier, NSString *slotID, NSEr
         NSTimeInterval age = now - [pending[@"created"] doubleValue];
         NSString *requestID = pending[@"request_id"];
         BOOL reuse = [pending[@"id"] isEqual:identifier] && [pending[@"target_bundle_id"] isEqual:targetBundleID] &&
-            requestID.length && age >= -5 && age <= 600 && [entry[@"pending_request_id"] isEqual:requestID];
+            requestID.length && age >= -5 && age <= 30 && [entry[@"pending_request_id"] isEqual:requestID];
         needsEviction = alive && sameProcess && activeGuestID.length && ![activeGuestID isEqual:identifier];
         if (!reuse) {
             requestID = NSUUID.UUID.UUIDString;
@@ -469,7 +471,7 @@ NSURL *ICCompleteRunnerSwitchURL(NSString *slotID, NSString *requestID) {
     updateRegistryTransaction(^(NSMutableDictionary *registry) {
         NSDictionary *ticket = [NSDictionary dictionaryWithContentsOfFile:slotTicketPath(targetSlot)];
         NSTimeInterval age = [NSDate.date timeIntervalSince1970] - [ticket[@"created"] doubleValue];
-        if (![ticket[@"request_id"] isEqual:requestID] || age < -5 || age > 600 ||
+        if (![ticket[@"request_id"] isEqual:requestID] || age < -5 || age > 30 ||
             ![registry[@"slots"][targetSlot][@"pending_request_id"] isEqual:requestID]) return;
         NSString *urlStr = [NSString stringWithFormat:@"sicontainer-%@://launch?req=%@&guest=%@", targetSlot, requestID, ticket[@"id"]];
         url = [NSURL URLWithString:urlStr];
@@ -554,23 +556,59 @@ static void flushGuestStateBeforeExit(void) {
     // Releasing here lets the Manager reopen a process which is still alive.
 }
 
+static void cancelPendingRunnerSwitch(NSString *role, NSString *requestID) {
+    if (!role.length || !requestID.length) return;
+    updateRegistryTransaction(^(NSMutableDictionary *registry) {
+        NSString *tPath = slotTicketPath(role);
+        NSDictionary *ticket = [NSDictionary dictionaryWithContentsOfFile:tPath];
+        if ([ticket isKindOfClass:NSDictionary.class] && [ticket[@"request_id"] isEqual:requestID]) {
+            [NSFileManager.defaultManager removeItemAtPath:tPath error:nil];
+        }
+        NSMutableDictionary *slots = registry[@"slots"];
+        NSMutableDictionary *entry = [slots[role] isKindOfClass:NSDictionary.class] ? [slots[role] mutableCopy] : [NSMutableDictionary new];
+        if ([entry[@"pending_request_id"] isEqual:requestID]) {
+            [entry removeObjectForKey:@"pending_request_id"];
+            [entry removeObjectForKey:@"pending_guest_id"];
+            entry[@"pid"] = @(getpid());
+            if (loadedGuestID.length) {
+                entry[@"guest_id"] = loadedGuestID;
+                if (loadedRequestID.length) entry[@"acked_request_id"] = loadedRequestID;
+                entry[@"state"] = @"running";
+            } else {
+                [entry removeObjectForKey:@"guest_id"];
+                [entry removeObjectForKey:@"acked_request_id"];
+                entry[@"state"] = @"idle";
+            }
+            slots[role] = entry;
+        }
+    });
+}
+
 static void bounceRunnerToManager(NSString *requestID, NSUInteger attempts) {
+    NSString *currentReq = activeBounceRequestID ?: requestID;
     if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
         if (attempts > 0) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                bounceRunnerToManager(requestID, attempts - 1);
+                bounceRunnerToManager(currentReq, attempts - 1);
             });
         } else {
+            activeBounceRequestID = nil;
+            bounceOpenURLSent = 0;
             evictingInProgress = 0;
+            cancelPendingRunnerSwitch(ICCurrentRole(), currentReq);
             fail(@"Phụ chưa vào trạng thái hoạt động. Hãy mở lại shortcut.");
         }
         return;
     }
-    NSString *bounce = [NSString stringWithFormat:@"sicontainer://complete-switch?slot=%@&req=%@", ICCurrentRole(), requestID];
+    bounceOpenURLSent = 1;
+    NSString *bounce = [NSString stringWithFormat:@"sicontainer://complete-switch?slot=%@&req=%@", ICCurrentRole(), currentReq];
     [UIApplication.sharedApplication openURL:[NSURL URLWithString:bounce] options:@{} completionHandler:^(BOOL success) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (!success) {
+                activeBounceRequestID = nil;
+                bounceOpenURLSent = 0;
                 evictingInProgress = 0;
+                cancelPendingRunnerSwitch(ICCurrentRole(), currentReq);
                 fail(@"Không mở được SIContainer Chính để hoàn tất chuyển app. Hãy kiểm tra app Chính đã được cài và còn hạn ký.");
                 return;
             }
@@ -585,7 +623,11 @@ static void bounceRunnerToManager(NSString *requestID, NSUInteger attempts) {
 }
 
 static void startRunnerBounce(NSString *requestID) {
-    if (__sync_bool_compare_and_swap(&evictingInProgress, 0, 1)) bounceRunnerToManager(requestID, 40);
+    activeBounceRequestID = requestID;
+    if (__sync_bool_compare_and_swap(&evictingInProgress, 0, 1)) {
+        bounceOpenURLSent = 0;
+        bounceRunnerToManager(requestID, 40);
+    }
 }
 
 static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
@@ -595,7 +637,7 @@ static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
     NSString *pendingReq = [pending isKindOfClass:NSDictionary.class] ? pending[@"request_id"] : nil;
     NSString *pendingGuest = [pending isKindOfClass:NSDictionary.class] ? pending[@"id"] : nil;
     NSTimeInterval pendingAge = [NSDate.date timeIntervalSince1970] - [pending[@"created"] doubleValue];
-    if (validIdentifier(pendingReq) && ![pendingReq isEqualToString:loadedRequestID ?: @""] && validIdentifier(pendingGuest) && pendingAge >= -5 && pendingAge <= 600) {
+    if (validIdentifier(pendingReq) && ![pendingReq isEqualToString:loadedRequestID ?: @""] && validIdentifier(pendingGuest) && pendingAge >= -5 && pendingAge <= 30) {
         if (!isForegroundWakeup && UIApplication.sharedApplication.applicationState == UIApplicationStateInactive) {
             // Process is mid-transition to foreground via sicontainer-runner1://evict; let DidBecomeActive bounce cleanly.
             return;
@@ -618,6 +660,10 @@ static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
             if ([entry[@"guest_id"] isEqual:loadedGuestID]) {
                 entry[@"last_active_at"] = @(now);
                 entry[@"state"] = @"running";
+                if ([entry[@"pending_request_id"] isEqual:loadedRequestID]) {
+                    [entry removeObjectForKey:@"pending_request_id"];
+                    [entry removeObjectForKey:@"pending_guest_id"];
+                }
                 slots[role] = entry;
             }
         });
@@ -633,7 +679,7 @@ BOOL ICHandleRunnerURL(NSURL *url) {
     if (!isInternalRunnerURL(url)) return NO;
     NSString *action = url.host.lowercaseString;
     if (![@[@"launch", @"resume", @"evict"] containsObject:action]) return YES;
-    if (evictingInProgress) return YES;
+    if (evictingInProgress && bounceOpenURLSent) return YES;
     NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
     NSMutableDictionary *query = [NSMutableDictionary new];
     for (NSURLQueryItem *item in components.queryItems) {
@@ -651,13 +697,14 @@ BOOL ICHandleRunnerURL(NSURL *url) {
         NSDictionary *pending = [NSDictionary dictionaryWithContentsOfFile:slotTicketPath(ICCurrentRole())];
         if (![pending[@"request_id"] isEqual:requestID] || (guest && ![pending[@"id"] isEqual:guest])) return YES;
         NSTimeInterval age = [NSDate.date timeIntervalSince1970] - [pending[@"created"] doubleValue];
-        if (age < -5 || age > 600) return YES;
+        if (age < -5 || age > 30) return YES;
         guest = pending[@"id"];
     }
     if (!validIdentifier(guest)) { fail(@"Shortcut thiếu danh tính app."); return YES; }
-    if ([guest isEqual:loadedGuestID] && !requestID) {
+    if ([guest isEqual:loadedGuestID] && !requestID && !evictingInProgress) {
         // UIKit has already brought the existing guest forward. No Manager hop,
         // ticket write, re-sign, or new guest process is needed.
+        checkPendingEvictionOrTouchLRU(YES);
         return YES;
     }
     if (!requestID) {
@@ -773,7 +820,14 @@ int ICBootGuest(void) {
         if (ICIsRunnerProcess()) {
             NSMutableDictionary *slots = registry[@"slots"];
             NSMutableDictionary *entry = [slots[role] isKindOfClass:NSDictionary.class] ? [slots[role] mutableCopy] : [NSMutableDictionary new];
-            if (ticket && ![entry[@"pending_request_id"] isEqual:ticket[@"request_id"]]) ticket = nil;
+            NSTimeInterval tAge = [NSDate.date timeIntervalSince1970] - [ticket[@"created"] doubleValue];
+            if (ticket && (![entry[@"pending_request_id"] isEqual:ticket[@"request_id"]] || tAge < -5 || tAge > 30)) {
+                if ([entry[@"pending_request_id"] isEqual:ticket[@"request_id"]]) {
+                    [entry removeObjectForKey:@"pending_request_id"];
+                    [entry removeObjectForKey:@"pending_guest_id"];
+                }
+                ticket = nil;
+            }
             if (!ticket) {
                 [entry removeObjectForKey:@"guest_id"];
                 [entry removeObjectForKey:@"acked_request_id"];
@@ -789,7 +843,8 @@ int ICBootGuest(void) {
     NSString *identifier = ticket[@"id"];
     NSString *requestID = [ticket[@"request_id"] isKindOfClass:NSString.class] ? ticket[@"request_id"] : [NSUUID UUID].UUIDString;
     NSTimeInterval age = [NSDate.date timeIntervalSince1970] - [ticket[@"created"] doubleValue];
-    if (![identifier isKindOfClass:NSString.class] || !validIdentifier(identifier) || age < -5 || age > 600) {
+    NSTimeInterval maxAge = ICIsRunnerProcess() ? 30 : 600;
+    if (![identifier isKindOfClass:NSString.class] || !validIdentifier(identifier) || age < -5 || age > maxAge) {
         fail(@"Yêu cầu mở app đã hết hạn. Chọn Chạy lại.");
         return -1;
     }
@@ -925,7 +980,8 @@ int ICBootGuest(void) {
         return 1;
     }
 
-    // Commit transactional ack and accurate LRU timestamp ONLY after runner verified & mapped the guest.
+    // Record Mach-O mapped ACK before entering guest main(); state transitions
+    // to "running" and updates last_active_at when UIApplicationDidBecomeActive fires.
     NSTimeInterval now = [NSDate.date timeIntervalSince1970];
     NSString *guestName = [manifest[@"name"] isKindOfClass:NSString.class] ? manifest[@"name"] : identifier;
     updateRegistryTransaction(^(NSMutableDictionary *registry) {
@@ -936,8 +992,10 @@ int ICBootGuest(void) {
         entryDict[@"guest_id"] = identifier;
         entryDict[@"guest_name"] = guestName;
         entryDict[@"acked_request_id"] = requestID;
-        entryDict[@"state"] = @"running";
-        entryDict[@"last_active_at"] = @(now);
+        entryDict[@"state"] = ICIsRunnerProcess() ? @"loaded" : @"running";
+        if (!ICIsRunnerProcess() || !entryDict[@"last_active_at"]) {
+            entryDict[@"last_active_at"] = @(now);
+        }
         entryDict[@"pid"] = @(getpid());
         if ([entryDict[@"pending_request_id"] isEqual:requestID]) {
             [entryDict removeObjectForKey:@"pending_request_id"];

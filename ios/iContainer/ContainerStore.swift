@@ -370,7 +370,6 @@ final class ContainerStore: ObservableObject {
             }, 250);
         } else if (location.hash !== '#setup') {
             window.location.replace('\(launchURL)');
-            setTimeout(function(){ window.location.href = '\(launchURL)'; }, 60);
         }
         </script>
         <style>

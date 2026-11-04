@@ -14,27 +14,45 @@ static BOOL (^isRunnerURL)(NSURL *);
 static void (^receiveRunnerURL)(NSURL *);
 static char applicationDelegateHookKey;
 static char sceneDelegateHookKey;
+static char connectionOptionsConsumedKey;
+static char launchOptionsConsumedKey;
+
+static BOOL isInternalURL(NSURL *url) {
+    return [url isKindOfClass:NSURL.class] && isRunnerURL && isRunnerURL(url);
+}
 
 static BOOL consumeURL(NSURL *url) {
-    if (![url isKindOfClass:NSURL.class] || !isRunnerURL(url)) return NO;
+    if (!isInternalURL(url)) return NO;
     // Finish UIKit's callback before starting an app-to-app transition.
     dispatch_async(dispatch_get_main_queue(), ^{ receiveRunnerURL(url); });
     return YES;
 }
 
-static NSSet *guestURLContexts(NSSet *contexts) {
+static NSSet *filterURLContexts(NSSet *contexts, BOOL dispatchInternal) {
     NSMutableSet *remaining = [NSMutableSet new];
     for (id<SICURLContext> context in contexts) {
-        if (!consumeURL(context.URL)) [remaining addObject:context];
+        NSURL *url = context.URL;
+        if (isInternalURL(url)) {
+            if (dispatchInternal) consumeURL(url);
+        } else if (context) {
+            [remaining addObject:context];
+        }
     }
     return remaining;
 }
 
-static NSDictionary *guestLaunchOptions(NSDictionary *options) {
+static NSDictionary *guestLaunchOptions(id delegate, NSDictionary *options) {
     // UIApplicationLaunchOptionsURLKey's exported value, without linking UIKit
     // into the Foundation-only delegate regression tests.
     NSString *key = @"UIApplicationLaunchOptionsURLKey";
-    if (!consumeURL(options[key])) return options;
+    NSURL *url = options[key];
+    if (!isInternalURL(url)) return options;
+    if (delegate && !objc_getAssociatedObject(delegate, &launchOptionsConsumedKey)) {
+        objc_setAssociatedObject(delegate, &launchOptionsConsumedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        consumeURL(url);
+    } else if (!delegate) {
+        consumeURL(url);
+    }
     NSMutableDictionary *filtered = [options mutableCopy];
     [filtered removeObjectForKey:key];
     return filtered;
@@ -91,7 +109,7 @@ static void hookApplicationDelegate(Class cls) {
         IMP original = methodImplementation(cls, selector);
         if (!original) continue;
         replaceMethod(cls, selector, ^BOOL(id self, id app, NSDictionary *options) {
-            return ((BOOL (*)(id, SEL, id, id))original)(self, selector, app, guestLaunchOptions(options));
+            return ((BOOL (*)(id, SEL, id, id))original)(self, selector, app, guestLaunchOptions(self, options));
         }, NULL);
     }
 }
@@ -102,15 +120,15 @@ static void hookSceneDelegate(Class cls) {
     SEL open = NSSelectorFromString(@"scene:openURLContexts:");
     IMP originalOpen = methodImplementation(cls, open);
     replaceMethod(cls, open, ^(id self, id scene, NSSet *contexts) {
-        NSSet *remaining = guestURLContexts(contexts);
+        NSSet *remaining = filterURLContexts(contexts, YES);
         if (remaining.count && originalOpen) ((void (*)(id, SEL, id, id))originalOpen)(self, open, scene, remaining);
     }, "v@:@@");
 
     SEL connect = NSSelectorFromString(@"scene:willConnectToSession:options:");
     IMP originalConnect = methodImplementation(cls, connect);
     replaceMethod(cls, connect, ^(id self, id scene, id session, id<SICConnectionOptions> options) {
-        // The hooked public getter dispatches internal cold-start URLs even when
-        // the guest does not inspect connection options itself.
+        // The hooked public getter dispatches internal cold-start URLs once,
+        // even when the guest does not inspect connection options itself.
         (void)options.URLContexts;
         if (originalConnect) ((void (*)(id, SEL, id, id, id))originalConnect)(self, connect, scene, session, options);
     }, "v@:@@@");
@@ -141,7 +159,11 @@ void SICInstallURLInterception(BOOL (^isInternalURL)(NSURL *), void (^handleURL)
         IMP originalContexts = methodImplementation(optionsClass, getter);
         if (originalContexts) replaceMethod(optionsClass, getter, ^NSSet *(id self) {
             NSSet *contexts = ((id (*)(id, SEL))originalContexts)(self, getter);
-            return guestURLContexts(contexts);
+            BOOL shouldDispatch = !objc_getAssociatedObject(self, &connectionOptionsConsumedKey);
+            if (shouldDispatch) {
+                objc_setAssociatedObject(self, &connectionOptionsConsumedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            return filterURLContexts(contexts, shouldDispatch);
         }, NULL);
     });
 }

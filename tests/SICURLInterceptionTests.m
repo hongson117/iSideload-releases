@@ -27,12 +27,15 @@
 
 @interface AppDelegate : NSObject
 @property(nonatomic) NSUInteger opens;
+@property(nonatomic, strong) NSDictionary *willLaunchOptions;
 @property(nonatomic, strong) NSDictionary *launchOptions;
 - (BOOL)application:(id)app openURL:(NSURL *)url options:(NSDictionary *)options;
+- (BOOL)application:(id)app willFinishLaunchingWithOptions:(NSDictionary *)options;
 - (BOOL)application:(id)app didFinishLaunchingWithOptions:(NSDictionary *)options;
 @end
 @implementation AppDelegate
 - (BOOL)application:(id)app openURL:(NSURL *)url options:(NSDictionary *)options { self.opens++; return YES; }
+- (BOOL)application:(id)app willFinishLaunchingWithOptions:(NSDictionary *)options { self.willLaunchOptions = options; return YES; }
 - (BOOL)application:(id)app didFinishLaunchingWithOptions:(NSDictionary *)options { self.launchOptions = options; return YES; }
 @end
 @interface AppSubclass : AppDelegate
@@ -53,14 +56,19 @@
 
 @interface SceneDelegate : NSObject
 @property(nonatomic, strong) NSSet *received;
+@property(nonatomic) NSUInteger openCalls;
 @property(nonatomic) NSUInteger connects;
 - (void)scene:(id)scene openURLContexts:(NSSet *)contexts;
 - (void)scene:(id)scene willConnectToSession:(id)session options:(UISceneConnectionOptions *)options;
 @end
 @implementation SceneDelegate
-- (void)scene:(id)scene openURLContexts:(NSSet *)contexts { self.received = contexts; }
+- (void)scene:(id)scene openURLContexts:(NSSet *)contexts { self.openCalls++; self.received = contexts; }
 - (void)scene:(id)scene willConnectToSession:(id)session options:(UISceneConnectionOptions *)options {
-    self.connects++; self.received = options.URLContexts;
+    self.connects++;
+    NSSet *firstRead = options.URLContexts;
+    NSSet *secondRead = options.URLContexts;
+    require([firstRead isEqual:secondRead], @"Repeated connectionOptions.URLContexts reads stay consistent");
+    self.received = secondRead;
 }
 @end
 
@@ -86,8 +94,11 @@ int main(void) {
         AppDelegate *sibling = [AppDelegate new];
         [sibling application:app openURL:internal options:@{}];
         require(sibling.opens == 1, @"Hooking subclass must not modify superclass/siblings");
-        [delegate application:app didFinishLaunchingWithOptions:@{@"UIApplicationLaunchOptionsURLKey": internal, @"other": @42}];
-        require(delegate.launchOptions[@"UIApplicationLaunchOptionsURLKey"] == nil && [delegate.launchOptions[@"other"] isEqual:@42], @"Cold launch options filtered");
+        NSDictionary *rawLaunch = @{@"UIApplicationLaunchOptionsURLKey": internal, @"other": @42};
+        [delegate application:app willFinishLaunchingWithOptions:rawLaunch];
+        [delegate application:app didFinishLaunchingWithOptions:rawLaunch];
+        require(delegate.willLaunchOptions[@"UIApplicationLaunchOptionsURLKey"] == nil && [delegate.willLaunchOptions[@"other"] isEqual:@42], @"WillFinish launch options filtered");
+        require(delegate.launchOptions[@"UIApplicationLaunchOptionsURLKey"] == nil && [delegate.launchOptions[@"other"] isEqual:@42], @"DidFinish launch options filtered");
 
         LegacyDelegate *legacy = [LegacyDelegate new];
         app.delegate = legacy;
@@ -103,14 +114,16 @@ int main(void) {
         URLContext *outside = [URLContext new]; outside.URL = external;
         NSSet *mixed = [NSSet setWithObjects:inside, outside, nil];
         [sceneDelegate scene:scene openURLContexts:mixed];
-        require([sceneDelegate.received isEqual:[NSSet setWithObject:outside]], @"Mixed scene context preserves external URLs");
+        require(sceneDelegate.openCalls == 1 && [sceneDelegate.received isEqual:[NSSet setWithObject:outside]], @"Mixed scene context preserves external URLs and invokes guest once");
+        [sceneDelegate scene:scene openURLContexts:[NSSet setWithObject:inside]];
+        require(sceneDelegate.openCalls == 1, @"Internal-only scene context does not invoke guest scene:openURLContexts:");
         UISceneConnectionOptions *options = [UISceneConnectionOptions new];
         options.URLContexts = mixed;
         [sceneDelegate scene:scene willConnectToSession:nil options:options];
         require(sceneDelegate.connects == 1 && [sceneDelegate.received isEqual:[NSSet setWithObject:outside]], @"Scene cold launch connects with filtered contexts");
         require(handled == 0, @"Internal actions deferred until after UIKit callback");
         dispatch_async(dispatch_get_main_queue(), ^{
-            require(handled >= 6, @"Deferred internal URLs handled");
+            require(handled == 6, [NSString stringWithFormat:@"Expected exactly 6 internal URL dispatches, got %lu", (unsigned long)handled]);
             NSLog(@"SIContainer delegate interception regression tests passed");
             exit(0);
         });
