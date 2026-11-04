@@ -14,6 +14,7 @@
   var name = params.get('name') || 'Ứng dụng';
   var rawHash = location.hash || '';
   var isSetup = rawHash.indexOf('setup') !== -1;
+  var armedForLaunch = !isSetup;
   var target = guest ? ('sicontainer://launch?guest=' + encodeURIComponent(guest)) : 'sicontainer://';
 
   if (name) {
@@ -24,10 +25,11 @@
   if (iconMatch && iconMatch[1]) {
     try {
       var b64 = decodeURIComponent(iconMatch[1]);
+      var mime = b64.indexOf('iVBOR') === 0 ? 'image/png' : 'image/jpeg';
       var link = document.createElement('link');
       link.rel = 'apple-touch-icon';
       link.sizes = '180x180';
-      link.href = 'data:image/png;base64,' + b64;
+      link.href = 'data:' + mime + ';base64,' + b64;
       document.head.appendChild(link);
       window.__sicIcon = link.href;
     } catch (e) {}
@@ -43,7 +45,7 @@
     setTimeout(function() { window.location.href = target; }, 60);
   }
 
-  if (!isSetup && guest) {
+  if (armedForLaunch && guest) {
     triggerLaunch();
   } else if (isSetup && guest) {
     setTimeout(function() {
@@ -55,13 +57,15 @@
   }
 
   window.addEventListener('pageshow', function(e) {
-    if (location.hash.indexOf('setup') === -1 && guest) {
+    if (armedForLaunch && guest) {
       triggerLaunch();
     }
   });
 
   document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible' && location.hash.indexOf('setup') === -1 && guest) {
+    if (document.visibilityState === 'hidden') {
+      armedForLaunch = true;
+    } else if (document.visibilityState === 'visible' && armedForLaunch && guest) {
       triggerLaunch();
     }
   });
@@ -79,7 +83,7 @@ a.btn{display:block;background:#0a84ff;color:#fff;text-decoration:none;padding:1
 <div class="card">
   <img id="iconImg" style="display:none;width:72px;height:72px;border-radius:16px;margin:0 auto 10px">
   <div class="title" id="appTitle">Đang mở ứng dụng...</div>
-  <div class="sub" id="appSub">Nếu chưa tự chuyển, bấm nút bên dưới hoặc chọn <b>Chia sẻ → Thêm vào MH chính</b>.</div>
+  <div class="sub" id="appSub">Để đưa ra Màn hình chính: bấm nút <b>Chia sẻ</b> ở thanh dưới Safari → chọn <b>Thêm vào MH chính</b>.</div>
   <a class="btn" id="openBtn" href="sicontainer://">Mở ngay</a>
 </div>
 <script>
