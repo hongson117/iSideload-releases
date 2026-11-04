@@ -63,6 +63,12 @@ final class Engine: ObservableObject {
         }
         checkSelfUpdate()
         confirmVersionUpdate()
+        #if ICONTAINER
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            ContainerStore.shared.processPendingAutomationCommandIfNeeded()
+        }
+        #endif
         if hasImportedCert { Task { await loadImportedCert() } }
     }
 
@@ -806,6 +812,9 @@ final class Engine: ObservableObject {
 
     /// On open/foreground: re-sign anything expiring within 2 days (VPN needed).
     func foregroundCheck() async {
+        #if ICONTAINER
+        ContainerStore.shared.processPendingAutomationCommandIfNeeded()
+        #endif
         guard !peerBusy, !busy, !updatingApp else { return }
         let resuming = pendingVPNAction != nil
         await resumeAfterVPN()

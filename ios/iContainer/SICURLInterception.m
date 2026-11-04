@@ -195,6 +195,15 @@ void SICInstallURLInterception(BOOL (^isInternalURL)(NSURL *), void (^handleURL)
         SEL sceneInit = NSSelectorFromString(@"initWithSession:connectionOptions:");
         IMP originalSceneInit = methodImplementation(sceneClass, sceneInit);
         if (originalSceneInit) replaceMethod(sceneClass, sceneInit, ^id(id self, id session, id<SICConnectionOptions> options) {
+            SEL cfgSel = NSSelectorFromString(@"configuration");
+            SEL delClsSel = NSSelectorFromString(@"delegateClass");
+            if ([session respondsToSelector:cfgSel]) {
+                id cfg = ((id (*)(id, SEL))objc_msgSend)(session, cfgSel);
+                if ([cfg respondsToSelector:delClsSel]) {
+                    Class delCls = ((Class (*)(id, SEL))objc_msgSend)(cfg, delClsSel);
+                    if (delCls) hookSceneDelegate(delCls);
+                }
+            }
             if ([options respondsToSelector:getter]) {
                 (void)options.URLContexts;
             }

@@ -72,6 +72,36 @@ final class ContainerStore: ObservableObject {
         }
     }
 
+    func processPendingAutomationCommandIfNeeded() {
+        reload()
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let cmdURL = docs.appendingPathComponent("sicontainer-cmd.json")
+        guard let data = try? Data(contentsOf: cmdURL),
+              let cmd = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let action = cmd["action"] as? String else { return }
+        try? FileManager.default.removeItem(at: cmdURL)
+        ICRecordDiagnosticTrace("automation_cmd_received", cmd)
+        switch action {
+        case "launch_in_runner1":
+            if let gid = cmd["guest_id"] as? String,
+               let guest = guests.first(where: { $0.id.caseInsensitiveCompare(gid) == .orderedSame }) {
+                launchInRunner1(guest)
+            }
+        case "open_url":
+            if let urlStr = cmd["url"] as? String, let url = URL(string: urlStr) {
+                openExternalURLWhenActive(url)
+            }
+        case "open_shortcut_installer":
+            if let gid = cmd["guest_id"] as? String,
+               let guest = guests.first(where: { $0.id.caseInsensitiveCompare(gid) == .orderedSame }) {
+                let mode = (cmd["mode"] as? String) ?? "webclip"
+                openShortcutInstaller(for: guest, mode: mode)
+            }
+        default:
+            break
+        }
+    }
+
     private func request(_ op: String, id: String) -> [String: Any] {
         ["op": op, "guest_id": id, "container_root": Self.root.path]
     }
@@ -114,7 +144,7 @@ final class ContainerStore: ObservableObject {
         }
     }
 
-    private func openExternalURLWhenActive(_ url: URL, failureMessage: String? = nil, retriesLeft: Int = 16) {
+    private func openExternalURLWhenActive(_ url: URL, failureMessage: String? = nil, retriesLeft: Int = 40) {
         endURLJumpBackgroundTask()
         urlJumpBgTask = UIApplication.shared.beginBackgroundTask(withName: "SIContainerURLJump") { [weak self] in
             Task { @MainActor in

@@ -1055,7 +1055,14 @@ int ICBootGuest(void) {
     NSString *oldTmp = NSTemporaryDirectory();
     installContext();
     if (ICIsRunnerProcess()) SICInstallURLInterception(^BOOL(NSURL *url) {
-        return isInternalRunnerURL(url);
+        BOOL match = isInternalRunnerURL(url);
+        if (match) {
+            ICRecordDiagnosticTrace(@"url_intercepted_in_guest", @{
+                @"url": url.absoluteString ?: @"",
+                @"loaded_guest_id": loadedGuestID ?: @"",
+            });
+        }
+        return match;
     }, ^(NSURL *url) {
         ICHandleRunnerURL(url);
     });
