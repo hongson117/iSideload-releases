@@ -14,9 +14,10 @@
   var name = params.get('name') || 'Ứng dụng';
   var rawSlot = params.get('slot') || 'runner1';
   var slot = (rawSlot === 'main' || rawSlot === 'runner1') ? rawSlot : 'runner1';
-  var alreadyLaunched = params.get('launched') === '1';
   var rawHash = location.hash || '';
   var isSetup = rawHash.indexOf('setup') !== -1;
+  var armedForLaunch = !isSetup;
+  var lastLaunchAt = 0;
   var scheme = (slot === 'main') ? 'sicontainer' : ('sicontainer-' + slot);
   var target = guest ? (scheme + '://launch?guest=' + encodeURIComponent(guest)) : (scheme + '://');
 
@@ -42,25 +43,40 @@
   window.__sicName = name;
   window.__sicGuest = guest;
 
-  var navEntry = (window.performance && performance.getEntriesByType) ? performance.getEntriesByType('navigation')[0] : null;
-  var navType = navEntry ? navEntry.type : ((window.performance && performance.navigation && performance.navigation.type === 2) ? 'back_forward' : 'navigate');
-
-  var cleanSearch = '?guest=' + encodeURIComponent(guest)
-    + (name ? ('&name=' + encodeURIComponent(name)) : '')
-    + '&slot=' + encodeURIComponent(slot);
-
-  if (!isSetup && !alreadyLaunched && guest && navType !== 'back_forward') {
-    try {
-      history.replaceState({ sicLaunchedFor: guest, launchedAt: Date.now() }, name, location.pathname + cleanSearch + '&launched=1');
-    } catch (e) {}
+  function triggerLaunch() {
+    if (!guest) return;
+    var now = Date.now();
+    if (now - lastLaunchAt < 1200) return;
+    lastLaunchAt = now;
     window.location.href = target;
+  }
+
+  if (armedForLaunch && guest) {
+    triggerLaunch();
   } else if (isSetup && guest) {
     setTimeout(function() {
       try {
-        history.replaceState({ sicSetupCleaned: true }, name, location.pathname + cleanSearch);
+        var cleanSearch = '?guest=' + encodeURIComponent(guest)
+          + (name ? ('&name=' + encodeURIComponent(name)) : '')
+          + '&slot=' + encodeURIComponent(slot);
+        history.replaceState(null, name, location.pathname + cleanSearch);
       } catch (e) {}
     }, 150);
   }
+
+  window.addEventListener('pageshow', function(e) {
+    if (armedForLaunch && guest && e.persisted) {
+      triggerLaunch();
+    }
+  });
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') {
+      armedForLaunch = true;
+    } else if (document.visibilityState === 'visible' && armedForLaunch && guest) {
+      triggerLaunch();
+    }
+  });
 })();
 </script>
 <style>
@@ -68,7 +84,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0d0d11;
 .card{background:#1c1c22;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;margin:16px auto;max-width:420px}
 .title{font-size:21px;font-weight:700;margin:8px 0 4px}
 .sub{font-size:14px;color:#98989f;margin-bottom:14px;line-height:1.5}
-.meta{font-size:11px;color:#636366;font-family:ui-monospace,SFMono-Regular,monospace;word-break:break-all;margin-top:10px}
 a.btn{display:block;background:#0a84ff;color:#fff;text-decoration:none;padding:14px 18px;border-radius:13px;font-weight:700;font-size:16px;margin-top:12px}
 </style>
 </head>
@@ -78,7 +93,6 @@ a.btn{display:block;background:#0a84ff;color:#fff;text-decoration:none;padding:1
   <div class="title" id="appTitle">Đang mở trực tiếp trên Phụ 1...</div>
   <div class="sub" id="appSub">Để đưa ra Màn hình chính: bấm nút <b>Chia sẻ</b> ở thanh dưới Safari → chọn <b>Thêm vào MH chính</b>.</div>
   <a class="btn" id="openBtn" href="sicontainer-runner1://">Mở trực tiếp (Phụ 1)</a>
-  <div class="meta" id="guestMeta"></div>
 </div>
 <script>
 if (window.__sicName) {
@@ -87,9 +101,6 @@ if (window.__sicName) {
 }
 if (window.__sicTarget) {
   document.getElementById('openBtn').href = window.__sicTarget;
-}
-if (window.__sicGuest) {
-  document.getElementById('guestMeta').textContent = 'Guest UUID: ' + window.__sicGuest;
 }
 if (window.__sicIcon) {
   var img = document.getElementById('iconImg');
