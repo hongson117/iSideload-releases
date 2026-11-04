@@ -212,24 +212,14 @@ struct ContainerView: View {
         }
         .confirmationDialog("Tạo Icon 1-Chạm ra Màn hình chính iOS", isPresented: Binding(get: { shortcutTarget != nil }, set: { if !$0 { shortcutTarget = nil } }), titleVisibility: .visible) {
             if let guest = shortcutTarget {
-                Button("Cách 1: Cài Hồ sơ WebClip (.mobileconfig - Icon chuẩn)") {
-                    shortcutTarget = nil
-                    store.openShortcutInstaller(for: guest, mode: "webclip")
-                }
-                Button("Cách 2: Mở trang Safari HTTPS (Chia sẻ → Thêm vào MH chính)") {
+                Button("Mở trang Safari HTTPS (Chia sẻ → Thêm vào MH chính)") {
                     shortcutTarget = nil
                     store.openShortcutInstaller(for: guest, mode: "safari")
-                }
-                Button("Sao chép link mở app") {
-                    let link = store.shortcutLaunchURL(for: guest)?.absoluteString
-                    UIPasteboard.general.string = link
-                    shortcutTarget = nil
-                    store.message = link.map { "Đã sao chép link mở app: \($0)" }
                 }
             }
             Button("Hủy", role: .cancel) { shortcutTarget = nil }
         } message: {
-            Text("WebClip cần xác nhận cài hồ sơ trong Cài đặt. Trang Safari hỗ trợ Chia sẻ → Thêm vào MH chính. Với Phụ 1 đã cài, shortcut mở thẳng Phụ 1 và chỉ qua Chính khi cần khởi động lại tiến trình.")
+            Text("Mở trang Safari hỗ trợ Chia sẻ → Thêm vào MH chính. Với Phụ 1 đã cài, shortcut mở thẳng Phụ 1 và chỉ qua Chính khi cần khởi động lại tiến trình.")
         }
         .alert("Chạy cục bộ trên Con Chính?", isPresented: Binding(get: { launchingLocal != nil }, set: { if !$0 { launchingLocal = nil } })) {
             Button("Tiếp tục") {

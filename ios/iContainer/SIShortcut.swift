@@ -39,7 +39,7 @@ enum SIShortcut {
         let profile: [String: Any] = [
             "PayloadType": "Configuration",
             "PayloadVersion": 1,
-            "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.v2.\(id.uuidString)",
+            "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.\(id.uuidString)",
             "PayloadUUID": UUID().uuidString,
             "PayloadDisplayName": "Shortcut \(name)",
             "PayloadDescription": "Thêm biểu tượng mở \(name) vào Màn hình chính.",

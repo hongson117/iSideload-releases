@@ -37,7 +37,6 @@ final class ContainerStore: ObservableObject {
     var runner1BundleID: String? {
         let probe = probeSummary["runner1_probe"] as? [String: Any]
         if let bid = probe?["bundle_id"] as? String, !bid.isEmpty { return bid }
-        if let installed = Engine.shared.installedRunner1App?.bundleID, !installed.isEmpty { return installed }
         return nil
     }
 
@@ -64,42 +63,6 @@ final class ContainerStore: ObservableObject {
                   guest.id == dir.lastPathComponent else { return nil }
             return guest
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        for guest in guests {
-            if let cfg = buildWebClipMobileConfig(for: guest) {
-                try? cfg.write(to: docs.appendingPathComponent("webclip-\(guest.id).mobileconfig"), options: .atomic)
-            }
-        }
-    }
-
-    func processPendingAutomationCommandIfNeeded() {
-        reload()
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cmdURL = docs.appendingPathComponent("sicontainer-cmd.json")
-        guard let data = try? Data(contentsOf: cmdURL),
-              let cmd = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let action = cmd["action"] as? String else { return }
-        try? FileManager.default.removeItem(at: cmdURL)
-        ICRecordDiagnosticTrace("automation_cmd_received", cmd)
-        switch action {
-        case "launch_in_runner1":
-            if let gid = cmd["guest_id"] as? String,
-               let guest = guests.first(where: { $0.id.caseInsensitiveCompare(gid) == .orderedSame }) {
-                launchInRunner1(guest)
-            }
-        case "open_url":
-            if let urlStr = cmd["url"] as? String, let url = URL(string: urlStr) {
-                openExternalURLWhenActive(url)
-            }
-        case "open_shortcut_installer":
-            if let gid = cmd["guest_id"] as? String,
-               let guest = guests.first(where: { $0.id.caseInsensitiveCompare(gid) == .orderedSame }) {
-                let mode = (cmd["mode"] as? String) ?? "webclip"
-                openShortcutInstaller(for: guest, mode: mode)
-            }
-        default:
-            break
-        }
     }
 
     private func request(_ op: String, id: String) -> [String: Any] {
@@ -144,7 +107,7 @@ final class ContainerStore: ObservableObject {
         }
     }
 
-    private func openExternalURLWhenActive(_ url: URL, failureMessage: String? = nil, retriesLeft: Int = 40) {
+    private func openExternalURLWhenActive(_ url: URL, failureMessage: String? = nil, retriesLeft: Int = 16) {
         endURLJumpBackgroundTask()
         urlJumpBgTask = UIApplication.shared.beginBackgroundTask(withName: "SIContainerURLJump") { [weak self] in
             Task { @MainActor in
@@ -403,7 +366,7 @@ final class ContainerStore: ObservableObject {
         <script>
         if (location.hash === '#auto-profile') {
             setTimeout(function(){
-                window.location.href = '/webclip/v2/\(guest.id).mobileconfig';
+                window.location.href = '/webclip/\(guest.id).mobileconfig';
             }, 250);
         } else if (location.hash !== '#setup') {
             window.location.replace('\(launchURL)');
@@ -428,7 +391,7 @@ final class ContainerStore: ObservableObject {
         <div class="step"><b>Bước 2:</b> Mở <b>Cài đặt (Settings)</b> của iPhone → bấm <b>Đã tải về hồ sơ</b> ở ngay đầu trang.</div>
         <div class="step"><b>Bước 3:</b> Bấm <b>Cài đặt</b> (góc trên bên phải) → nhập mật mã máy.</div>
         <div class="warn"><b>Lưu ý quan trọng ở màn hình "Cảnh báo (Hồ sơ không được xác nhận)":</b><br>Đây chỉ là thông báo mặc định của iOS cho hồ sơ tạo trên máy. Bạn hãy bấm tiếp nút <b>Cài đặt</b> màu xanh ở <b>góc trên cùng bên phải</b> → bấm <b>Cài đặt</b> màu đỏ ở dưới cùng là Icon <b>\(title)</b> sẽ hiện ngay ngoài Màn hình chính!</div>
-        <a class="btn" href="/webclip/v2/\(guest.id).mobileconfig">Tải lại Hồ sơ Icon 1-Chạm (.mobileconfig)</a>
+        <a class="btn" href="/webclip/\(guest.id).mobileconfig">Tải lại Hồ sơ Icon 1-Chạm (.mobileconfig)</a>
         <a class="btn btn-secondary" href="\(launchURL)">Mở \(title) ngay bây giờ</a>
         </div>
         </body></html>
@@ -438,10 +401,18 @@ final class ContainerStore: ObservableObject {
 
     private func buildServiceWorkerJS() -> Data {
         let js = """
-        const CACHE = 'sicontainer-shortcuts-v3';
+        const CACHE = 'sicontainer-shortcuts-v2';
         self.addEventListener('install', e => { self.skipWaiting(); });
-        self.addEventListener('activate', e => {
-            e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => self.clients.claim()));
+        self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
+        self.addEventListener('fetch', e => {
+            if (e.request.method !== 'GET') return;
+            e.respondWith(
+                fetch(e.request).then(res => {
+                    const copy = res.clone();
+                    caches.open(CACHE).then(c => c.put(e.request, copy));
+                    return res;
+                }).catch(() => caches.match(e.request, {ignoreSearch: true}))
+            );
         });
         """
         return Data(js.utf8)
@@ -470,7 +441,6 @@ final class ContainerStore: ObservableObject {
                 .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
             let fullStr = iconB64.isEmpty ? "\(baseHTTPS)#setup" : "\(baseHTTPS)#setup&icon=\(iconB64)"
             if let url = URL(string: fullStr) {
-                ICRecordDiagnosticTrace("open_shortcut_installer", ["mode": "safari", "guest_id": guest.id, "url": baseHTTPS])
                 openExternalURLWhenActive(url)
                 return
             }
@@ -479,18 +449,12 @@ final class ContainerStore: ObservableObject {
             failure = "Không tạo được cấu hình Shortcut."
             return
         }
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        try? configData.write(to: docs.appendingPathComponent("last-generated.mobileconfig"), options: .atomic)
-        try? configData.write(to: docs.appendingPathComponent("webclip-\(guest.id).mobileconfig"), options: .atomic)
-        ICRecordDiagnosticTrace("open_shortcut_installer", ["mode": mode, "guest_id": guest.id, "mobileconfig_bytes": configData.count])
-
         beginShortcutServerBackgroundTask()
         let htmlData = buildSafariShortcutHTML(for: guest)
         let swData = buildServiceWorkerJS()
         let safeFile = "\(guest.id).mobileconfig"
         shortcutPayloads["/webclip.mobileconfig"] = ("application/x-apple-aspen-config", safeFile, configData)
         shortcutPayloads["/webclip/\(safeFile)"] = ("application/x-apple-aspen-config", safeFile, configData)
-        shortcutPayloads["/webclip/v2/\(safeFile)"] = ("application/x-apple-aspen-config", safeFile, configData)
         shortcutPayloads["/safari"] = ("text/html; charset=utf-8", nil, htmlData)
         shortcutPayloads["/safari/\(guest.id)"] = ("text/html; charset=utf-8", nil, htmlData)
         shortcutPayloads["/sw.js"] = ("application/javascript; charset=utf-8", nil, swData)

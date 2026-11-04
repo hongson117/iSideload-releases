@@ -19,7 +19,6 @@
 #import <string.h>
 
 static NSString *rootPath;
-static NSString *hostDocumentsDir;
 static NSString *sharedGroupID;
 static BOOL sharedGroupOK = NO;
 static NSString *hostBundleID;
@@ -116,11 +115,6 @@ NSString *ICContainerRoot(void) {
     dispatch_once(&once, ^{
         rawHostBundleID();
         NSFileManager *fm = NSFileManager.defaultManager;
-        NSString *docDir = [fm URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject.path;
-        if (docDir.length) {
-            hostDocumentsDir = docDir;
-            [fm createDirectoryAtPath:hostDocumentsDir withIntermediateDirectories:YES attributes:nil error:nil];
-        }
         for (NSString *group in candidateAppGroups()) {
             NSURL *url = [fm containerURLForSecurityApplicationGroupIdentifier:group];
             if (!url.path.length) continue;
@@ -176,13 +170,8 @@ static NSString *registryPath(void) { return [slotsDir() stringByAppendingPathCo
 static NSString *registryLockPath(void) { return [slotsDir() stringByAppendingPathComponent:@"registry.lock"]; }
 static NSString *ticketPath(void) { return [ICContainerRoot() stringByAppendingPathComponent:@"next-launch.plist"]; }
 static NSString *errorPath(void) { return [ICContainerRoot() stringByAppendingPathComponent:@"last-launch-error.txt"]; }
-static NSString *traceLogPath(void) { return [ICContainerRoot() stringByAppendingPathComponent:@"url-trace.jsonl"]; }
-static NSString *traceLockPath(void) { return [slotsDir() stringByAppendingPathComponent:@"trace.lock"]; }
 NSString *ICLastLaunchError(void) { return [NSString stringWithContentsOfFile:errorPath() encoding:NSUTF8StringEncoding error:nil]; }
-static void fail(NSString *message) {
-    [message writeToFile:errorPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    ICRecordDiagnosticTrace(@"fail", @{@"message": message ?: @""});
-}
+static void fail(NSString *message) { [message writeToFile:errorPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]; }
 
 static void acquireRunnerAliveLockIfNeeded(void) {
     if (!ICIsRunnerProcess() || slotAliveFD >= 0) return;
@@ -261,45 +250,6 @@ static BOOL updateRegistryTransaction(void (^block)(NSMutableDictionary *registr
     return saved;
 }
 
-static void syncDiagnosticSnapshot(NSArray<NSString *> *knownLines) {
-    if (!hostDocumentsDir.length) return;
-    NSArray<NSString *> *lines = knownLines;
-    if (!lines) {
-        NSString *existing = [NSString stringWithContentsOfFile:traceLogPath() encoding:NSUTF8StringEncoding error:nil] ?: @"";
-        NSMutableArray<NSString *> *arr = [NSMutableArray new];
-        for (NSString *line in [existing componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
-            if (line.length > 0) [arr addObject:line];
-        }
-        lines = arr;
-    }
-    NSMutableArray<NSDictionary *> *parsedTraces = [NSMutableArray new];
-    for (NSString *line in lines) {
-        NSData *d = [line dataUsingEncoding:NSUTF8StringEncoding];
-        NSDictionary *obj = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
-        if ([obj isKindOfClass:NSDictionary.class]) [parsedTraces addObject:obj];
-    }
-    NSData *regData = [NSData dataWithContentsOfFile:registryPath()];
-    NSDictionary *regDict = regData ? [NSJSONSerialization JSONObjectWithData:regData options:0 error:nil] : nil;
-    NSDictionary *ticketDict = [NSDictionary dictionaryWithContentsOfFile:slotTicketPath(@"runner1")];
-    NSDictionary *snapshot = @{
-        @"updated_at": @([NSDate.date timeIntervalSince1970]),
-        @"role": ICCurrentRole(),
-        @"bundle_id": rawHostBundleID(),
-        @"pid": @(getpid()),
-        @"loaded_guest_id": loadedGuestID ?: @"",
-        @"loaded_request_id": loadedRequestID ?: @"",
-        @"last_launch_error": ICLastLaunchError() ?: @"",
-        @"runner1_alive_in_ram": @(ICIsSlotAlive(@"runner1")),
-        @"slot_registry": [regDict isKindOfClass:NSDictionary.class] ? regDict : @{},
-        @"runner1_ticket": [ticketDict isKindOfClass:NSDictionary.class] ? ticketDict : @{},
-        @"url_trace": parsedTraces,
-    };
-    NSData *snapData = [NSJSONSerialization dataWithJSONObject:snapshot options:NSJSONWritingPrettyPrinted error:nil];
-    if (snapData) {
-        [snapData writeToFile:[hostDocumentsDir stringByAppendingPathComponent:@"sicontainer-diag.json"] options:NSDataWritingAtomic error:nil];
-    }
-}
-
 void ICRecordRoleProbe(void) {
     ICContainerRoot();
     acquireRunnerAliveLockIfNeeded();
@@ -321,7 +271,6 @@ void ICRecordRoleProbe(void) {
     NSData *json = [NSJSONSerialization dataWithJSONObject:probe options:NSJSONWritingPrettyPrinted error:nil];
     NSString *target = [probesDir() stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.json", role]];
     if (json) [json writeToFile:target options:NSDataWritingAtomic error:nil];
-    syncDiagnosticSnapshot(nil);
 }
 
 NSDictionary *ICReadProbeSummary(void) {
@@ -344,47 +293,6 @@ NSDictionary *ICReadProbeSummary(void) {
         @"runner1_alive_in_ram": @(runner1Alive),
         @"slot_registry": [regDict isKindOfClass:NSDictionary.class] ? regDict : @{},
     };
-}
-
-void ICRecordDiagnosticTrace(NSString *event, NSDictionary *details) {
-    ICContainerRoot();
-    NSString *lockFile = traceLockPath();
-    int fd = open(lockFile.fileSystemRepresentation, O_CREAT | O_RDWR, 0600);
-    if (fd >= 0) flock(fd, LOCK_EX);
-
-    NSMutableDictionary *entry = [NSMutableDictionary new];
-    entry[@"ts"] = @([NSDate.date timeIntervalSince1970]);
-    entry[@"role"] = ICCurrentRole();
-    entry[@"pid"] = @(getpid());
-    entry[@"loaded_guest_id"] = loadedGuestID ?: @"";
-    entry[@"loaded_request_id"] = loadedRequestID ?: @"";
-    entry[@"event"] = event ?: @"unknown";
-    if ([details isKindOfClass:NSDictionary.class]) {
-        entry[@"details"] = details;
-    }
-
-    NSString *logFile = traceLogPath();
-    NSString *existing = [NSString stringWithContentsOfFile:logFile encoding:NSUTF8StringEncoding error:nil] ?: @"";
-    NSMutableArray<NSString *> *lines = [NSMutableArray new];
-    for (NSString *line in [existing componentsSeparatedByCharactersInSet:NSCharacterSet.newlineCharacterSet]) {
-        if (line.length > 0) [lines addObject:line];
-    }
-    NSData *entryData = [NSJSONSerialization dataWithJSONObject:entry options:0 error:nil];
-    if (entryData) {
-        NSString *entryLine = [[NSString alloc] initWithData:entryData encoding:NSUTF8StringEncoding];
-        if (entryLine.length) [lines addObject:entryLine];
-    }
-    while (lines.count > 60) {
-        [lines removeObjectAtIndex:0];
-    }
-    NSString *joined = [[lines componentsJoinedByString:@"\n"] stringByAppendingString:@"\n"];
-    [joined writeToFile:logFile atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    syncDiagnosticSnapshot(lines);
-
-    if (fd >= 0) {
-        flock(fd, LOCK_UN);
-        close(fd);
-    }
 }
 
 static BOOL validIdentifier(NSString *identifier) {
@@ -542,15 +450,6 @@ NSDictionary *ICPrepareRunnerLaunch(NSString *identifier, NSString *slotID, NSEr
         if (error) *error = writeError ?: [NSError errorWithDomain:@"SIContainer" code:12 userInfo:@{NSLocalizedDescriptionKey: @"Không lưu được yêu cầu mở app. Hãy thử lại."}];
         return nil;
     }
-    ICRecordDiagnosticTrace(@"prepare_runner_launch", @{
-        @"guest_id": identifier ?: @"",
-        @"slot": targetSlot ?: @"",
-        @"action": plan[@"action"] ?: @"",
-        @"request_id": plan[@"request_id"] ?: @"",
-        @"url": plan[@"url"] ?: @"",
-        @"needs_eviction": @(needsEviction),
-        @"alive": @(alive),
-    });
     // The runner handles its own URL on the main queue. Never wait for our own
     // alive lock or send ourselves an eviction notification here.
     if (needsEviction && ![ICCurrentRole() isEqual:targetSlot]) {
@@ -576,12 +475,6 @@ NSURL *ICCompleteRunnerSwitchURL(NSString *slotID, NSString *requestID) {
             ![registry[@"slots"][targetSlot][@"pending_request_id"] isEqual:requestID]) return;
         NSString *urlStr = [NSString stringWithFormat:@"sicontainer-%@://launch?req=%@&guest=%@", targetSlot, requestID, ticket[@"id"]];
         url = [NSURL URLWithString:urlStr];
-    });
-    ICRecordDiagnosticTrace(@"complete_runner_switch", @{
-        @"slot": targetSlot ?: @"",
-        @"request_id": requestID ?: @"",
-        @"url": url.absoluteString ?: @"",
-        @"success": @(url != nil),
     });
     return url;
 }
@@ -709,17 +602,8 @@ static void bounceRunnerToManager(NSString *requestID, NSUInteger attempts) {
     }
     bounceOpenURLSent = 1;
     NSString *bounce = [NSString stringWithFormat:@"sicontainer://complete-switch?slot=%@&req=%@", ICCurrentRole(), currentReq];
-    ICRecordDiagnosticTrace(@"bounce_runner_to_manager", @{
-        @"request_id": currentReq ?: @"",
-        @"bounce_url": bounce ?: @"",
-        @"app_state": @(UIApplication.sharedApplication.applicationState),
-    });
     [UIApplication.sharedApplication openURL:[NSURL URLWithString:bounce] options:@{} completionHandler:^(BOOL success) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            ICRecordDiagnosticTrace(@"bounce_open_url_result", @{
-                @"request_id": currentReq ?: @"",
-                @"success": @(success),
-            });
             if (!success) {
                 activeBounceRequestID = nil;
                 bounceOpenURLSent = 0;
@@ -754,13 +638,6 @@ static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
     NSString *pendingGuest = [pending isKindOfClass:NSDictionary.class] ? pending[@"id"] : nil;
     NSTimeInterval pendingAge = [NSDate.date timeIntervalSince1970] - [pending[@"created"] doubleValue];
     if (validIdentifier(pendingReq) && ![pendingReq isEqualToString:loadedRequestID ?: @""] && validIdentifier(pendingGuest) && pendingAge >= -5 && pendingAge <= 30) {
-        ICRecordDiagnosticTrace(@"pending_eviction_detected", @{
-            @"pending_request_id": pendingReq ?: @"",
-            @"pending_guest_id": pendingGuest ?: @"",
-            @"loaded_guest_id": loadedGuestID ?: @"",
-            @"is_foreground": @(isForegroundWakeup),
-            @"app_state": @(UIApplication.sharedApplication.applicationState),
-        });
         if (!isForegroundWakeup && UIApplication.sharedApplication.applicationState == UIApplicationStateInactive) {
             // Process is mid-transition to foreground via sicontainer-runner1://evict; let DidBecomeActive bounce cleanly.
             return;
@@ -790,10 +667,6 @@ static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
                 slots[role] = entry;
             }
         });
-        ICRecordDiagnosticTrace(@"guest_running_ack", @{
-            @"guest_id": loadedGuestID ?: @"",
-            @"request_id": loadedRequestID ?: @"",
-        });
     }
 }
 
@@ -804,12 +677,6 @@ static BOOL isInternalRunnerURL(NSURL *url) {
 
 BOOL ICHandleRunnerURL(NSURL *url) {
     if (!isInternalRunnerURL(url)) return NO;
-    ICRecordDiagnosticTrace(@"handle_runner_url_received", @{
-        @"url": url.absoluteString ?: @"",
-        @"loaded_guest_id": loadedGuestID ?: @"",
-        @"loaded_request_id": loadedRequestID ?: @"",
-        @"evicting": @(evictingInProgress),
-    });
     NSString *action = url.host.lowercaseString;
     if (![@[@"launch", @"resume", @"evict"] containsObject:action]) return YES;
     if (evictingInProgress && bounceOpenURLSent) return YES;
@@ -837,11 +704,6 @@ BOOL ICHandleRunnerURL(NSURL *url) {
     if ([guest isEqual:loadedGuestID] && !requestID && !evictingInProgress) {
         // UIKit has already brought the existing guest forward. No Manager hop,
         // ticket write, re-sign, or new guest process is needed.
-        ICRecordDiagnosticTrace(@"handle_runner_url_decision", @{
-            @"decision": @"resume_in_place",
-            @"guest_id": guest ?: @"",
-            @"loaded_guest_id": loadedGuestID ?: @"",
-        });
         checkPendingEvictionOrTouchLRU(YES);
         return YES;
     }
@@ -851,12 +713,6 @@ BOOL ICHandleRunnerURL(NSURL *url) {
         if (!plan) { fail(error.localizedDescription ?: @"Không chuẩn bị được yêu cầu mở app."); return YES; }
         requestID = plan[@"request_id"];
     }
-    ICRecordDiagnosticTrace(@"handle_runner_url_decision", @{
-        @"decision": @"start_runner_bounce",
-        @"guest_id": guest ?: @"",
-        @"request_id": requestID ?: @"",
-        @"loaded_guest_id": loadedGuestID ?: @"",
-    });
     startRunnerBounce(requestID);
     return YES;
 }
@@ -1055,14 +911,7 @@ int ICBootGuest(void) {
     NSString *oldTmp = NSTemporaryDirectory();
     installContext();
     if (ICIsRunnerProcess()) SICInstallURLInterception(^BOOL(NSURL *url) {
-        BOOL match = isInternalRunnerURL(url);
-        if (match) {
-            ICRecordDiagnosticTrace(@"url_intercepted_in_guest", @{
-                @"url": url.absoluteString ?: @"",
-                @"loaded_guest_id": loadedGuestID ?: @"",
-            });
-        }
-        return match;
+        return isInternalRunnerURL(url);
     }, ^(NSURL *url) {
         ICHandleRunnerURL(url);
     });
@@ -1154,11 +1003,6 @@ int ICBootGuest(void) {
         }
         slots[role] = entryDict;
     });
-    ICRecordDiagnosticTrace(@"boot_guest_loaded", @{
-        @"guest_id": identifier ?: @"",
-        @"guest_name": guestName ?: @"",
-        @"request_id": requestID ?: @"",
-    });
 
     if (ICIsRunnerProcess()) {
         NSString *notifyName = [NSString stringWithFormat:@"com.hongson117.sicontainer.%@.evict", role];
@@ -1167,25 +1011,17 @@ int ICBootGuest(void) {
             beginRunnerBackgroundStandby();
         }];
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-            SICRefreshURLInterceptionForActiveObjects();
             endRunnerBackgroundStandby();
             checkPendingEvictionOrTouchLRU(YES);
         }];
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-            SICRefreshURLInterceptionForActiveObjects();
             endRunnerBackgroundStandby();
             checkPendingEvictionOrTouchLRU(YES);
         }];
     }
 
     [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidFinishLaunchingNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-        if (ICIsRunnerProcess()) {
-            SICRefreshURLInterceptionForActiveObjects();
-        }
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            if (ICIsRunnerProcess()) {
-                SICRefreshURLInterceptionForActiveObjects();
-            }
             installReturnButton();
         });
     }];

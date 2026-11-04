@@ -63,12 +63,6 @@ final class Engine: ObservableObject {
         }
         checkSelfUpdate()
         confirmVersionUpdate()
-        #if ICONTAINER
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            ContainerStore.shared.processPendingAutomationCommandIfNeeded()
-        }
-        #endif
         if hasImportedCert { Task { await loadImportedCert() } }
     }
 
@@ -245,14 +239,11 @@ final class Engine: ObservableObject {
         _ = try await run(r)
     }
 
-    static func isRunner1BundleID(_ bundleID: String) -> Bool {
-        bundleID == "com.hongson117.sicontainer.runner1" ||
-        bundleID.hasPrefix("com.hongson117.sicontainer.runner1.") ||
-        (bundleID.hasPrefix("com.hongson117.sicontainer.") && bundleID.hasSuffix(".runner1"))
-    }
-
     var installedRunner1App: SideloadedApp? {
-        apps.first { Self.isRunner1BundleID($0.bundleID) }
+        apps.first {
+            $0.bundleID == "com.hongson117.sicontainer.runner1" ||
+            $0.bundleID.hasPrefix("com.hongson117.sicontainer.runner1.")
+        }
     }
 
     var hasBundledRunner1IPA: Bool {
@@ -812,9 +803,6 @@ final class Engine: ObservableObject {
 
     /// On open/foreground: re-sign anything expiring within 2 days (VPN needed).
     func foregroundCheck() async {
-        #if ICONTAINER
-        ContainerStore.shared.processPendingAutomationCommandIfNeeded()
-        #endif
         guard !peerBusy, !busy, !updatingApp else { return }
         let resuming = pendingVPNAction != nil
         await resumeAfterVPN()
@@ -971,7 +959,6 @@ final class Engine: ObservableObject {
     func handleURL(_ url: URL) {
         if url.scheme == "icontainer" || url.scheme == "sicontainer" {
             #if ICONTAINER
-            ICRecordDiagnosticTrace("manager_handle_url", ["url": url.absoluteString])
             if url.host == "launch" {
                 let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
                 if let guestID = items.first(where: { $0.name == "guest" })?.value, !guestID.isEmpty {
