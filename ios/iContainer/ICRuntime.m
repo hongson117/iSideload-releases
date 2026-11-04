@@ -35,6 +35,22 @@ static UIWindow *returnWindow;
 static int slotAliveFD = -1;
 static int guestWriterFD = -1;
 static volatile int evictingInProgress = 0;
+static UIBackgroundTaskIdentifier runnerBgTask = UIBackgroundTaskInvalid;
+
+static void endRunnerBackgroundStandby(void) {
+    if (runnerBgTask != UIBackgroundTaskInvalid) {
+        [UIApplication.sharedApplication endBackgroundTask:runnerBgTask];
+        runnerBgTask = UIBackgroundTaskInvalid;
+    }
+}
+
+static void beginRunnerBackgroundStandby(void) {
+    if (!ICIsRunnerProcess()) return;
+    endRunnerBackgroundStandby();
+    runnerBgTask = [UIApplication.sharedApplication beginBackgroundTaskWithName:@"SIContainerRunnerSlotStandby" expirationHandler:^{
+        endRunnerBackgroundStandby();
+    }];
+}
 
 static NSString *rawHostBundleID(void) {
     if (hostBundleID) return hostBundleID;
@@ -46,10 +62,12 @@ static NSString *rawHostBundleID(void) {
 
 static NSString *extractTeamSuffix(NSString *bundleID) {
     NSArray<NSString *> *parts = [bundleID componentsSeparatedByString:@"."];
-    if (parts.count >= 4) {
-        NSString *last = parts.lastObject;
-        if (last.length == 10 && ![last isEqualToString:@"sicontainer"] && ![last isEqualToString:@"icontainer"] && ![last hasPrefix:@"runner"]) {
-            return last;
+    for (NSString *part in [parts reverseObjectEnumerator]) {
+        if (part.length == 10 &&
+            ![part isEqualToString:@"sicontainer"] &&
+            ![part isEqualToString:@"icontainer"] &&
+            ![part hasPrefix:@"runner"]) {
+            return part;
         }
     }
     return nil;
@@ -291,18 +309,36 @@ static NSString *expectedBundleIDForSlot(NSString *slotID) {
     NSString *probed = [rDict isKindOfClass:NSDictionary.class] ? rDict[@"bundle_id"] : nil;
     if ([probed isKindOfClass:NSString.class] && probed.length > 0) return probed;
     NSString *team = extractTeamSuffix(rawHostBundleID());
-    NSString *suffix = team.length ? [@"." stringByAppendingString:team] : @"";
     if ([slotID isEqualToString:@"runner1"] || [slotID isEqualToString:@"runner2"]) {
-        return [NSString stringWithFormat:@"com.hongson117.sicontainer.%@%@", slotID, suffix];
+        if (team.length > 0) {
+            return [NSString stringWithFormat:@"com.hongson117.sicontainer.%@.%@", team, slotID];
+        }
+        return [NSString stringWithFormat:@"com.hongson117.sicontainer.%@", slotID];
     }
     return rawHostBundleID();
 }
 
 static NSString *preparedAppPathForBundle(NSString *guestDir, NSString *targetBundleID) {
-    NSString *perSlot = [[guestDir stringByAppendingPathComponent:@"Prepared"] stringByAppendingPathComponent:targetBundleID];
+    NSString *preparedRoot = [guestDir stringByAppendingPathComponent:@"Prepared"];
+    NSString *perSlot = [preparedRoot stringByAppendingPathComponent:targetBundleID];
     NSString *candidate = [perSlot stringByAppendingPathComponent:@"Prepared.app"];
     if ([NSFileManager.defaultManager fileExistsAtPath:[candidate stringByAppendingPathComponent:@"iContainerLaunch.json"]]) {
         return candidate;
+    }
+    NSString *team = extractTeamSuffix(targetBundleID);
+    for (NSString *role in @[@"runner1", @"runner2"]) {
+        if ([targetBundleID containsString:[@"." stringByAppendingString:role]] && team.length > 0) {
+            NSArray<NSString *> *altIDs = @[
+                [NSString stringWithFormat:@"com.hongson117.sicontainer.%@.%@", team, role],
+                [NSString stringWithFormat:@"com.hongson117.sicontainer.%@.%@", role, team],
+            ];
+            for (NSString *alt in altIDs) {
+                NSString *altApp = [[preparedRoot stringByAppendingPathComponent:alt] stringByAppendingPathComponent:@"Prepared.app"];
+                if ([NSFileManager.defaultManager fileExistsAtPath:[altApp stringByAppendingPathComponent:@"iContainerLaunch.json"]]) {
+                    return altApp;
+                }
+            }
+        }
     }
     return [guestDir stringByAppendingPathComponent:@"Prepared.app"];
 }
@@ -508,16 +544,20 @@ static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
     NSString *pendingReq = [pending isKindOfClass:NSDictionary.class] ? pending[@"request_id"] : nil;
     NSString *pendingGuest = [pending isKindOfClass:NSDictionary.class] ? pending[@"id"] : nil;
     if (pendingReq.length > 0 && ![pendingReq isEqualToString:loadedRequestID ?: @""] && pendingGuest.length > 0) {
+        if (!isForegroundWakeup && UIApplication.sharedApplication.applicationState == UIApplicationStateInactive) {
+            // Process is mid-transition to foreground via sicontainer-runner1://evict; let DidBecomeActive bounce cleanly.
+            return;
+        }
         if (__sync_bool_compare_and_swap(&evictingInProgress, 0, 1)) {
             flushGuestStateBeforeExit();
-            if (isForegroundWakeup || UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
+            if (isForegroundWakeup || UIApplication.sharedApplication.applicationState != UIApplicationStateBackground) {
                 NSString *bounce = [NSString stringWithFormat:@"sicontainer://complete-switch?slot=%@&req=%@", role, pendingReq];
                 NSURL *url = [NSURL URLWithString:bounce];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL success) {
                         _exit(0);
                     }];
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                         _exit(0);
                     });
                 });
@@ -792,10 +832,15 @@ int ICBootGuest(void) {
     if (ICIsRunnerProcess()) {
         NSString *notifyName = [NSString stringWithFormat:@"com.hongson117.sicontainer.%@.evict", role];
         CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, darwinEvictCallback, (__bridge CFStringRef)notifyName, NULL, CFNotificationSuspensionBehaviorDeliverImmediately);
+        [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidEnterBackgroundNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+            beginRunnerBackgroundStandby();
+        }];
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+            endRunnerBackgroundStandby();
             checkPendingEvictionOrTouchLRU(YES);
         }];
         [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+            endRunnerBackgroundStandby();
             checkPendingEvictionOrTouchLRU(YES);
         }];
     }

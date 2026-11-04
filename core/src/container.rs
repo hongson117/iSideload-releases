@@ -198,10 +198,17 @@ pub fn resolve_target_slots(host_id: &str, req: &Value) -> Result<Vec<String>, S
                 tail
             };
             let main_slot = format!("com.hongson117.sicontainer{team_suffix}");
-            let runner1_slot = format!("com.hongson117.sicontainer.runner1{team_suffix}");
+            let runner1_slot_a = if team_suffix.is_empty() {
+                "com.hongson117.sicontainer.runner1".to_string()
+            } else {
+                format!("com.hongson117.sicontainer{team_suffix}.runner1")
+            };
+            let runner1_slot_b = format!("com.hongson117.sicontainer.runner1{team_suffix}");
             slots.push(main_slot);
-            if !slots.iter().any(|x| x == &runner1_slot) {
-                slots.push(runner1_slot);
+            for cand in [runner1_slot_a, runner1_slot_b] {
+                if !slots.iter().any(|x| x == &cand) {
+                    slots.push(cand);
+                }
             }
         } else {
             slots.push(host_id.to_string());

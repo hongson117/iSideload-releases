@@ -98,10 +98,24 @@ struct ContainerView: View {
                 }
                 ForEach(store.guests) { guest in
                     VStack(alignment: .leading, spacing: 8) {
-                        Label(guest.name.isEmpty ? guest.bundleID : guest.name, systemImage: "app.dashed")
-                            .font(.headline)
-                        Text("\(guest.bundleID) · \(guest.version)")
-                            .font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            if let icon = store.guestIconImage(for: guest) {
+                                Image(uiImage: icon)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 40, height: 40)
+                                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            } else {
+                                Image(systemName: "app.dashed")
+                                    .font(.title2)
+                            }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(guest.name.isEmpty ? guest.bundleID : guest.name)
+                                    .font(.headline)
+                                Text("\(guest.bundleID) · \(guest.version)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
                         if !(guest.embeddedComponents ?? []).isEmpty {
                             Label("IPA có extension/Watch · chạy app chính trên iPhone", systemImage: "info.circle")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -196,25 +210,25 @@ struct ContainerView: View {
         } message: {
             Text("Nguồn ký phải khớp chứng chỉ đã cài SIContainer và SIContainer Phụ 1.")
         }
-        .confirmationDialog("Tạo Shortcut ra Màn hình chính iOS", isPresented: Binding(get: { shortcutTarget != nil }, set: { if !$0 { shortcutTarget = nil } }), titleVisibility: .visible) {
+        .confirmationDialog("Tạo Icon 1-Chạm ra Màn hình chính iOS", isPresented: Binding(get: { shortcutTarget != nil }, set: { if !$0 { shortcutTarget = nil } }), titleVisibility: .visible) {
             if let guest = shortcutTarget {
-                Button("Cài hồ sơ WebClip (.mobileconfig - Icon chuẩn)") {
+                Button("Cài Icon 1-Chạm (Hồ sơ WebClip chuẩn)") {
                     shortcutTarget = nil
                     store.openShortcutInstaller(for: guest, mode: "webclip")
                 }
-                Button("Mở trang Safari (Chia sẻ → Thêm vào MH chính)") {
+                Button("Mở trang Safari (Gắn sẵn link nhảy trực tiếp)") {
                     shortcutTarget = nil
                     store.openShortcutInstaller(for: guest, mode: "safari")
                 }
-                Button("Sao chép URL Phím tắt (sicontainer://launch)") {
+                Button("Sao chép link mở trực tiếp (sicontainer://launch)") {
                     UIPasteboard.general.string = "sicontainer://launch?guest=\(guest.id)"
                     shortcutTarget = nil
-                    store.message = "Đã sao chép URL: sicontainer://launch?guest=\(guest.id)"
+                    store.message = "Đã sao chép link: sicontainer://launch?guest=\(guest.id)"
                 }
             }
             Button("Hủy", role: .cancel) { shortcutTarget = nil }
         } message: {
-            Text("Chọn Hồ sơ WebClip để có icon chuẩn không viền, hoặc dùng trang Safari / Phím tắt iOS.")
+            Text("Cài Hồ sơ WebClip hoặc Thêm vào MH chính từ Safari để chạm 1 lần ngoài màn hình chính là nhảy thẳng vào app.")
         }
         .alert("Chạy cục bộ trên Con Chính?", isPresented: Binding(get: { launchingLocal != nil }, set: { if !$0 { launchingLocal = nil } })) {
             Button("Tiếp tục") {

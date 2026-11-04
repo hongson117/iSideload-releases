@@ -23,6 +23,7 @@ final class Engine: ObservableObject {
     @Published var busy = false
     @Published var peerBusy = false
     @Published var selectedTab = 0
+    @Published var showSIContainerView = false
     @Published var stage = ""
     @Published var progress: Double = 0
     @Published var prompt: CorePrompt?
@@ -962,6 +963,7 @@ final class Engine: ObservableObject {
                 let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
                 if let guestID = items.first(where: { $0.name == "guest" })?.value, !guestID.isEmpty {
                     selectedTab = 0
+                    showSIContainerView = true
                     ContainerStore.shared.launchFromShortcut(guestID: guestID)
                 }
                 return
@@ -971,11 +973,15 @@ final class Engine: ObservableObject {
                 let slot = items.first(where: { $0.name == "slot" })?.value ?? "runner1"
                 let req = items.first(where: { $0.name == "req" })?.value ?? ""
                 if !req.isEmpty {
+                    selectedTab = 0
+                    showSIContainerView = true
                     ContainerStore.shared.completeRunnerSwitch(slot: slot, requestID: req)
                 }
                 return
             }
             if url.host == "probe-complete" {
+                selectedTab = 0
+                showSIContainerView = true
                 ContainerStore.shared.reload()
                 ContainerStore.shared.message = "Đã xác minh kết nối 2 chiều với SIContainer Phụ 1!"
                 return

@@ -72,13 +72,16 @@ struct AppsView: View {
                 }
                 #if ICONTAINER
                 Section {
-                    NavigationLink {
-                        ContainerView()
+                    Button {
+                        engine.showSIContainerView = true
                     } label: {
                         Label("Mở SIContainer · điều phối & chạy app bên trong", systemImage: "shippingbox")
                     }
                 } header: { Text("SIContainer (1 Chính + 1 Phụ)") } footer: {
                     Text("Nhập vô số IPA vào SIContainer để chạy qua Slot Phụ 1 (App Group dùng chung) và tạo Shortcut ra thẳng màn hình chính. Nút Chọn file IPA để cài ở trên vẫn cài app độc lập ra màn hình chính như trước.")
+                }
+                .navigationDestination(isPresented: $engine.showSIContainerView) {
+                    ContainerView()
                 }
                 #else
                 Section {

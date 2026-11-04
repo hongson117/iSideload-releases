@@ -13,7 +13,9 @@ final class ContainerStore: ObservableObject {
     @Published var readyToReopen = false
     @Published var probeSummary: [String: Any] = [:]
     private var shortcutListener: NWListener?
-    private var shortcutPayloads: [String: (mime: String, data: Data)] = [:]
+    private var shortcutPayloads: [String: (mime: String, filename: String?, data: Data)] = [:]
+    private var shortcutBgTask: UIBackgroundTaskIdentifier = .invalid
+    private var iconCache: [String: UIImage] = [:]
 
     static var root: URL { URL(fileURLWithPath: ICContainerRoot(), isDirectory: true) }
 
@@ -96,6 +98,48 @@ final class ContainerStore: ObservableObject {
         } catch { failure = error.localizedDescription }
     }
 
+    private func openExternalURLWhenActive(_ url: URL, failureMessage: String? = nil, retriesLeft: Int = 16) {
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SIContainerURLJump") {
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        func attempt(_ remaining: Int) {
+            let state = UIApplication.shared.applicationState
+            if state != .active && remaining > 4 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                    attempt(remaining - 1)
+                }
+                return
+            }
+            UIApplication.shared.open(url, options: [:]) { [weak self] ok in
+                Task { @MainActor in
+                    if ok {
+                        if bgTask != .invalid {
+                            UIApplication.shared.endBackgroundTask(bgTask)
+                            bgTask = .invalid
+                        }
+                    } else if remaining > 0 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
+                            attempt(remaining - 1)
+                        }
+                    } else {
+                        if bgTask != .invalid {
+                            UIApplication.shared.endBackgroundTask(bgTask)
+                            bgTask = .invalid
+                        }
+                        if let msg = failureMessage {
+                            self?.failure = msg
+                        }
+                    }
+                }
+            }
+        }
+        attempt(retriesLeft)
+    }
+
     func launchInRunner1(_ guest: ContainerGuest) {
         guard !working else { return }
         guard guest.readyToLaunch else {
@@ -109,13 +153,10 @@ final class ContainerStore: ObservableObject {
             failure = error?.localizedDescription ?? "Không tạo được lệnh điều phối sang SIContainer Phụ 1."
             return
         }
-        UIApplication.shared.open(url, options: [:]) { [weak self] ok in
-            if !ok {
-                Task { @MainActor in
-                    self?.failure = "Không mở được SIContainer Phụ 1. Hãy kiểm tra đã cài SIContainer Phụ 1 trên máy chưa."
-                }
-            }
-        }
+        openExternalURLWhenActive(
+            url,
+            failureMessage: "Không mở được SIContainer Phụ 1. Hãy kiểm tra đã cài SIContainer Phụ 1 trên máy chưa."
+        )
     }
 
     func launchLocalFallback(_ guest: ContainerGuest) {
@@ -148,20 +189,17 @@ final class ContainerStore: ObservableObject {
 
     func completeRunnerSwitch(slot: String, requestID: String) {
         guard let url = ICCompleteRunnerSwitchURL(slot, requestID) else { return }
-        UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        openExternalURLWhenActive(url)
     }
 
     func probeRunner1() {
         ICRecordRoleProbe()
         reload()
         guard let url = URL(string: "sicontainer-runner1://probe?return=1") else { return }
-        UIApplication.shared.open(url, options: [:]) { [weak self] ok in
-            if !ok {
-                Task { @MainActor in
-                    self?.failure = "Chưa mở được SIContainer Phụ 1 (sicontainer-runner1://). Hãy cài SIContainer Phụ 1 trước."
-                }
-            }
-        }
+        openExternalURLWhenActive(
+            url,
+            failureMessage: "Chưa mở được SIContainer Phụ 1 (sicontainer-runner1://). Hãy cài SIContainer Phụ 1 trước."
+        )
     }
 
     func remove(_ guest: ContainerGuest, engine: Engine) async {
@@ -173,36 +211,112 @@ final class ContainerStore: ObservableObject {
         } catch { failure = error.localizedDescription }
     }
 
-    // MARK: - Home Screen Shortcut Generator (WebClip .mobileconfig & Safari Page)
+    // MARK: - Home Screen Shortcut Generator (WebClip .mobileconfig & Direct Safari Launcher)
+
+    func guestIconImage(for guest: ContainerGuest) -> UIImage? {
+        if let cached = iconCache[guest.id] { return cached }
+        let appDir = Self.root.appendingPathComponent(guest.id).appendingPathComponent("Original.app")
+        var found: UIImage?
+
+        if let bundle = Bundle(url: appDir) {
+            let info = bundle.infoDictionary ?? [:]
+            var iconNames: [String] = []
+            if let icons = info["CFBundleIcons"] as? [String: Any],
+               let primary = icons["CFBundlePrimaryIcon"] as? [String: Any] {
+                if let files = primary["CFBundleIconFiles"] as? [String] {
+                    iconNames.append(contentsOf: files.reversed())
+                }
+                if let name = primary["CFBundleIconName"] as? String {
+                    iconNames.append(name)
+                }
+            }
+            if let iconsPad = info["CFBundleIcons~ipad"] as? [String: Any],
+               let primary = iconsPad["CFBundlePrimaryIcon"] as? [String: Any],
+               let files = primary["CFBundleIconFiles"] as? [String] {
+                iconNames.append(contentsOf: files.reversed())
+            }
+            if let legacyFiles = info["CFBundleIconFiles"] as? [String] {
+                iconNames.append(contentsOf: legacyFiles.reversed())
+            }
+            iconNames.append(contentsOf: ["AppIcon60x60", "AppIcon76x76", "AppIcon", "Icon-60", "Icon"])
+            for name in iconNames {
+                if let img = UIImage(named: name, in: bundle, compatibleWith: nil), img.size.width >= 40 {
+                    found = img
+                    break
+                }
+            }
+        }
+
+        if found == nil,
+           let files = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.fileSizeKey]) {
+            let candidates = files.filter {
+                let name = $0.lastPathComponent.lowercased()
+                return name.hasSuffix(".png") && (name.contains("appicon") || name.contains("icon"))
+            }
+            var best: URL?
+            var bestSize = 0
+            for file in candidates {
+                let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                if size > bestSize { bestSize = size; best = file }
+            }
+            if let chosen = best, let raw = try? Data(contentsOf: chosen), let img = UIImage(data: raw) {
+                found = img
+            }
+        }
+
+        let size = CGSize(width: 180, height: 180)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1.0
+        format.opaque = true
+        let rendered = UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+            if let img = found {
+                UIColor.black.setFill()
+                ctx.fill(CGRect(origin: .zero, size: size))
+                img.draw(in: CGRect(origin: .zero, size: size))
+            } else {
+                let colors = [UIColor(red: 0.35, green: 0.24, blue: 0.92, alpha: 1.0).cgColor,
+                              UIColor(red: 0.14, green: 0.09, blue: 0.45, alpha: 1.0).cgColor] as CFArray
+                if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
+                    ctx.cgContext.drawLinearGradient(grad, start: .zero, end: CGPoint(x: 180, y: 180), options: [])
+                }
+                let title = (guest.name.isEmpty ? guest.bundleID : guest.name).trimmingCharacters(in: .whitespacesAndNewlines)
+                let letter = String(title.prefix(1)).uppercased()
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: 92, weight: .bold),
+                    .foregroundColor: UIColor.white
+                ]
+                let strSize = letter.size(withAttributes: attrs)
+                let rect = CGRect(
+                    x: (180 - strSize.width) / 2.0,
+                    y: (180 - strSize.height) / 2.0,
+                    width: strSize.width,
+                    height: strSize.height
+                )
+                letter.draw(in: rect, withAttributes: attrs)
+            }
+        }
+        iconCache[guest.id] = rendered
+        return rendered
+    }
 
     private func extractGuestIconPNG(for guest: ContainerGuest) -> Data? {
-        let appDir = Self.root.appendingPathComponent(guest.id).appendingPathComponent("Original.app")
-        guard let files = try? FileManager.default.contentsOfDirectory(at: appDir, includingPropertiesForKeys: [.fileSizeKey]) else { return nil }
-        let candidates = files.filter {
-            let name = $0.lastPathComponent.lowercased()
-            return name.hasSuffix(".png") && (name.contains("appicon") || name.contains("icon"))
-        }
-        var best: URL?
-        var bestSize = 0
-        for file in candidates {
-            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            if size > bestSize { bestSize = size; best = file }
-        }
-        guard let chosen = best, let raw = try? Data(contentsOf: chosen), let img = UIImage(data: raw) else { return nil }
-        return img.pngData()
+        guestIconImage(for: guest)?.pngData()
     }
 
     private func buildWebClipMobileConfig(for guest: ContainerGuest) -> Data? {
         let launchURL = "sicontainer://launch?guest=\(guest.id)"
+        let cleanUUID = (UUID(uuidString: guest.id) ?? UUID()).uuidString.uppercased()
+        let displayTitle = guest.name.isEmpty ? guest.bundleID : guest.name
         var clip: [String: Any] = [
             "PayloadType": "com.apple.webclip.managed",
             "PayloadVersion": 1,
-            "PayloadIdentifier": "com.hongson117.sicontainer.webclip.\(guest.id)",
-            "PayloadUUID": guest.id,
-            "PayloadDisplayName": guest.name.isEmpty ? guest.bundleID : guest.name,
-            "Label": guest.name.isEmpty ? guest.bundleID : guest.name,
+            "PayloadIdentifier": "com.hongson117.sicontainer.webclip.\(cleanUUID)",
+            "PayloadUUID": cleanUUID,
+            "PayloadDisplayName": displayTitle,
+            "Label": displayTitle,
             "URL": launchURL,
-            "FullScreen": true,
+            "FullScreen": false,
+            "IgnoreManifestScope": true,
             "Precomposed": true,
             "IsRemovable": true
         ]
@@ -212,11 +326,12 @@ final class ContainerStore: ObservableObject {
         let profile: [String: Any] = [
             "PayloadType": "Configuration",
             "PayloadVersion": 1,
-            "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.\(guest.id)",
-            "PayloadUUID": UUID().uuidString,
-            "PayloadDisplayName": "Shortcut: \(guest.name.isEmpty ? guest.bundleID : guest.name)",
-            "PayloadDescription": "Tạo biểu tượng mở nhanh \(guest.name) qua SIContainer trên màn hình chính.",
+            "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.\(cleanUUID)",
+            "PayloadUUID": UUID().uuidString.uppercased(),
+            "PayloadDisplayName": "Biểu tượng: \(displayTitle)",
+            "PayloadDescription": "Tạo icon mở trực tiếp \(displayTitle) (1 chạm vào thẳng app qua SIContainer).",
             "PayloadOrganization": "SIContainer",
+            "PayloadRemovalDisallowed": false,
             "PayloadContent": [clip]
         ]
         return try? PropertyListSerialization.data(fromPropertyList: profile, format: .xml, options: 0)
@@ -229,33 +344,89 @@ final class ContainerStore: ObservableObject {
             .replacingOccurrences(of: ">", with: "&gt;")
         let launchURL = "sicontainer://launch?guest=\(guest.id)"
         let iconB64 = extractGuestIconPNG(for: guest)?.base64EncodedString() ?? ""
-        let iconLink = iconB64.isEmpty ? "" : "<link rel=\"apple-touch-icon\" href=\"data:image/png;base64,\(iconB64)\">"
+        let iconLink = iconB64.isEmpty ? "" : "<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"data:image/png;base64,\(iconB64)\">"
+        let imgTag = iconB64.isEmpty ? "" : "<img src=\"data:image/png;base64,\(iconB64)\" style=\"width:76px;height:76px;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,.45);margin-bottom:10px\">"
         let html = """
         <!doctype html>
         <html lang="vi"><head><meta charset="utf-8">
-        <meta name="viewport" content="width=device-width,initial-scale=1">
-        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
         <meta name="apple-mobile-web-app-title" content="\(title)">
         \(iconLink)
         <title>\(title)</title>
-        <style>body{font-family:-apple-system,sans-serif;padding:28px;text-align:center;background:#111;color:#fff}
-        .card{background:#1c1c1e;border-radius:18px;padding:24px;margin-top:20px}
-        a.btn{display:inline-block;background:#0a84ff;color:#fff;text-decoration:none;padding:12px 20px;border-radius:12px;font-weight:600;margin-top:14px}</style>
-        </head><body>
-        <h2>\(title)</h2>
-        <div class="card">
-        <p>1. Nếu đang mở từ Màn hình chính, đang chuyển sang <b>\(title)</b>…</p>
-        <p>2. Để thêm ra Màn hình chính: bấm nút <b>Chia sẻ</b> ở thanh dưới Safari → chọn <b>Thêm vào MH chính</b>.</p>
-        <a class="btn" href="\(launchURL)">Mở \(title) ngay</a>
-        </div>
         <script>
-        if (window.navigator.standalone || location.hash === '#launch') {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function(){});
+        }
+        if (location.hash !== '#setup') {
             window.location.replace('\(launchURL)');
+            setTimeout(function(){ window.location.href = '\(launchURL)'; }, 60);
+        } else {
+            setTimeout(function(){
+                try { history.replaceState(null, '', '/safari/\(guest.id)#launch'); } catch(e) {}
+            }, 120);
         }
         </script>
+        <style>
+        body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:22px 18px;text-align:center;background:#0d0d11;color:#fff;margin:0}
+        .card{background:#1c1c22;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px;margin:14px auto;max-width:420px;text-align:left}
+        .title{font-size:21px;font-weight:700;margin:4px 0 2px;text-align:center}
+        .sub{font-size:13px;color:#98989f;margin-bottom:14px;text-align:center}
+        .step{font-size:15px;line-height:1.55;margin:8px 0;color:#e5e5ea}
+        a.btn{display:block;text-align:center;background:#5e5ce6;color:#fff;text-decoration:none;padding:13px 18px;border-radius:13px;font-weight:600;margin-top:12px;font-size:15px}
+        a.btn-secondary{background:#2c2c34;color:#fff}
+        </style>
+        </head><body>
+        \(imgTag)
+        <div class="title">\(title)</div>
+        <div class="sub">Shortcut 1-Chạm mở trực tiếp</div>
+        <div class="card">
+        <div class="step"><b>Cách 1 (Khuyên dùng · Mở thẳng 1 chạm không qua Safari):</b></div>
+        <div class="step">Bấm nút dưới đây → chọn <b>Cho phép</b> → vào <b>Cài đặt → Đã tải về hồ sơ → Cài đặt</b>.</div>
+        <a class="btn" href="/webclip/\(guest.id).mobileconfig">Cài Hồ sơ Icon 1-Chạm (.mobileconfig)</a>
+        </div>
+        <div class="card">
+        <div class="step"><b>Cách 2 (Thêm trực tiếp từ trang Safari này):</b></div>
+        <div class="step">Trang này đã gắn sẵn lệnh nhảy trực tiếp. Bấm nút <b>Chia sẻ</b> ở thanh dưới Safari → chọn <b>Thêm vào MH chính</b>. Khi chạm icon ngoài màn hình chính sẽ tự nhảy thẳng vào <b>\(title)</b>.</div>
+        <a class="btn btn-secondary" href="\(launchURL)">Thử mở \(title) ngay</a>
+        </div>
         </body></html>
         """
         return Data(html.utf8)
+    }
+
+    private func buildServiceWorkerJS() -> Data {
+        let js = """
+        const CACHE = 'sicontainer-shortcuts-v2';
+        self.addEventListener('install', e => { self.skipWaiting(); });
+        self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
+        self.addEventListener('fetch', e => {
+            if (e.request.method !== 'GET') return;
+            e.respondWith(
+                fetch(e.request).then(res => {
+                    const copy = res.clone();
+                    caches.open(CACHE).then(c => c.put(e.request, copy));
+                    return res;
+                }).catch(() => caches.match(e.request, {ignoreSearch: true}))
+            );
+        });
+        """
+        return Data(js.utf8)
+    }
+
+    private func beginShortcutServerBackgroundTask() {
+        if shortcutBgTask != .invalid {
+            UIApplication.shared.endBackgroundTask(shortcutBgTask)
+            shortcutBgTask = .invalid
+        }
+        shortcutBgTask = UIApplication.shared.beginBackgroundTask(withName: "SIContainerShortcutServer") { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.shortcutBgTask != .invalid {
+                    UIApplication.shared.endBackgroundTask(self.shortcutBgTask)
+                    self.shortcutBgTask = .invalid
+                }
+            }
+        }
     }
 
     func openShortcutInstaller(for guest: ContainerGuest, mode: String) {
@@ -263,43 +434,82 @@ final class ContainerStore: ObservableObject {
             failure = "Không tạo được cấu hình Shortcut."
             return
         }
+        beginShortcutServerBackgroundTask()
         let htmlData = buildSafariShortcutHTML(for: guest)
-        shortcutPayloads["/webclip.mobileconfig"] = ("application/x-apple-aspen-config", configData)
-        shortcutPayloads["/safari"] = ("text/html; charset=utf-8", htmlData)
+        let swData = buildServiceWorkerJS()
+        let safeFile = "\(guest.id).mobileconfig"
+        shortcutPayloads["/webclip.mobileconfig"] = ("application/x-apple-aspen-config", safeFile, configData)
+        shortcutPayloads["/webclip/\(safeFile)"] = ("application/x-apple-aspen-config", safeFile, configData)
+        shortcutPayloads["/safari"] = ("text/html; charset=utf-8", nil, htmlData)
+        shortcutPayloads["/safari/\(guest.id)"] = ("text/html; charset=utf-8", nil, htmlData)
+        shortcutPayloads["/sw.js"] = ("application/javascript; charset=utf-8", nil, swData)
 
-        if shortcutListener == nil {
-            guard let listener = try? NWListener(using: .tcp, on: .any) else {
-                failure = "Không mở được cổng máy chủ nội bộ cho Shortcut."
-                return
-            }
-            listener.newConnectionHandler = { [weak self] conn in
-                conn.start(queue: .main)
-                conn.receive(minimumIncompleteLength: 1, maximumLength: 8192) { data, _, _, _ in
-                    Task { @MainActor in
-                        guard let self else { conn.cancel(); return }
-                        let req = String(data: data ?? Data(), encoding: .utf8) ?? ""
-                        let firstLine = req.split(separator: "\r\n").first ?? ""
-                        let rawPath = firstLine.split(separator: " ").dropFirst().first.map(String.init) ?? "/safari"
-                        let path = rawPath.components(separatedBy: "?").first ?? "/safari"
-                        let payload = self.shortcutPayloads[path] ?? self.shortcutPayloads["/safari"]!
-                        let header = "HTTP/1.1 200 OK\r\nContent-Type: \(payload.mime)\r\nContent-Length: \(payload.data.count)\r\nConnection: close\r\n\r\n"
-                        var response = Data(header.utf8)
+        shortcutListener?.cancel()
+        shortcutListener = nil
+
+        let preferredPort = NWEndpoint.Port(rawValue: 18989)
+        let listener = (preferredPort.flatMap { try? NWListener(using: .tcp, on: $0) })
+            ?? (try? NWListener(using: .tcp, on: .any))
+        guard let listener else {
+            failure = "Không mở được cổng máy chủ nội bộ cho Shortcut."
+            return
+        }
+
+        let targetPath = (mode == "webclip")
+            ? "/webclip/\(safeFile)"
+            : "/safari/\(guest.id)#setup"
+        var didOpenBrowser = false
+
+        listener.newConnectionHandler = { [weak self] conn in
+            conn.start(queue: .main)
+            conn.receive(minimumIncompleteLength: 1, maximumLength: 16384) { data, _, _, _ in
+                Task { @MainActor in
+                    guard let self else { conn.cancel(); return }
+                    let req = String(data: data ?? Data(), encoding: .utf8) ?? ""
+                    let firstLine = req.split(separator: "\r\n").first ?? ""
+                    let parts = firstLine.split(separator: " ")
+                    let method = parts.first.map(String.init) ?? "GET"
+                    let rawPath = parts.dropFirst().first.map(String.init) ?? "/safari/\(guest.id)"
+                    let cleanPath = (rawPath.components(separatedBy: "?").first ?? "/safari/\(guest.id)")
+                        .components(separatedBy: "#").first ?? "/safari/\(guest.id)"
+                    let defaultPayload = self.shortcutPayloads["/safari/\(guest.id)"] ?? ("text/html; charset=utf-8", nil, htmlData)
+                    let payload = self.shortcutPayloads[cleanPath] ?? defaultPayload
+
+                    var headers = [
+                        "HTTP/1.1 200 OK",
+                        "Content-Type: \(payload.mime)",
+                        "Content-Length: \(payload.data.count)",
+                        "Cache-Control: public, max-age=31536000",
+                        "Connection: close"
+                    ]
+                    if let filename = payload.filename {
+                        headers.append("Content-Disposition: attachment; filename=\"\(filename)\"")
+                    }
+                    let headerBlock = headers.joined(separator: "\r\n") + "\r\n\r\n"
+                    var response = Data(headerBlock.utf8)
+                    if method.uppercased() != "HEAD" {
                         response.append(payload.data)
-                        conn.send(content: response, completion: .contentProcessed { _ in conn.cancel() })
+                    }
+                    conn.send(content: response, completion: .contentProcessed { _ in conn.cancel() })
+                }
+            }
+        }
+
+        listener.stateUpdateHandler = { [weak self, weak listener] state in
+            Task { @MainActor in
+                guard let self, let listener else { return }
+                if case .ready = state, !didOpenBrowser {
+                    didOpenBrowser = true
+                    let port = listener.port?.rawValue ?? 18989
+                    if let url = URL(string: "http://127.0.0.1:\(port)\(targetPath)") {
+                        self.openExternalURLWhenActive(url)
                     }
                 }
             }
-            listener.start(queue: .main)
-            shortcutListener = listener
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            guard let self, let port = self.shortcutListener?.port?.rawValue else { return }
-            let path = (mode == "webclip") ? "/webclip.mobileconfig" : "/safari"
-            if let url = URL(string: "http://127.0.0.1:\(port)\(path)") {
-                UIApplication.shared.open(url)
-            }
-        }
+        listener.start(queue: .main)
+        shortcutListener = listener
     }
 }
 #endif
