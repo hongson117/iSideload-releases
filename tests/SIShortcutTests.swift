@@ -18,7 +18,7 @@ struct SIShortcutTests {
             precondition(UUID(uuidString: payload["PayloadUUID"] as! String) != nil)
         }
         precondition(profile["PayloadUUID"] as! String != clip["PayloadUUID"] as! String)
-        precondition(profile["PayloadIdentifier"] as? String == "com.hongson117.sicontainer.shortcut.\(guest)")
+        precondition(profile["PayloadIdentifier"] as? String == "com.hongson117.sicontainer.shortcut.v2.\(guest)")
         let url = URLComponents(string: clip["URL"] as! String)!
         let query = Dictionary(uniqueKeysWithValues: url.queryItems!.map { ($0.name, $0.value!) })
         precondition(query == ["guest": guest, "name": name, "slot": "runner1"])

@@ -11,6 +11,7 @@ NSString *ICCurrentRole(void);
 
 /// Hardware Gate 1: record & inspect cross-bundle App Group + flock verification.
 void ICRecordRoleProbe(void);
+void ICRecordDiagnosticTrace(NSString *event, NSDictionary * _Nullable details);
 NSDictionary *ICReadProbeSummary(void);
 BOOL ICIsSlotAlive(NSString *slotID);
 BOOL ICWaitForSlotExit(NSString *slotID, NSTimeInterval timeout);

@@ -9,10 +9,25 @@
 @end
 @implementation UIApplication
 @end
-@interface UIScene : NSObject
+@interface UIScene : NSObject {
+@public
+    id _delegate;
+}
 @property(nonatomic, strong) id delegate;
+- (void)_openURLContexts:(NSSet *)contexts;
 @end
 @implementation UIScene
+@synthesize delegate = _delegate;
+- (void)_openURLContexts:(NSSet *)contexts {
+    if ([self.delegate respondsToSelector:@selector(scene:openURLContexts:)]) {
+        [self.delegate performSelector:@selector(scene:openURLContexts:) withObject:self withObject:contexts];
+    }
+}
+@end
+@interface UISceneConfiguration : NSObject
+@property(nonatomic, assign) Class delegateClass;
+@end
+@implementation UISceneConfiguration
 @end
 @interface UISceneConnectionOptions : NSObject
 @property(nonatomic, strong) NSSet *URLContexts;
@@ -24,6 +39,10 @@
 @end
 @implementation URLContext
 @end
+
+static void require(BOOL value, NSString *message) {
+    if (!value) { NSLog(@"FAIL %@", message); exit(1); }
+}
 
 @interface AppDelegate : NSObject
 @property(nonatomic) NSUInteger opens;
@@ -72,9 +91,14 @@
 }
 @end
 
-static void require(BOOL value, NSString *message) {
-    if (!value) { NSLog(@"FAIL %@", message); exit(1); }
-}
+@interface DirectIvarSceneDelegate : NSObject
+@property(nonatomic, strong) NSSet *received;
+@property(nonatomic) NSUInteger openCalls;
+- (void)scene:(id)scene openURLContexts:(NSSet *)contexts;
+@end
+@implementation DirectIvarSceneDelegate
+- (void)scene:(id)scene openURLContexts:(NSSet *)contexts { self.openCalls++; self.received = contexts; }
+@end
 
 int main(void) {
     @autoreleasepool {
@@ -110,20 +134,32 @@ int main(void) {
         UIScene *scene = [UIScene new];
         SceneDelegate *sceneDelegate = [SceneDelegate new];
         scene.delegate = sceneDelegate;
-        URLContext *inside = [URLContext new]; inside.URL = internal;
+        URLContext *inside1 = [URLContext new]; inside1.URL = internal;
         URLContext *outside = [URLContext new]; outside.URL = external;
-        NSSet *mixed = [NSSet setWithObjects:inside, outside, nil];
+        NSSet *mixed = [NSSet setWithObjects:inside1, outside, nil];
         [sceneDelegate scene:scene openURLContexts:mixed];
         require(sceneDelegate.openCalls == 1 && [sceneDelegate.received isEqual:[NSSet setWithObject:outside]], @"Mixed scene context preserves external URLs and invokes guest once");
-        [sceneDelegate scene:scene openURLContexts:[NSSet setWithObject:inside]];
+        URLContext *inside2 = [URLContext new]; inside2.URL = internal;
+        [sceneDelegate scene:scene openURLContexts:[NSSet setWithObject:inside2]];
         require(sceneDelegate.openCalls == 1, @"Internal-only scene context does not invoke guest scene:openURLContexts:");
+        URLContext *inside3 = [URLContext new]; inside3.URL = internal;
         UISceneConnectionOptions *options = [UISceneConnectionOptions new];
-        options.URLContexts = mixed;
+        options.URLContexts = [NSSet setWithObjects:inside3, outside, nil];
         [sceneDelegate scene:scene willConnectToSession:nil options:options];
         require(sceneDelegate.connects == 1 && [sceneDelegate.received isEqual:[NSSet setWithObject:outside]], @"Scene cold launch connects with filtered contexts");
+
+        // Real UIKit sets UIScene->_delegate directly from UISceneConfiguration without calling setDelegate:
+        // and delivers runtime URLs through -[UIScene _openURLContexts:].
+        UIScene *directScene = [UIScene new];
+        DirectIvarSceneDelegate *directDelegate = [DirectIvarSceneDelegate new];
+        directScene->_delegate = directDelegate;
+        URLContext *inside4 = [URLContext new]; inside4.URL = internal;
+        [directScene _openURLContexts:[NSSet setWithObjects:inside4, outside, nil]];
+        require(directDelegate.openCalls == 1 && [directDelegate.received isEqual:[NSSet setWithObject:outside]], @"Direct ivar scene delegate and _openURLContexts: filter internal URLs once");
+
         require(handled == 0, @"Internal actions deferred until after UIKit callback");
         dispatch_async(dispatch_get_main_queue(), ^{
-            require(handled == 6, [NSString stringWithFormat:@"Expected exactly 6 internal URL dispatches, got %lu", (unsigned long)handled]);
+            require(handled == 7, [NSString stringWithFormat:@"Expected exactly 7 internal URL dispatches, got %lu", (unsigned long)handled]);
             NSLog(@"SIContainer delegate interception regression tests passed");
             exit(0);
         });

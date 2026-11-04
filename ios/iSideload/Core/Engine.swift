@@ -239,11 +239,14 @@ final class Engine: ObservableObject {
         _ = try await run(r)
     }
 
+    static func isRunner1BundleID(_ bundleID: String) -> Bool {
+        bundleID == "com.hongson117.sicontainer.runner1" ||
+        bundleID.hasPrefix("com.hongson117.sicontainer.runner1.") ||
+        (bundleID.hasPrefix("com.hongson117.sicontainer.") && bundleID.hasSuffix(".runner1"))
+    }
+
     var installedRunner1App: SideloadedApp? {
-        apps.first {
-            $0.bundleID == "com.hongson117.sicontainer.runner1" ||
-            $0.bundleID.hasPrefix("com.hongson117.sicontainer.runner1.")
-        }
+        apps.first { Self.isRunner1BundleID($0.bundleID) }
     }
 
     var hasBundledRunner1IPA: Bool {
@@ -959,6 +962,7 @@ final class Engine: ObservableObject {
     func handleURL(_ url: URL) {
         if url.scheme == "icontainer" || url.scheme == "sicontainer" {
             #if ICONTAINER
+            ICRecordDiagnosticTrace("manager_handle_url", ["url": url.absoluteString])
             if url.host == "launch" {
                 let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
                 if let guestID = items.first(where: { $0.name == "guest" })?.value, !guestID.isEmpty {
