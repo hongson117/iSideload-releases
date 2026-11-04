@@ -1,4 +1,4 @@
-const CACHE = 'sicontainer-go-v2';
+const CACHE = 'sicontainer-go-v3';
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./go.html', './sw.js'])).then(() => self.skipWaiting()));
 });
@@ -14,6 +14,6 @@ self.addEventListener('fetch', e => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
       return res;
-    }).catch(() => caches.match(e.request, {ignoreSearch: true}))
+    }).catch(() => caches.match(e.request).then(r => r || caches.match('./go.html')))
   );
 });
