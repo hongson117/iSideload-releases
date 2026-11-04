@@ -367,7 +367,11 @@ mod tests {
     #[test] fn resolves_default_and_explicit_sicontainer_slots_and_writes_per_slot_bundles(){
         assert_eq!(
             resolve_target_slots("com.hongson117.sicontainer.BSV5CJQF89",&json!({})).unwrap(),
-            vec!["com.hongson117.sicontainer.BSV5CJQF89","com.hongson117.sicontainer.runner1.BSV5CJQF89"]
+            vec![
+                "com.hongson117.sicontainer.BSV5CJQF89",
+                "com.hongson117.sicontainer.BSV5CJQF89.runner1",
+                "com.hongson117.sicontainer.runner1.BSV5CJQF89"
+            ]
         );
         assert!(resolve_target_slots("com.example.other",&json!({})).is_err());
         assert!(resolve_target_slots("com.hongson117.sicontainer.BSV5CJQF89",&json!({"target_bundle_ids":["../escape"]})).is_err());

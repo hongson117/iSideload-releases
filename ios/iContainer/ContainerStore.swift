@@ -15,6 +15,8 @@ final class ContainerStore: ObservableObject {
     private var shortcutListener: NWListener?
     private var shortcutPayloads: [String: (mime: String, filename: String?, data: Data)] = [:]
     private var shortcutBgTask: UIBackgroundTaskIdentifier = .invalid
+    private var urlJumpBgTask: UIBackgroundTaskIdentifier = .invalid
+    private var shortcutDidOpenBrowser = false
     private var iconCache: [String: UIImage] = [:]
 
     static var root: URL { URL(fileURLWithPath: ICContainerRoot(), isDirectory: true) }
@@ -98,46 +100,52 @@ final class ContainerStore: ObservableObject {
         } catch { failure = error.localizedDescription }
     }
 
+    private func endURLJumpBackgroundTask() {
+        if urlJumpBgTask != .invalid {
+            UIApplication.shared.endBackgroundTask(urlJumpBgTask)
+            urlJumpBgTask = .invalid
+        }
+    }
+
     private func openExternalURLWhenActive(_ url: URL, failureMessage: String? = nil, retriesLeft: Int = 16) {
-        var bgTask: UIBackgroundTaskIdentifier = .invalid
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "SIContainerURLJump") {
-            if bgTask != .invalid {
-                UIApplication.shared.endBackgroundTask(bgTask)
-                bgTask = .invalid
+        endURLJumpBackgroundTask()
+        urlJumpBgTask = UIApplication.shared.beginBackgroundTask(withName: "SIContainerURLJump") { [weak self] in
+            Task { @MainActor in
+                self?.endURLJumpBackgroundTask()
             }
         }
-        func attempt(_ remaining: Int) {
-            let state = UIApplication.shared.applicationState
-            if state != .active && remaining > 4 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    attempt(remaining - 1)
-                }
-                return
-            }
-            UIApplication.shared.open(url, options: [:]) { [weak self] ok in
+        attemptOpenExternalURL(url, failureMessage: failureMessage, remaining: retriesLeft)
+    }
+
+    private func attemptOpenExternalURL(_ url: URL, failureMessage: String?, remaining: Int) {
+        let state = UIApplication.shared.applicationState
+        if state != .active && remaining > 4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
                 Task { @MainActor in
-                    if ok {
-                        if bgTask != .invalid {
-                            UIApplication.shared.endBackgroundTask(bgTask)
-                            bgTask = .invalid
+                    self?.attemptOpenExternalURL(url, failureMessage: failureMessage, remaining: remaining - 1)
+                }
+            }
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { [weak self] ok in
+            Task { @MainActor in
+                guard let self else { return }
+                if ok {
+                    self.endURLJumpBackgroundTask()
+                } else if remaining > 0 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) { [weak self] in
+                        Task { @MainActor in
+                            self?.attemptOpenExternalURL(url, failureMessage: failureMessage, remaining: remaining - 1)
                         }
-                    } else if remaining > 0 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.10) {
-                            attempt(remaining - 1)
-                        }
-                    } else {
-                        if bgTask != .invalid {
-                            UIApplication.shared.endBackgroundTask(bgTask)
-                            bgTask = .invalid
-                        }
-                        if let msg = failureMessage {
-                            self?.failure = msg
-                        }
+                    }
+                } else {
+                    self.endURLJumpBackgroundTask()
+                    if let msg = failureMessage {
+                        self.failure = msg
                     }
                 }
             }
         }
-        attempt(retriesLeft)
     }
 
     func launchInRunner1(_ guest: ContainerGuest) {
@@ -458,7 +466,7 @@ final class ContainerStore: ObservableObject {
         let targetPath = (mode == "webclip")
             ? "/webclip/\(safeFile)"
             : "/safari/\(guest.id)#setup"
-        var didOpenBrowser = false
+        shortcutDidOpenBrowser = false
 
         listener.newConnectionHandler = { [weak self] conn in
             conn.start(queue: .main)
@@ -498,8 +506,8 @@ final class ContainerStore: ObservableObject {
         listener.stateUpdateHandler = { [weak self, weak listener] state in
             Task { @MainActor in
                 guard let self, let listener else { return }
-                if case .ready = state, !didOpenBrowser {
-                    didOpenBrowser = true
+                if case .ready = state, !self.shortcutDidOpenBrowser {
+                    self.shortcutDidOpenBrowser = true
                     let port = listener.port?.rawValue ?? 18989
                     if let url = URL(string: "http://127.0.0.1:\(port)\(targetPath)") {
                         self.openExternalURLWhenActive(url)

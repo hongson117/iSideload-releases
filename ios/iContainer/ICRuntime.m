@@ -35,12 +35,12 @@ static UIWindow *returnWindow;
 static int slotAliveFD = -1;
 static int guestWriterFD = -1;
 static volatile int evictingInProgress = 0;
-static UIBackgroundTaskIdentifier runnerBgTask = UIBackgroundTaskInvalid;
+static UIBackgroundTaskIdentifier runnerBgTask = 0;
 
 static void endRunnerBackgroundStandby(void) {
-    if (runnerBgTask != UIBackgroundTaskInvalid) {
+    if (runnerBgTask != 0 && runnerBgTask != UIBackgroundTaskInvalid) {
         [UIApplication.sharedApplication endBackgroundTask:runnerBgTask];
-        runnerBgTask = UIBackgroundTaskInvalid;
+        runnerBgTask = 0;
     }
 }
 
