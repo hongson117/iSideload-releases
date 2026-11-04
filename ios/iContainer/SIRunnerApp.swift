@@ -69,7 +69,6 @@ struct SIRunnerApp: App {
                     lastError = ICLastLaunchError()
                     let host = url.host ?? ""
                     let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-                    let req = comps?.queryItems?.first(where: { $0.name == "req" })?.value ?? ""
                     if host == "probe" {
                         if comps?.queryItems?.first(where: { $0.name == "return" })?.value == "1",
                            let back = URL(string: "sicontainer://probe-complete?slot=runner1") {
@@ -77,13 +76,12 @@ struct SIRunnerApp: App {
                                 UIApplication.shared.open(back)
                             }
                         }
-                    } else if host == "launch" || host == "evict" {
-                        // This runner UI was open when a guest launch arrived; bounce via Manager so
-                        // the next process start executes ICBootGuest() before UIApplicationMain.
-                        if let bounce = URL(string: "sicontainer://complete-switch?slot=runner1&req=\(req)") {
-                            UIApplication.shared.open(bounce, options: [:]) { _ in exit(0) }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { exit(0) }
-                        }
+                    } else {
+                        // A direct cold-start URL has no ticket yet. The runtime
+                        // validates the guest, writes a one-shot ticket, and bounces
+                        // so that the next process loads it before UIKit starts.
+                        ICHandleRunnerURL(url)
+                        lastError = ICLastLaunchError()
                     }
                 }
             }

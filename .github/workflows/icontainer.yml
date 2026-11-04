@@ -50,6 +50,10 @@ jobs:
           /tmp/interaction-tests
           swiftc -parse-as-library ios/iContainer/ContainerGuest.swift tests/ContainerGuestTests.swift -o /tmp/guest-tests
           /tmp/guest-tests
+          swiftc -parse-as-library ios/iContainer/SIShortcut.swift tests/SIShortcutTests.swift -o /tmp/shortcut-tests
+          /tmp/shortcut-tests
+          clang -fobjc-arc -fblocks -framework Foundation ios/iContainer/SICURLInterception.m tests/SICURLInterceptionTests.m -o /tmp/url-interception-tests
+          /tmp/url-interception-tests
       - name: Build unsigned SIContainerRunner1 (Helper Slot 1)
         run: |
           xcodebuild -project SIContainer.xcodeproj -scheme SIContainerRunner1 -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION=${{ github.run_number }} CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build > /tmp/ic-runner1-build.log 2>&1 || { tail -120 /tmp/ic-runner1-build.log; exit 1; }

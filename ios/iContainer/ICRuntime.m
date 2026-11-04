@@ -3,6 +3,7 @@
 // Prepared.app bundles with shared guest Data/, kernel flock() liveness/writer
 // locks, and transactional request/ack LRU tracking.
 #import "ICRuntime.h"
+#import "SICURLInterception.h"
 #import <UIKit/UIKit.h>
 #import <CoreFoundation/CoreFoundation.h>
 #import <objc/runtime.h>
@@ -227,10 +228,11 @@ BOOL ICWaitForSlotExit(NSString *slotID, NSTimeInterval timeout) {
     return !ICIsSlotAlive(slotID);
 }
 
-static void updateRegistryTransaction(void (^block)(NSMutableDictionary *registry)) {
+static BOOL updateRegistryTransaction(void (^block)(NSMutableDictionary *registry)) {
     NSString *lockFile = registryLockPath();
     int fd = open(lockFile.fileSystemRepresentation, O_CREAT | O_RDWR, 0600);
-    if (fd >= 0) flock(fd, LOCK_EX);
+    if (fd < 0) return NO;
+    if (flock(fd, LOCK_EX) != 0) { close(fd); return NO; }
     NSData *raw = [NSData dataWithContentsOfFile:registryPath()];
     NSDictionary *existing = raw ? [NSJSONSerialization JSONObjectWithData:raw options:0 error:nil] : nil;
     NSMutableDictionary *reg = [existing isKindOfClass:NSDictionary.class] ? [existing mutableCopy] : [NSMutableDictionary new];
@@ -240,11 +242,10 @@ static void updateRegistryTransaction(void (^block)(NSMutableDictionary *registr
     reg[@"schema"] = @1;
     block(reg);
     NSData *out = [NSJSONSerialization dataWithJSONObject:reg options:NSJSONWritingPrettyPrinted error:nil];
-    if (out) [out writeToFile:registryPath() options:NSDataWritingAtomic error:nil];
-    if (fd >= 0) {
-        flock(fd, LOCK_UN);
-        close(fd);
-    }
+    BOOL saved = out && [out writeToFile:registryPath() options:NSDataWritingAtomic error:nil];
+    flock(fd, LOCK_UN);
+    close(fd);
+    return saved;
 }
 
 void ICRecordRoleProbe(void) {
@@ -293,6 +294,7 @@ NSDictionary *ICReadProbeSummary(void) {
 }
 
 static BOOL validIdentifier(NSString *identifier) {
+    if (![identifier isKindOfClass:NSString.class]) return NO;
     NSUUID *uuid = [[NSUUID alloc] initWithUUIDString:identifier];
     return uuid != nil && [uuid.UUIDString caseInsensitiveCompare:identifier] == NSOrderedSame;
 }
@@ -375,6 +377,11 @@ NSDictionary *ICPrepareRunnerLaunch(NSString *identifier, NSString *slotID, NSEr
         return nil;
     }
     NSString *targetSlot = slotID.length ? slotID : @"runner1";
+    if (![@[@"runner1", @"runner2"] containsObject:targetSlot]) {
+        if (error) *error = [NSError errorWithDomain:@"SIContainer" code:11 userInfo:@{NSLocalizedDescriptionKey: @"Slot không hợp lệ."}];
+        return nil;
+    }
+    identifier = [[NSUUID alloc] initWithUUIDString:identifier].UUIDString;
     NSString *targetBundleID = expectedBundleIDForSlot(targetSlot);
     NSString *dir = [ICContainerRoot() stringByAppendingPathComponent:identifier];
     NSString *prepared = preparedAppPathForBundle(dir, targetBundleID);
@@ -395,70 +402,79 @@ NSDictionary *ICPrepareRunnerLaunch(NSString *identifier, NSString *slotID, NSEr
 
     NSString *scheme = [NSString stringWithFormat:@"sicontainer-%@", targetSlot];
     BOOL alive = ICIsSlotAlive(targetSlot);
-    __block NSString *activeGuestID = nil;
-    __block NSString *ackedRequestID = nil;
-    updateRegistryTransaction(^(NSMutableDictionary *registry) {
-        NSDictionary *slotEntry = registry[@"slots"][targetSlot];
-        if ([slotEntry isKindOfClass:NSDictionary.class]) {
-            activeGuestID = slotEntry[@"guest_id"];
-            ackedRequestID = slotEntry[@"acked_request_id"];
-        }
-    });
-
-    // If Runner 1 is already alive in RAM and running this exact guest, resume without reloading.
-    if (alive && [activeGuestID isEqualToString:identifier] && ackedRequestID.length > 0 && ![[NSFileManager defaultManager] fileExistsAtPath:slotTicketPath(targetSlot)]) {
-        NSString *urlStr = [NSString stringWithFormat:@"%@://resume?guest=%@&req=%@", scheme, identifier, ackedRequestID];
-        return @{@"action": @"resume", @"slot": targetSlot, @"request_id": ackedRequestID, @"url": urlStr};
-    }
-
-    NSString *requestID = [NSUUID UUID].UUIDString;
-    NSTimeInterval now = [NSDate.date timeIntervalSince1970];
-    NSDictionary *ticket = @{
-        @"request_id": requestID,
-        @"id": identifier,
-        @"slot": targetSlot,
-        @"target_bundle_id": targetBundleID,
-        @"evict_previous": @(alive && activeGuestID != nil && ![activeGuestID isEqualToString:identifier]),
-        @"created": @(now),
-    };
-    NSData *plist = [NSPropertyListSerialization dataWithPropertyList:ticket format:NSPropertyListBinaryFormat_v1_0 options:0 error:error];
-    if (!plist || ![plist writeToFile:slotTicketPath(targetSlot) options:NSDataWritingAtomic error:error]) {
-        return nil;
-    }
-
-    // Record pending request in slot-registry WITHOUT updating last_active_at.
-    updateRegistryTransaction(^(NSMutableDictionary *registry) {
+    __block NSDictionary *plan;
+    __block NSError *writeError;
+    __block BOOL needsEviction = NO;
+    BOOL committed = updateRegistryTransaction(^(NSMutableDictionary *registry) {
         NSMutableDictionary *slots = registry[@"slots"];
         NSMutableDictionary *entry = [slots[targetSlot] isKindOfClass:NSDictionary.class] ? [slots[targetSlot] mutableCopy] : [NSMutableDictionary new];
+        NSDictionary *pending = [NSDictionary dictionaryWithContentsOfFile:slotTicketPath(targetSlot)];
+        NSString *activeGuestID = entry[@"guest_id"];
+        NSString *ackedRequestID = entry[@"acked_request_id"];
+        NSDictionary *probe = nil;
+        NSData *probeData = [NSData dataWithContentsOfFile:[probesDir() stringByAppendingPathComponent:[targetSlot stringByAppendingString:@".json"]]];
+        if (probeData) probe = [NSJSONSerialization JSONObjectWithData:probeData options:0 error:nil];
+        BOOL sameProcess = [probe isKindOfClass:NSDictionary.class] && [entry[@"pid"] isEqual:probe[@"pid"]];
+        if (alive && sameProcess && [activeGuestID isEqual:identifier] && ackedRequestID.length && !pending) {
+            NSString *url = [NSString stringWithFormat:@"%@://resume?guest=%@&req=%@", scheme, identifier, ackedRequestID];
+            plan = @{@"action": @"resume", @"slot": targetSlot, @"request_id": ackedRequestID, @"url": url};
+            return;
+        }
+
+        NSTimeInterval now = [NSDate.date timeIntervalSince1970];
+        NSTimeInterval age = now - [pending[@"created"] doubleValue];
+        NSString *requestID = pending[@"request_id"];
+        BOOL reuse = [pending[@"id"] isEqual:identifier] && [pending[@"target_bundle_id"] isEqual:targetBundleID] &&
+            requestID.length && age >= -5 && age <= 600 && [entry[@"pending_request_id"] isEqual:requestID];
+        needsEviction = alive && sameProcess && activeGuestID.length && ![activeGuestID isEqual:identifier];
+        if (!reuse) {
+            requestID = NSUUID.UUID.UUIDString;
+            NSDictionary *ticket = @{@"request_id": requestID, @"id": identifier, @"slot": targetSlot,
+                @"target_bundle_id": targetBundleID, @"evict_previous": @(needsEviction), @"created": @(now)};
+            NSData *plist = [NSPropertyListSerialization dataWithPropertyList:ticket format:NSPropertyListBinaryFormat_v1_0 options:0 error:&writeError];
+            if (!plist || ![plist writeToFile:slotTicketPath(targetSlot) options:NSDataWritingAtomic error:&writeError]) return;
+        }
         entry[@"slot_id"] = targetSlot;
         entry[@"bundle_id"] = targetBundleID;
         entry[@"pending_request_id"] = requestID;
         entry[@"pending_guest_id"] = identifier;
         entry[@"state"] = alive ? @"switching" : @"launching";
         slots[targetSlot] = entry;
+        NSString *action = needsEviction ? @"evict" : @"launch";
+        NSString *url = [NSString stringWithFormat:@"%@://%@?req=%@&guest=%@", scheme, action, requestID, identifier];
+        plan = @{@"action": action, @"slot": targetSlot, @"request_id": requestID, @"url": url};
     });
-
-    if (alive && activeGuestID != nil && ![activeGuestID isEqualToString:identifier]) {
+    if (!committed || !plan) {
+        if (error) *error = writeError ?: [NSError errorWithDomain:@"SIContainer" code:12 userInfo:@{NSLocalizedDescriptionKey: @"Không lưu được yêu cầu mở app. Hãy thử lại."}];
+        return nil;
+    }
+    // The runner handles its own URL on the main queue. Never wait for our own
+    // alive lock or send ourselves an eviction notification here.
+    if (needsEviction && ![ICCurrentRole() isEqual:targetSlot]) {
         NSString *notifyName = [NSString stringWithFormat:@"com.hongson117.sicontainer.%@.evict", targetSlot];
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), (__bridge CFStringRef)notifyName, NULL, NULL, true);
-        if (ICWaitForSlotExit(targetSlot, 0.45)) {
-            NSString *urlStr = [NSString stringWithFormat:@"%@://launch?req=%@&guest=%@", scheme, requestID, identifier];
-            return @{@"action": @"launch_after_darwin_exit", @"slot": targetSlot, @"request_id": requestID, @"url": urlStr};
-        }
-        NSString *urlStr = [NSString stringWithFormat:@"%@://evict?req=%@&guest=%@", scheme, requestID, identifier];
-        return @{@"action": @"wake_to_evict", @"slot": targetSlot, @"request_id": requestID, @"url": urlStr};
+        ICWaitForSlotExit(targetSlot, 0.45);
     }
-
-    NSString *urlStr = [NSString stringWithFormat:@"%@://launch?req=%@&guest=%@", scheme, requestID, identifier];
-    return @{@"action": @"launch", @"slot": targetSlot, @"request_id": requestID, @"url": urlStr};
+    return plan;
 }
 
 NSURL *ICCompleteRunnerSwitchURL(NSString *slotID, NSString *requestID) {
     NSString *targetSlot = slotID.length ? slotID : @"runner1";
-    ICWaitForSlotExit(targetSlot, 1.5);
-    NSString *scheme = [NSString stringWithFormat:@"sicontainer-%@", targetSlot];
-    NSString *urlStr = [NSString stringWithFormat:@"%@://launch?req=%@", scheme, requestID ?: @""];
-    return [NSURL URLWithString:urlStr];
+    if (![@[@"runner1", @"runner2"] containsObject:targetSlot] || !validIdentifier(requestID)) return nil;
+    if (!ICWaitForSlotExit(targetSlot, 2.0)) {
+        fail(@"Phụ chưa thoát xong. Hãy mở lại shortcut để thử lại.");
+        return nil;
+    }
+    __block NSURL *url;
+    updateRegistryTransaction(^(NSMutableDictionary *registry) {
+        NSDictionary *ticket = [NSDictionary dictionaryWithContentsOfFile:slotTicketPath(targetSlot)];
+        NSTimeInterval age = [NSDate.date timeIntervalSince1970] - [ticket[@"created"] doubleValue];
+        if (![ticket[@"request_id"] isEqual:requestID] || age < -5 || age > 600 ||
+            ![registry[@"slots"][targetSlot][@"pending_request_id"] isEqual:requestID]) return;
+        NSString *urlStr = [NSString stringWithFormat:@"sicontainer-%@://launch?req=%@&guest=%@", targetSlot, requestID, ticket[@"id"]];
+        url = [NSURL URLWithString:urlStr];
+    });
+    return url;
 }
 
 static NSBundle *mainBundle(id self, SEL cmd) { return guestBundle; }
@@ -530,11 +546,46 @@ static void restoreContext(void) {
 }
 
 static void flushGuestStateBeforeExit(void) {
-    [NSNotificationCenter.defaultCenter postNotificationName:UIApplicationWillResignActiveNotification object:UIApplication.sharedApplication];
-    [NSNotificationCenter.defaultCenter postNotificationName:UIApplicationDidEnterBackgroundNotification object:UIApplication.sharedApplication];
+    // UIKit delivers lifecycle callbacks during the bounce. Synthetic
+    // notifications cannot flush an arbitrary guest's database or scene state.
     if (guestDefaults) [guestDefaults synchronize];
     CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication);
-    releaseRunnerLocks();
+    // Keep writer/alive locks until the kernel releases them at process exit.
+    // Releasing here lets the Manager reopen a process which is still alive.
+}
+
+static void bounceRunnerToManager(NSString *requestID, NSUInteger attempts) {
+    if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) {
+        if (attempts > 0) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                bounceRunnerToManager(requestID, attempts - 1);
+            });
+        } else {
+            evictingInProgress = 0;
+            fail(@"Phụ chưa vào trạng thái hoạt động. Hãy mở lại shortcut.");
+        }
+        return;
+    }
+    NSString *bounce = [NSString stringWithFormat:@"sicontainer://complete-switch?slot=%@&req=%@", ICCurrentRole(), requestID];
+    [UIApplication.sharedApplication openURL:[NSURL URLWithString:bounce] options:@{} completionHandler:^(BOOL success) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!success) {
+                evictingInProgress = 0;
+                fail(@"Không mở được SIContainer Chính để hoàn tất chuyển app. Hãy kiểm tra app Chính đã được cài và còn hạn ký.");
+                return;
+            }
+            // Yield for the real background callbacks. The Manager waits on the
+            // alive lock, so this delay is never used as proof of termination.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                flushGuestStateBeforeExit();
+                _exit(0);
+            });
+        });
+    }];
+}
+
+static void startRunnerBounce(NSString *requestID) {
+    if (__sync_bool_compare_and_swap(&evictingInProgress, 0, 1)) bounceRunnerToManager(requestID, 40);
 }
 
 static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
@@ -543,25 +594,17 @@ static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
     NSDictionary *pending = [NSDictionary dictionaryWithContentsOfFile:slotTicketPath(role)];
     NSString *pendingReq = [pending isKindOfClass:NSDictionary.class] ? pending[@"request_id"] : nil;
     NSString *pendingGuest = [pending isKindOfClass:NSDictionary.class] ? pending[@"id"] : nil;
-    if (pendingReq.length > 0 && ![pendingReq isEqualToString:loadedRequestID ?: @""] && pendingGuest.length > 0) {
+    NSTimeInterval pendingAge = [NSDate.date timeIntervalSince1970] - [pending[@"created"] doubleValue];
+    if (validIdentifier(pendingReq) && ![pendingReq isEqualToString:loadedRequestID ?: @""] && validIdentifier(pendingGuest) && pendingAge >= -5 && pendingAge <= 600) {
         if (!isForegroundWakeup && UIApplication.sharedApplication.applicationState == UIApplicationStateInactive) {
             // Process is mid-transition to foreground via sicontainer-runner1://evict; let DidBecomeActive bounce cleanly.
             return;
         }
-        if (__sync_bool_compare_and_swap(&evictingInProgress, 0, 1)) {
-            flushGuestStateBeforeExit();
-            if (isForegroundWakeup || UIApplication.sharedApplication.applicationState != UIApplicationStateBackground) {
-                NSString *bounce = [NSString stringWithFormat:@"sicontainer://complete-switch?slot=%@&req=%@", role, pendingReq];
-                NSURL *url = [NSURL URLWithString:bounce];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL success) {
-                        _exit(0);
-                    }];
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        _exit(0);
-                    });
-                });
-            } else {
+        if (isForegroundWakeup || UIApplication.sharedApplication.applicationState != UIApplicationStateBackground) {
+            startRunnerBounce(pendingReq);
+        } else {
+            if (__sync_bool_compare_and_swap(&evictingInProgress, 0, 1)) {
+                flushGuestStateBeforeExit();
                 _exit(0);
             }
         }
@@ -581,8 +624,54 @@ static void checkPendingEvictionOrTouchLRU(BOOL isForegroundWakeup) {
     }
 }
 
+static BOOL isInternalRunnerURL(NSURL *url) {
+    NSString *scheme = [@"sicontainer-" stringByAppendingString:ICCurrentRole()];
+    return ICIsRunnerProcess() && [url.scheme.lowercaseString isEqual:scheme];
+}
+
+BOOL ICHandleRunnerURL(NSURL *url) {
+    if (!isInternalRunnerURL(url)) return NO;
+    NSString *action = url.host.lowercaseString;
+    if (![@[@"launch", @"resume", @"evict"] containsObject:action]) return YES;
+    if (evictingInProgress) return YES;
+    NSURLComponents *components = [NSURLComponents componentsWithURL:url resolvingAgainstBaseURL:NO];
+    NSMutableDictionary *query = [NSMutableDictionary new];
+    for (NSURLQueryItem *item in components.queryItems) {
+        if (query[item.name]) { fail(@"Link mở app có tham số trùng lặp."); return YES; }
+        query[item.name] = item.value ?: @"";
+    }
+    NSString *guest = query[@"guest"];
+    NSString *requestID = query[@"req"];
+    if (guest && !validIdentifier(guest)) { fail(@"Danh tính app trong shortcut không hợp lệ."); return YES; }
+    if (guest) guest = [[NSUUID alloc] initWithUUIDString:guest].UUIDString;
+    if (requestID) {
+        // A delayed URL from an earlier switch must never recreate an old ticket.
+        if (!validIdentifier(requestID)) return YES;
+        if ([requestID isEqual:loadedRequestID] && (!guest || [guest isEqual:loadedGuestID])) return YES;
+        NSDictionary *pending = [NSDictionary dictionaryWithContentsOfFile:slotTicketPath(ICCurrentRole())];
+        if (![pending[@"request_id"] isEqual:requestID] || (guest && ![pending[@"id"] isEqual:guest])) return YES;
+        NSTimeInterval age = [NSDate.date timeIntervalSince1970] - [pending[@"created"] doubleValue];
+        if (age < -5 || age > 600) return YES;
+        guest = pending[@"id"];
+    }
+    if (!validIdentifier(guest)) { fail(@"Shortcut thiếu danh tính app."); return YES; }
+    if ([guest isEqual:loadedGuestID] && !requestID) {
+        // UIKit has already brought the existing guest forward. No Manager hop,
+        // ticket write, re-sign, or new guest process is needed.
+        return YES;
+    }
+    if (!requestID) {
+        NSError *error;
+        NSDictionary *plan = ICPrepareRunnerLaunch(guest, ICCurrentRole(), &error);
+        if (!plan) { fail(error.localizedDescription ?: @"Không chuẩn bị được yêu cầu mở app."); return YES; }
+        requestID = plan[@"request_id"];
+    }
+    startRunnerBounce(requestID);
+    return YES;
+}
+
 static void darwinEvictCallback(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
-    checkPendingEvictionOrTouchLRU(NO);
+    dispatch_async(dispatch_get_main_queue(), ^{ checkPendingEvictionOrTouchLRU(NO); });
 }
 
 @interface ICReturnController : UIViewController
@@ -675,10 +764,27 @@ int ICBootGuest(void) {
     ICRecordRoleProbe();
     NSString *role = ICCurrentRole();
     NSString *activeTicketFile = ICIsRunnerProcess() ? slotTicketPath(role) : ticketPath();
-    NSDictionary *ticket = [NSDictionary dictionaryWithContentsOfFile:activeTicketFile];
+    __block NSDictionary *ticket;
+    // Consumption and dispatch share the same lock, preventing a read/remove
+    // race from deleting a newer launch request.
+    BOOL consumed = updateRegistryTransaction(^(NSMutableDictionary *registry) {
+        ticket = [NSDictionary dictionaryWithContentsOfFile:activeTicketFile];
+        if (ticket && ![NSFileManager.defaultManager removeItemAtPath:activeTicketFile error:nil]) ticket = nil;
+        if (ICIsRunnerProcess()) {
+            NSMutableDictionary *slots = registry[@"slots"];
+            NSMutableDictionary *entry = [slots[role] isKindOfClass:NSDictionary.class] ? [slots[role] mutableCopy] : [NSMutableDictionary new];
+            if (ticket && ![entry[@"pending_request_id"] isEqual:ticket[@"request_id"]]) ticket = nil;
+            if (!ticket) {
+                [entry removeObjectForKey:@"guest_id"];
+                [entry removeObjectForKey:@"acked_request_id"];
+                entry[@"state"] = @"idle";
+                entry[@"pid"] = @(getpid());
+                slots[role] = entry;
+            }
+        }
+    });
+    if (!consumed) return -1;
     if (!ticket) return -1;
-    // Consume first, even if any following validation or guest initialization fails.
-    [NSFileManager.defaultManager removeItemAtPath:activeTicketFile error:nil];
 
     NSString *identifier = ticket[@"id"];
     NSString *requestID = [ticket[@"request_id"] isKindOfClass:NSString.class] ? ticket[@"request_id"] : [NSUUID UUID].UUIDString;
@@ -689,6 +795,10 @@ int ICBootGuest(void) {
     }
 
     NSString *myBundleID = rawHostBundleID();
+    if (ICIsRunnerProcess() && (![ticket[@"slot"] isEqual:role] || ![ticket[@"target_bundle_id"] isEqual:myBundleID])) {
+        fail(@"Vé mở app không khớp Slot hiện tại.");
+        return -1;
+    }
     NSString *dir = verifiedPath([root stringByAppendingPathComponent:identifier], root);
     NSString *preparedCandidate = dir ? preparedAppPathForBundle(dir, myBundleID) : nil;
     NSString *app = (dir && preparedCandidate) ? verifiedPath(preparedCandidate, dir) : nil;
@@ -745,6 +855,11 @@ int ICBootGuest(void) {
     NSString *oldHome = NSHomeDirectory();
     NSString *oldTmp = NSTemporaryDirectory();
     installContext();
+    if (ICIsRunnerProcess()) SICInstallURLInterception(^BOOL(NSURL *url) {
+        return isInternalRunnerURL(url);
+    }, ^(NSURL *url) {
+        ICHandleRunnerURL(url);
+    });
     for (NSUInteger round = 0; round < 8 && pending.count; round++) {
         BOOL progress = NO;
         for (NSString *p in pending.copy) {
@@ -824,8 +939,10 @@ int ICBootGuest(void) {
         entryDict[@"state"] = @"running";
         entryDict[@"last_active_at"] = @(now);
         entryDict[@"pid"] = @(getpid());
-        [entryDict removeObjectForKey:@"pending_request_id"];
-        [entryDict removeObjectForKey:@"pending_guest_id"];
+        if ([entryDict[@"pending_request_id"] isEqual:requestID]) {
+            [entryDict removeObjectForKey:@"pending_request_id"];
+            [entryDict removeObjectForKey:@"pending_guest_id"];
+        }
         slots[role] = entryDict;
     });
 

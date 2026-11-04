@@ -21,6 +21,8 @@ BOOL ICQueueGuest(NSString *identifier, NSError **error);
 /// Transactional multi-slot dispatch for Runner 1 (returns action & URL to open).
 NSDictionary * _Nullable ICPrepareRunnerLaunch(NSString *identifier, NSString *slotID, NSError **error);
 NSURL * _Nullable ICCompleteRunnerSwitchURL(NSString *slotID, NSString *requestID);
+/// Consumes a runner URL in either the standby UI or a loaded guest process.
+BOOL ICHandleRunnerURL(NSURL *url);
 
 /// -1: show host/runner UI, otherwise the guest process return code.
 int ICBootGuest(void);

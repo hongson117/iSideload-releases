@@ -220,15 +220,16 @@ struct ContainerView: View {
                     shortcutTarget = nil
                     store.openShortcutInstaller(for: guest, mode: "safari")
                 }
-                Button("Sao chép link mở trực tiếp (sicontainer://launch)") {
-                    UIPasteboard.general.string = "sicontainer://launch?guest=\(guest.id)"
+                Button("Sao chép link mở app") {
+                    let link = store.shortcutLaunchURL(for: guest)?.absoluteString
+                    UIPasteboard.general.string = link
                     shortcutTarget = nil
-                    store.message = "Đã sao chép link: sicontainer://launch?guest=\(guest.id)"
+                    store.message = link.map { "Đã sao chép link mở app: \($0)" }
                 }
             }
             Button("Hủy", role: .cancel) { shortcutTarget = nil }
         } message: {
-            Text("Cả 2 cách đều dùng đường dẫn HTTPS cố định (không phụ thuộc máy chủ ngầm nên không bao giờ bị màn hình trắng) và tự nhảy thẳng vào app.")
+            Text("WebClip cần xác nhận cài hồ sơ trong Cài đặt. Trang Safari hỗ trợ Chia sẻ → Thêm vào MH chính. Với Phụ 1 đã cài, shortcut mở thẳng Phụ 1 và chỉ qua Chính khi cần khởi động lại tiến trình.")
         }
         .alert("Chạy cục bộ trên Con Chính?", isPresented: Binding(get: { launchingLocal != nil }, set: { if !$0 { launchingLocal = nil } })) {
             Button("Tiếp tục") {

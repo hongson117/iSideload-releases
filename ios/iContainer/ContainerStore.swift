@@ -196,8 +196,16 @@ final class ContainerStore: ObservableObject {
     }
 
     func completeRunnerSwitch(slot: String, requestID: String) {
-        guard let url = ICCompleteRunnerSwitchURL(slot, requestID) else { return }
-        openExternalURLWhenActive(url)
+        // Waiting for the kernel lock must not block the Manager's UI or prevent
+        // UIKit from completing the foreground transition.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let url = ICCompleteRunnerSwitchURL(slot, requestID)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let url { self.openExternalURLWhenActive(url) }
+                else { self.failure = ICLastLaunchError() ?? "Yêu cầu chuyển app đã hết hạn hoặc đã được xử lý." }
+            }
+        }
     }
 
     func probeRunner1() {
@@ -323,43 +331,20 @@ final class ContainerStore: ObservableObject {
         return (small.jpegData(compressionQuality: 0.82) ?? small.pngData() ?? Data()).base64EncodedString()
     }
 
+    func shortcutLaunchURL(for guest: ContainerGuest) -> URL? {
+        SIShortcut.launchURL(guestID: guest.id, slot: sharedGroupAvailable ? "runner1" : "main")
+    }
+
     private func permanentHTTPSLaunchURL(for guest: ContainerGuest) -> String {
         let displayTitle = guest.name.isEmpty ? guest.bundleID : guest.name
-        let encodedName = displayTitle.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "App"
-        return "https://hongson117.github.io/iSideload-releases/go.html?guest=\(guest.id)&name=\(encodedName)"
+        return SIShortcut.webURL(guestID: guest.id, name: displayTitle,
+            slot: sharedGroupAvailable ? "runner1" : "main")?.absoluteString ?? ""
     }
 
     private func buildWebClipMobileConfig(for guest: ContainerGuest) -> Data? {
-        let httpsLaunchURL = permanentHTTPSLaunchURL(for: guest)
-        let cleanUUID = UUID().uuidString.uppercased()
         let displayTitle = guest.name.isEmpty ? guest.bundleID : guest.name
-        var clip: [String: Any] = [
-            "PayloadType": "com.apple.webclip.managed",
-            "PayloadVersion": 1,
-            "PayloadIdentifier": "com.hongson117.sicontainer.webclip.v2.\(guest.id)",
-            "PayloadUUID": cleanUUID,
-            "PayloadDisplayName": displayTitle,
-            "Label": displayTitle,
-            "URL": httpsLaunchURL,
-            "FullScreen": false,
-            "Precomposed": true,
-            "IsRemovable": true
-        ]
-        if let iconData = extractGuestIconPNG(for: guest) {
-            clip["Icon"] = iconData
-        }
-        let profile: [String: Any] = [
-            "PayloadType": "Configuration",
-            "PayloadVersion": 1,
-            "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.\((UUID(uuidString: guest.id) ?? UUID()).uuidString.uppercased())",
-            "PayloadUUID": UUID().uuidString.uppercased(),
-            "PayloadDisplayName": "Icon 1-Chạm: \(displayTitle)",
-            "PayloadDescription": "Tạo icon mở trực tiếp \(displayTitle) ngoài Màn hình chính qua HTTPS chuẩn iOS.",
-            "PayloadOrganization": "SIContainer",
-            "PayloadRemovalDisallowed": false,
-            "PayloadContent": [clip]
-        ]
-        return try? PropertyListSerialization.data(fromPropertyList: profile, format: .xml, options: 0)
+        return SIShortcut.mobileConfig(guestID: guest.id, name: displayTitle,
+            icon: extractGuestIconPNG(for: guest), slot: sharedGroupAvailable ? "runner1" : "main")
     }
 
     private func buildSafariShortcutHTML(for guest: ContainerGuest) -> Data {
@@ -367,7 +352,7 @@ final class ContainerStore: ObservableObject {
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
-        let launchURL = "sicontainer://launch?guest=\(guest.id)"
+        let launchURL = shortcutLaunchURL(for: guest)?.absoluteString ?? "sicontainer://"
         let iconB64 = extractGuestIconPNG(for: guest)?.base64EncodedString() ?? ""
         let iconLink = iconB64.isEmpty ? "" : "<link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"data:image/png;base64,\(iconB64)\">"
         let imgTag = iconB64.isEmpty ? "" : "<img src=\"data:image/png;base64,\(iconB64)\" style=\"width:76px;height:76px;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,.45);margin-bottom:10px\">"
@@ -401,7 +386,7 @@ final class ContainerStore: ObservableObject {
         </head><body>
         \(imgTag)
         <div class="title">\(title)</div>
-        <div class="sub">Cài Icon 1-Chạm Chuẩn iOS (Không qua Safari)</div>
+        <div class="sub">Thêm biểu tượng mở app vào Màn hình chính</div>
         <div class="card">
         <div class="step"><b>Bước 1:</b> Bấm <b>Cho phép</b> khi Safari hỏi tải hồ sơ cấu hình (nếu chưa hiện, bấm nút màu xanh bên dưới).</div>
         <div class="step"><b>Bước 2:</b> Mở <b>Cài đặt (Settings)</b> của iPhone → bấm <b>Đã tải về hồ sơ</b> ở ngay đầu trang.</div>
@@ -510,7 +495,7 @@ final class ContainerStore: ObservableObject {
                         "HTTP/1.1 200 OK",
                         "Content-Type: \(payload.mime)",
                         "Content-Length: \(payload.data.count)",
-                        "Cache-Control: public, max-age=31536000",
+                        "Cache-Control: no-store",
                         "Connection: close"
                     ]
                     if let filename = payload.filename {
