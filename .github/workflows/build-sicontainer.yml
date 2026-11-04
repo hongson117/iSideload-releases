@@ -71,16 +71,7 @@ jobs:
           ssh-key: ${{ secrets.ICONTAINER_SOURCE_READ_KEY }}
           persist-credentials: false
           show-progress: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            /core/
-            /ios/
-            /scripts/
-            /tests/
-            /project.yml
-            /project-icontainer.yml
-            /project-sicontainer.yml
-            !**/target/
+          submodules: false
       - name: Record source identity
         run: echo "SOURCE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
