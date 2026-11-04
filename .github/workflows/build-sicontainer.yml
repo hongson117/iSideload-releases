@@ -9,6 +9,10 @@ on:
         description: Increasing iPhone app build number
         required: false
         default: ''
+      publish_release:
+        description: Publish the verified binaries as a release
+        type: boolean
+        default: true
 permissions:
   contents: read
 concurrency:
@@ -111,6 +115,14 @@ jobs:
             /tmp/lc-tests
             swiftc -parse-as-library ios/iContainer/ContainerGuest.swift tests/ContainerGuestTests.swift -o /tmp/guest-tests
             /tmp/guest-tests
+            if [[ -f tests/SIShortcutTests.swift ]]; then
+              swiftc -parse-as-library ios/iContainer/SIShortcut.swift tests/SIShortcutTests.swift -o /tmp/shortcut-tests
+              /tmp/shortcut-tests
+            fi
+            if [[ -f tests/SICURLInterceptionTests.m ]]; then
+              clang -fobjc-arc -fblocks -framework Foundation ios/iContainer/SICURLInterception.m tests/SICURLInterceptionTests.m -o /tmp/url-interception-tests
+              /tmp/url-interception-tests
+            fi
             python3 -m venv /tmp/ic-python
             /tmp/ic-python/bin/python -m pip install --quiet pyyaml
             EXPECTED_VERSION=$(/tmp/ic-python/bin/python -c "import yaml; print(yaml.safe_load(open('project-sicontainer.yml'))['targets']['SIContainer']['settings']['base']['MARKETING_VERSION'])")
@@ -185,6 +197,7 @@ jobs:
             publish/ThirdPartyNotices.txt
 
   publish:
+    if: ${{ inputs.publish_release }}
     needs: [core-tests, ios]
     runs-on: ubuntu-latest
     permissions:
