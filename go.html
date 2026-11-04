@@ -12,10 +12,12 @@
   var params = new URLSearchParams(location.search);
   var guest = params.get('guest') || '';
   var name = params.get('name') || 'Ứng dụng';
-  var slot = params.get('slot') || 'runner1';
+  var rawSlot = params.get('slot') || 'runner1';
+  var slot = (rawSlot === 'main' || rawSlot === 'runner1') ? rawSlot : 'runner1';
   var rawHash = location.hash || '';
   var isSetup = rawHash.indexOf('setup') !== -1;
   var armedForLaunch = !isSetup;
+  var lastLaunchAt = 0;
   var scheme = (slot === 'main') ? 'sicontainer' : ('sicontainer-' + slot);
   var target = guest ? (scheme + '://launch?guest=' + encodeURIComponent(guest)) : (scheme + '://');
 
@@ -43,8 +45,10 @@
 
   function triggerLaunch() {
     if (!guest) return;
-    window.location.replace(target);
-    setTimeout(function() { window.location.href = target; }, 50);
+    var now = Date.now();
+    if (now - lastLaunchAt < 1200) return;
+    lastLaunchAt = now;
+    window.location.href = target;
   }
 
   if (armedForLaunch && guest) {
@@ -52,14 +56,16 @@
   } else if (isSetup && guest) {
     setTimeout(function() {
       try {
-        var cleanSearch = '?guest=' + encodeURIComponent(guest) + (name ? ('&name=' + encodeURIComponent(name)) : '');
+        var cleanSearch = '?guest=' + encodeURIComponent(guest)
+          + (name ? ('&name=' + encodeURIComponent(name)) : '')
+          + '&slot=' + encodeURIComponent(slot);
         history.replaceState(null, name, location.pathname + cleanSearch);
       } catch (e) {}
     }, 150);
   }
 
   window.addEventListener('pageshow', function(e) {
-    if (armedForLaunch && guest) {
+    if (armedForLaunch && guest && e.persisted) {
       triggerLaunch();
     }
   });
