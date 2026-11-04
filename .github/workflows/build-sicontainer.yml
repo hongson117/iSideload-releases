@@ -19,6 +19,13 @@ concurrency:
   group: public-sicontainer-build
   cancel-in-progress: false
 jobs:
+  shortcut-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: node --test .github/scripts/test_shortcut.cjs
   core-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -186,7 +193,7 @@ jobs:
 
   publish:
     if: ${{ inputs.publish_release }}
-    needs: [core-tests, ios]
+    needs: [shortcut-tests, core-tests, ios]
     runs-on: ubuntu-latest
     permissions:
       contents: write

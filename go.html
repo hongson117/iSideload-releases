@@ -1,112 +1,45 @@
 <!doctype html>
 <html lang="vi">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>SIContainer</title>
-<script>
-(function() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(function(){});
-  }
-  var params = new URLSearchParams(location.search);
-  var guest = params.get('guest') || '';
-  var name = params.get('name') || 'Ứng dụng';
-  var rawSlot = params.get('slot') || 'runner1';
-  var slot = (rawSlot === 'main' || rawSlot === 'runner1') ? rawSlot : 'runner1';
-  var rawHash = location.hash || '';
-  var isSetup = rawHash.indexOf('setup') !== -1;
-  var armedForLaunch = !isSetup;
-  var lastLaunchAt = 0;
-  var scheme = (slot === 'main') ? 'sicontainer' : ('sicontainer-' + slot);
-  var target = guest ? (scheme + '://launch?guest=' + encodeURIComponent(guest)) : (scheme + '://');
-
-  if (name) {
-    document.title = name;
-  }
-
-  var iconMatch = rawHash.match(/icon=([^&]+)/);
-  if (iconMatch && iconMatch[1]) {
-    try {
-      var b64 = decodeURIComponent(iconMatch[1]);
-      var mime = b64.indexOf('iVBOR') === 0 ? 'image/png' : 'image/jpeg';
-      var link = document.createElement('link');
-      link.rel = 'apple-touch-icon';
-      link.sizes = '180x180';
-      link.href = 'data:' + mime + ';base64,' + b64;
-      document.head.appendChild(link);
-      window.__sicIcon = link.href;
-    } catch (e) {}
-  }
-
-  window.__sicTarget = target;
-  window.__sicName = name;
-  window.__sicGuest = guest;
-
-  function triggerLaunch() {
-    if (!guest) return;
-    var now = Date.now();
-    if (now - lastLaunchAt < 1200) return;
-    lastLaunchAt = now;
-    window.location.href = target;
-  }
-
-  if (armedForLaunch && guest) {
-    triggerLaunch();
-  } else if (isSetup && guest) {
-    setTimeout(function() {
-      try {
-        var cleanSearch = '?guest=' + encodeURIComponent(guest)
-          + (name ? ('&name=' + encodeURIComponent(name)) : '')
-          + '&slot=' + encodeURIComponent(slot);
-        history.replaceState(null, name, location.pathname + cleanSearch);
-      } catch (e) {}
-    }, 150);
-  }
-
-  window.addEventListener('pageshow', function(e) {
-    if (armedForLaunch && guest && e.persisted) {
-      triggerLaunch();
-    }
-  });
-
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'hidden') {
-      armedForLaunch = true;
-    } else if (document.visibilityState === 'visible' && armedForLaunch && guest) {
-      triggerLaunch();
-    }
-  });
-})();
-</script>
-<style>
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0d0d11;color:#fff;margin:0;padding:28px 18px;text-align:center}
-.card{background:#1c1c22;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;margin:16px auto;max-width:420px}
-.title{font-size:21px;font-weight:700;margin:8px 0 4px}
-.sub{font-size:14px;color:#98989f;margin-bottom:14px;line-height:1.5}
-a.btn{display:block;background:#0a84ff;color:#fff;text-decoration:none;padding:14px 18px;border-radius:13px;font-weight:700;font-size:16px;margin-top:12px}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="SIContainer" id="webAppTitle">
+  <meta name="theme-color" content="#12151d">
+  <title>SIContainer</title>
+  <style>
+    :root{color-scheme:dark}
+    body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#12151d;color:#f5f6fa;margin:0;padding:48px 22px;line-height:1.6}
+    main{max-width:420px;margin:auto}
+    .card{background:#1c2230;border:1px solid #343d50;border-radius:22px;padding:26px}
+    #iconImg{width:76px;height:76px;border-radius:18px;margin-bottom:12px}
+    h1{font-size:25px;line-height:1.3;margin:0 0 12px;overflow-wrap:anywhere}
+    p{color:#bbc5d8;margin:12px 0}
+    ol{padding-left:22px;color:#d8deeb}
+    li{margin:10px 0}
+    .button{display:block;text-align:center;background:#3276ed;color:white;text-decoration:none;padding:14px;border-radius:13px;font-weight:650;margin-top:24px;overflow-wrap:anywhere}
+    #status{font-size:14px;min-height:44px}
+    .footer{font-size:12px;color:#98a6c0;margin:20px 4px}
+    [hidden]{display:none!important}
+  </style>
+  <script src="./shortcut.js?v=5" defer></script>
 </head>
 <body>
-<div class="card">
-  <img id="iconImg" style="display:none;width:72px;height:72px;border-radius:16px;margin:0 auto 10px">
-  <div class="title" id="appTitle">Đang mở trực tiếp trên Phụ 1...</div>
-  <div class="sub" id="appSub">Để đưa ra Màn hình chính: bấm nút <b>Chia sẻ</b> ở thanh dưới Safari → chọn <b>Thêm vào MH chính</b>.</div>
-  <a class="btn" id="openBtn" href="sicontainer-runner1://">Mở trực tiếp (Phụ 1)</a>
-</div>
-<script>
-if (window.__sicName) {
-  document.getElementById('appTitle').textContent = window.__sicName;
-  document.getElementById('openBtn').textContent = 'Mở ' + window.__sicName + ' ngay';
-}
-if (window.__sicTarget) {
-  document.getElementById('openBtn').href = window.__sicTarget;
-}
-if (window.__sicIcon) {
-  var img = document.getElementById('iconImg');
-  img.src = window.__sicIcon;
-  img.style.display = 'block';
-}
-</script>
+  <main>
+    <div class="card">
+      <img id="iconImg" alt="" hidden>
+      <h1 id="appTitle">Mở ứng dụng</h1>
+      <p id="intro">Thêm biểu tượng để mở ứng dụng qua SIContainer.</p>
+      <ol id="setupSteps">
+        <li>Chạm <strong>Chia sẻ</strong> trong Safari.</li>
+        <li>Chọn <strong>Thêm vào Màn hình chính</strong>.</li>
+        <li>Giữ <strong>Mở dưới dạng ứng dụng web</strong> bật nếu có tùy chọn này, rồi chạm <strong>Thêm</strong>.</li>
+      </ol>
+      <a class="button" id="openBtn" href="sicontainer://">Mở SIContainer</a>
+      <p id="status" role="status" aria-live="polite">Nếu trang vừa được khôi phục, chạm nút Mở để tiếp tục.</p>
+      <noscript><p>Trình duyệt cần bật JavaScript để chọn đúng ứng dụng. Bạn có thể mở SIContainer bằng nút phía trên.</p></noscript>
+    </div>
+    <p class="footer">SIContainer · Shortcut v5</p>
+  </main>
 </body>
 </html>
