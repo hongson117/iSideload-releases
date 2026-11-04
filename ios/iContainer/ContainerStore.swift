@@ -311,22 +311,37 @@ final class ContainerStore: ObservableObject {
         guestIconImage(for: guest)?.pngData()
     }
 
-    private func buildWebClipMobileConfig(for guest: ContainerGuest) -> Data? {
-        let launchURL = "sicontainer://launch?guest=\(guest.id)"
-        let cleanUUID = (UUID(uuidString: guest.id) ?? UUID()).uuidString.uppercased()
+    private func extractGuestSmallIconB64(for guest: ContainerGuest) -> String {
+        guard let base = guestIconImage(for: guest) else { return "" }
+        let size = CGSize(width: 96, height: 96)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1.0
+        format.opaque = true
+        let small = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            base.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return (small.jpegData(compressionQuality: 0.82) ?? small.pngData() ?? Data()).base64EncodedString()
+    }
+
+    private func permanentHTTPSLaunchURL(for guest: ContainerGuest) -> String {
         let displayTitle = guest.name.isEmpty ? guest.bundleID : guest.name
-        let hostBundleID = Bundle.main.bundleIdentifier ?? "com.hongson117.sicontainer"
+        let encodedName = displayTitle.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "App"
+        return "https://hongson117.github.io/iSideload-releases/go.html?guest=\(guest.id)&name=\(encodedName)"
+    }
+
+    private func buildWebClipMobileConfig(for guest: ContainerGuest) -> Data? {
+        let httpsLaunchURL = permanentHTTPSLaunchURL(for: guest)
+        let cleanUUID = UUID().uuidString.uppercased()
+        let displayTitle = guest.name.isEmpty ? guest.bundleID : guest.name
         var clip: [String: Any] = [
             "PayloadType": "com.apple.webclip.managed",
             "PayloadVersion": 1,
-            "PayloadIdentifier": "com.hongson117.sicontainer.webclip.\(cleanUUID)",
+            "PayloadIdentifier": "com.hongson117.sicontainer.webclip.v2.\(guest.id)",
             "PayloadUUID": cleanUUID,
             "PayloadDisplayName": displayTitle,
             "Label": displayTitle,
-            "URL": launchURL,
-            "TargetApplicationBundleIdentifier": hostBundleID,
-            "FullScreen": true,
-            "IgnoreManifestScope": true,
+            "URL": httpsLaunchURL,
+            "FullScreen": false,
             "Precomposed": true,
             "IsRemovable": true
         ]
@@ -336,10 +351,10 @@ final class ContainerStore: ObservableObject {
         let profile: [String: Any] = [
             "PayloadType": "Configuration",
             "PayloadVersion": 1,
-            "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.\(cleanUUID)",
+            "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.\((UUID(uuidString: guest.id) ?? UUID()).uuidString.uppercased())",
             "PayloadUUID": UUID().uuidString.uppercased(),
             "PayloadDisplayName": "Icon 1-Chạm: \(displayTitle)",
-            "PayloadDescription": "Tạo icon mở trực tiếp \(displayTitle) ngoài Màn hình chính (không qua Safari, không màn hình trắng).",
+            "PayloadDescription": "Tạo icon mở trực tiếp \(displayTitle) ngoài Màn hình chính qua HTTPS chuẩn iOS.",
             "PayloadOrganization": "SIContainer",
             "PayloadRemovalDisallowed": false,
             "PayloadContent": [clip]
@@ -436,6 +451,16 @@ final class ContainerStore: ObservableObject {
     }
 
     func openShortcutInstaller(for guest: ContainerGuest, mode: String) {
+        if mode == "safari" {
+            let baseHTTPS = permanentHTTPSLaunchURL(for: guest)
+            let iconB64 = extractGuestSmallIconB64(for: guest)
+                .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+            let fullStr = iconB64.isEmpty ? "\(baseHTTPS)#setup" : "\(baseHTTPS)#setup&icon=\(iconB64)"
+            if let url = URL(string: fullStr) {
+                openExternalURLWhenActive(url)
+                return
+            }
+        }
         guard let configData = buildWebClipMobileConfig(for: guest) else {
             failure = "Không tạo được cấu hình Shortcut."
             return
