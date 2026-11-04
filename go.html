@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>SIContainer</title>
+<script>
+(function() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  }
+  var params = new URLSearchParams(location.search);
+  var guest = params.get('guest') || '';
+  var name = params.get('name') || 'Ứng dụng';
+  var rawHash = location.hash || '';
+  var isSetup = rawHash.indexOf('setup') !== -1;
+  var target = guest ? ('sicontainer://launch?guest=' + encodeURIComponent(guest)) : 'sicontainer://';
+
+  if (name) {
+    document.title = name;
+  }
+
+  var iconMatch = rawHash.match(/icon=([^&]+)/);
+  if (iconMatch && iconMatch[1]) {
+    try {
+      var b64 = decodeURIComponent(iconMatch[1]);
+      var link = document.createElement('link');
+      link.rel = 'apple-touch-icon';
+      link.sizes = '180x180';
+      link.href = 'data:image/png;base64,' + b64;
+      document.head.appendChild(link);
+      window.__sicIcon = link.href;
+    } catch (e) {}
+  }
+
+  window.__sicTarget = target;
+  window.__sicName = name;
+  window.__sicGuest = guest;
+
+  function triggerLaunch() {
+    if (!guest) return;
+    window.location.replace(target);
+    setTimeout(function() { window.location.href = target; }, 60);
+  }
+
+  if (!isSetup && guest) {
+    triggerLaunch();
+  } else if (isSetup && guest) {
+    setTimeout(function() {
+      try {
+        var cleanSearch = '?guest=' + encodeURIComponent(guest) + (name ? ('&name=' + encodeURIComponent(name)) : '');
+        history.replaceState(null, name, location.pathname + cleanSearch);
+      } catch (e) {}
+    }, 150);
+  }
+
+  window.addEventListener('pageshow', function(e) {
+    if (location.hash.indexOf('setup') === -1 && guest) {
+      triggerLaunch();
+    }
+  });
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && location.hash.indexOf('setup') === -1 && guest) {
+      triggerLaunch();
+    }
+  });
+})();
+</script>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0d0d11;color:#fff;margin:0;padding:28px 18px;text-align:center}
+.card{background:#1c1c22;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;margin:16px auto;max-width:420px}
+.title{font-size:21px;font-weight:700;margin:8px 0 4px}
+.sub{font-size:14px;color:#98989f;margin-bottom:14px;line-height:1.5}
+a.btn{display:block;background:#0a84ff;color:#fff;text-decoration:none;padding:14px 18px;border-radius:13px;font-weight:700;font-size:16px;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="card">
+  <img id="iconImg" style="display:none;width:72px;height:72px;border-radius:16px;margin:0 auto 10px">
+  <div class="title" id="appTitle">Đang mở ứng dụng...</div>
+  <div class="sub" id="appSub">Nếu chưa tự chuyển, bấm nút bên dưới hoặc chọn <b>Chia sẻ → Thêm vào MH chính</b>.</div>
+  <a class="btn" id="openBtn" href="sicontainer://">Mở ngay</a>
+</div>
+<script>
+if (window.__sicName) {
+  document.getElementById('appTitle').textContent = window.__sicName;
+  document.getElementById('openBtn').textContent = 'Mở ' + window.__sicName + ' ngay';
+}
+if (window.__sicTarget) {
+  document.getElementById('openBtn').href = window.__sicTarget;
+}
+if (window.__sicIcon) {
+  var img = document.getElementById('iconImg');
+  img.src = window.__sicIcon;
+  img.style.display = 'block';
+}
+</script>
+</body>
+</html>
