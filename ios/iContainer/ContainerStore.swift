@@ -315,6 +315,7 @@ final class ContainerStore: ObservableObject {
         let launchURL = "sicontainer://launch?guest=\(guest.id)"
         let cleanUUID = (UUID(uuidString: guest.id) ?? UUID()).uuidString.uppercased()
         let displayTitle = guest.name.isEmpty ? guest.bundleID : guest.name
+        let hostBundleID = Bundle.main.bundleIdentifier ?? "com.hongson117.sicontainer"
         var clip: [String: Any] = [
             "PayloadType": "com.apple.webclip.managed",
             "PayloadVersion": 1,
@@ -323,7 +324,8 @@ final class ContainerStore: ObservableObject {
             "PayloadDisplayName": displayTitle,
             "Label": displayTitle,
             "URL": launchURL,
-            "FullScreen": false,
+            "TargetApplicationBundleIdentifier": hostBundleID,
+            "FullScreen": true,
             "IgnoreManifestScope": true,
             "Precomposed": true,
             "IsRemovable": true
@@ -336,8 +338,8 @@ final class ContainerStore: ObservableObject {
             "PayloadVersion": 1,
             "PayloadIdentifier": "com.hongson117.sicontainer.shortcut.\(cleanUUID)",
             "PayloadUUID": UUID().uuidString.uppercased(),
-            "PayloadDisplayName": "Biểu tượng: \(displayTitle)",
-            "PayloadDescription": "Tạo icon mở trực tiếp \(displayTitle) (1 chạm vào thẳng app qua SIContainer).",
+            "PayloadDisplayName": "Icon 1-Chạm: \(displayTitle)",
+            "PayloadDescription": "Tạo icon mở trực tiếp \(displayTitle) ngoài Màn hình chính (không qua Safari, không màn hình trắng).",
             "PayloadOrganization": "SIContainer",
             "PayloadRemovalDisallowed": false,
             "PayloadContent": [clip]
@@ -362,40 +364,36 @@ final class ContainerStore: ObservableObject {
         \(iconLink)
         <title>\(title)</title>
         <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(function(){});
-        }
-        if (location.hash !== '#setup') {
+        if (location.hash === '#auto-profile') {
+            setTimeout(function(){
+                window.location.href = '/webclip/\(guest.id).mobileconfig';
+            }, 250);
+        } else if (location.hash !== '#setup') {
             window.location.replace('\(launchURL)');
             setTimeout(function(){ window.location.href = '\(launchURL)'; }, 60);
-        } else {
-            setTimeout(function(){
-                try { history.replaceState(null, '', '/safari/\(guest.id)#launch'); } catch(e) {}
-            }, 120);
         }
         </script>
         <style>
         body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:22px 18px;text-align:center;background:#0d0d11;color:#fff;margin:0}
-        .card{background:#1c1c22;border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px;margin:14px auto;max-width:420px;text-align:left}
+        .card{background:#1c1c22;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:18px 20px;margin:14px auto;max-width:440px;text-align:left}
         .title{font-size:21px;font-weight:700;margin:4px 0 2px;text-align:center}
         .sub{font-size:13px;color:#98989f;margin-bottom:14px;text-align:center}
-        .step{font-size:15px;line-height:1.55;margin:8px 0;color:#e5e5ea}
-        a.btn{display:block;text-align:center;background:#5e5ce6;color:#fff;text-decoration:none;padding:13px 18px;border-radius:13px;font-weight:600;margin-top:12px;font-size:15px}
-        a.btn-secondary{background:#2c2c34;color:#fff}
+        .step{font-size:15px;line-height:1.6;margin:10px 0;color:#e5e5ea}
+        .warn{background:rgba(255,159,10,.14);border:1px solid rgba(255,159,10,.4);border-radius:12px;padding:12px 14px;margin:12px 0;color:#ffd60a;font-size:14px;line-height:1.55}
+        a.btn{display:block;text-align:center;background:#0a84ff;color:#fff;text-decoration:none;padding:14px 18px;border-radius:13px;font-weight:700;margin-top:12px;font-size:16px}
+        a.btn-secondary{background:#2c2c34;color:#fff;font-weight:600;font-size:14px}
         </style>
         </head><body>
         \(imgTag)
         <div class="title">\(title)</div>
-        <div class="sub">Shortcut 1-Chạm mở trực tiếp</div>
+        <div class="sub">Cài Icon 1-Chạm Chuẩn iOS (Không qua Safari)</div>
         <div class="card">
-        <div class="step"><b>Cách 1 (Khuyên dùng · Mở thẳng 1 chạm không qua Safari):</b></div>
-        <div class="step">Bấm nút dưới đây → chọn <b>Cho phép</b> → vào <b>Cài đặt → Đã tải về hồ sơ → Cài đặt</b>.</div>
-        <a class="btn" href="/webclip/\(guest.id).mobileconfig">Cài Hồ sơ Icon 1-Chạm (.mobileconfig)</a>
-        </div>
-        <div class="card">
-        <div class="step"><b>Cách 2 (Thêm trực tiếp từ trang Safari này):</b></div>
-        <div class="step">Trang này đã gắn sẵn lệnh nhảy trực tiếp. Bấm nút <b>Chia sẻ</b> ở thanh dưới Safari → chọn <b>Thêm vào MH chính</b>. Khi chạm icon ngoài màn hình chính sẽ tự nhảy thẳng vào <b>\(title)</b>.</div>
-        <a class="btn btn-secondary" href="\(launchURL)">Thử mở \(title) ngay</a>
+        <div class="step"><b>Bước 1:</b> Bấm <b>Cho phép</b> khi Safari hỏi tải hồ sơ cấu hình (nếu chưa hiện, bấm nút màu xanh bên dưới).</div>
+        <div class="step"><b>Bước 2:</b> Mở <b>Cài đặt (Settings)</b> của iPhone → bấm <b>Đã tải về hồ sơ</b> ở ngay đầu trang.</div>
+        <div class="step"><b>Bước 3:</b> Bấm <b>Cài đặt</b> (góc trên bên phải) → nhập mật mã máy.</div>
+        <div class="warn"><b>Lưu ý quan trọng ở màn hình "Cảnh báo (Hồ sơ không được xác nhận)":</b><br>Đây chỉ là thông báo mặc định của iOS cho hồ sơ tạo trên máy. Bạn hãy bấm tiếp nút <b>Cài đặt</b> màu xanh ở <b>góc trên cùng bên phải</b> → bấm <b>Cài đặt</b> màu đỏ ở dưới cùng là Icon <b>\(title)</b> sẽ hiện ngay ngoài Màn hình chính!</div>
+        <a class="btn" href="/webclip/\(guest.id).mobileconfig">Tải lại Hồ sơ Icon 1-Chạm (.mobileconfig)</a>
+        <a class="btn btn-secondary" href="\(launchURL)">Mở \(title) ngay bây giờ</a>
         </div>
         </body></html>
         """
@@ -464,7 +462,7 @@ final class ContainerStore: ObservableObject {
         }
 
         let targetPath = (mode == "webclip")
-            ? "/webclip/\(safeFile)"
+            ? "/safari/\(guest.id)#auto-profile"
             : "/safari/\(guest.id)#setup"
         shortcutDidOpenBrowser = false
 

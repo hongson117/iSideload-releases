@@ -212,13 +212,9 @@ struct ContainerView: View {
         }
         .confirmationDialog("Tạo Icon 1-Chạm ra Màn hình chính iOS", isPresented: Binding(get: { shortcutTarget != nil }, set: { if !$0 { shortcutTarget = nil } }), titleVisibility: .visible) {
             if let guest = shortcutTarget {
-                Button("Cài Icon 1-Chạm (Hồ sơ WebClip chuẩn)") {
+                Button("Cài Icon 1-Chạm ra Màn hình chính (Khuyên dùng)") {
                     shortcutTarget = nil
                     store.openShortcutInstaller(for: guest, mode: "webclip")
-                }
-                Button("Mở trang Safari (Gắn sẵn link nhảy trực tiếp)") {
-                    shortcutTarget = nil
-                    store.openShortcutInstaller(for: guest, mode: "safari")
                 }
                 Button("Sao chép link mở trực tiếp (sicontainer://launch)") {
                     UIPasteboard.general.string = "sicontainer://launch?guest=\(guest.id)"
@@ -228,7 +224,7 @@ struct ContainerView: View {
             }
             Button("Hủy", role: .cancel) { shortcutTarget = nil }
         } message: {
-            Text("Cài Hồ sơ WebClip hoặc Thêm vào MH chính từ Safari để chạm 1 lần ngoài màn hình chính là nhảy thẳng vào app.")
+            Text("Tải Hồ sơ WebClip gắn TargetApplicationBundleIdentifier: ở màn hình Cảnh báo trong Cài đặt, bấm tiếp nút 'Cài đặt' màu xanh ở góc trên bên phải để hoàn tất.")
         }
         .alert("Chạy cục bộ trên Con Chính?", isPresented: Binding(get: { launchingLocal != nil }, set: { if !$0 { launchingLocal = nil } })) {
             Button("Tiếp tục") {
