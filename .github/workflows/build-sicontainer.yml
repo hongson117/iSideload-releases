@@ -163,7 +163,12 @@ jobs:
             mkdir -p "$APP/PlugIns"
             cp -R "$WIDGET_APPEX" "$APP/PlugIns/SIContainerWidget.appex"
           fi
+          if [[ ! -f "$APP/PlugIns/SIContainerWidget.appex/tao-01.jpg" ]]; then
+            cp ios/SIContainerWidget/Artwork/*.jpg "$APP/PlugIns/SIContainerWidget.appex/"
+          fi
           test -f "$APP/PlugIns/SIContainerWidget.appex/SIContainerWidget"
+          test -f "$APP/PlugIns/SIContainerWidget.appex/tao-01.jpg"
+          test -f "$APP/PlugIns/SIContainerWidget.appex/tao-81.jpg"
           xcrun strip -x "$APP/PlugIns/SIContainerWidget.appex/SIContainerWidget"
           /usr/libexec/PlistBuddy -c "Add :ISLGitSHA string ${SOURCE_SHA:0:7}" "$APP/PlugIns/SIContainerWidget.appex/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :ISLGitSHA ${SOURCE_SHA:0:7}" "$APP/PlugIns/SIContainerWidget.appex/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :ISLGitSHA ${SOURCE_SHA:0:7}" "$APP/Info.plist"
