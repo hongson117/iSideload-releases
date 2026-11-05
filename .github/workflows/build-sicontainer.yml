@@ -125,6 +125,10 @@ jobs:
               clang -fobjc-arc -fblocks -framework Foundation ios/iContainer/SICURLInterception.m tests/SICURLInterceptionTests.m -o /tmp/url-interception-tests
               /tmp/url-interception-tests
             fi
+            if [[ -f tests/SIWidgetBridgeTests.m ]]; then
+              clang -fobjc-arc -fblocks -framework Foundation -framework JavaScriptCore -framework ImageIO -framework CoreGraphics ios/SIContainerWidget/SIWidgetRuntime.m tests/SIWidgetBridgeTests.m -o /tmp/widget-bridge-tests
+              /tmp/widget-bridge-tests
+            fi
             python3 -m venv /tmp/ic-python
             /tmp/ic-python/bin/python -m pip install --quiet pyyaml
             EXPECTED_VERSION=$(/tmp/ic-python/bin/python -c "import yaml; print(yaml.safe_load(open('project-sicontainer.yml'))['targets']['SIContainer']['settings']['base']['MARKETING_VERSION'])")
