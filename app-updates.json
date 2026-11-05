@@ -17,10 +17,10 @@
     },
     "sicontainer": {
       "version": "0.1.0",
-      "build": "1020",
-      "url": "https://github.com/hongson117/iSideload-releases/releases/download/sicontainer-v0.1.0-b1020/SIContainer.ipa",
-      "sha256": "d242c0414db6cc75dc98f275d324cfe18b914fe3416f58bb9c3edb9a02125966",
-      "bytes": 4807832
+      "build": "1021",
+      "url": "https://github.com/hongson117/iSideload-releases/releases/download/sicontainer-v0.1.0-b1021/SIContainer.ipa",
+      "sha256": "63f3df9771536f95265f8298afe62174dd04beda45964f8be0b01318a608a3b2",
+      "bytes": 4807821
     }
   }
 }
