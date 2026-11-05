@@ -117,6 +117,8 @@ jobs:
             if [[ -f tests/SILunarCalendarTests.swift ]]; then
               swiftc -parse-as-library ios/SIContainerWidget/SILunarCalendar.swift tests/SILunarCalendarTests.swift -o /tmp/lunar-tests
               /tmp/lunar-tests
+              SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+              xcrun --sdk iphoneos swiftc -target arm64-apple-ios17.0 -isysroot "$SDK" -parse-as-library -typecheck ios/SIContainerWidget/SILunarCalendar.swift ios/SIContainerWidget/SIContainerWidget.swift
             fi
             if [[ -f tests/SICURLInterceptionTests.m ]]; then
               clang -fobjc-arc -fblocks -framework Foundation ios/iContainer/SICURLInterception.m tests/SICURLInterceptionTests.m -o /tmp/url-interception-tests
@@ -146,9 +148,8 @@ jobs:
           ) >/tmp/macho-smoke.log 2>&1 || { echo 'Native Mach-O preparation check failed; private diagnostics were not uploaded.'; exit 1; }
       - name: Build unsigned SIContainerRunner1 and SIContainer
         run: |
-          xcodebuild -project SIContainer.xcodeproj -scheme SIContainerRunner1 -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/runner1-build.log 2>&1 || { echo 'Runner1 build failed; private diagnostics were not uploaded.'; exit 1; }
-          xcodebuild -project SIContainer.xcodeproj -target SIContainerWidget -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/widget-build.log 2>&1 || { echo 'Widget build failed; private diagnostics were not uploaded.'; exit 1; }
-          xcodebuild -project SIContainer.xcodeproj -scheme SIContainer -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/app-build.log 2>&1 || { echo 'Main app build failed; private diagnostics were not uploaded.'; exit 1; }
+          xcodebuild -project SIContainer.xcodeproj -scheme SIContainerRunner1 -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/runner1-build.log 2>&1 || { grep -E "error:|xcodebuild:" /tmp/runner1-build.log | tail -n 20 || true; echo 'Runner1 build failed.'; exit 1; }
+          xcodebuild -project SIContainer.xcodeproj -scheme SIContainer -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/app-build.log 2>&1 || { grep -E "error:|xcodebuild:" /tmp/app-build.log | tail -n 20 || true; echo 'Main app build failed.'; exit 1; }
       - name: Package and audit SIContainer and SIContainerRunner1 binaries
         run: |
           mkdir -p out-runner1/Payload out/Payload publish
