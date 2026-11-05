@@ -114,6 +114,10 @@ jobs:
               swiftc -parse-as-library ios/iContainer/SIShortcut.swift tests/SIShortcutTests.swift -o /tmp/shortcut-tests
               /tmp/shortcut-tests
             fi
+            if [[ -f tests/SILunarCalendarTests.swift ]]; then
+              swiftc -parse-as-library ios/SIContainerWidget/SILunarCalendar.swift tests/SILunarCalendarTests.swift -o /tmp/lunar-tests
+              /tmp/lunar-tests
+            fi
             if [[ -f tests/SICURLInterceptionTests.m ]]; then
               clang -fobjc-arc -fblocks -framework Foundation ios/iContainer/SICURLInterception.m tests/SICURLInterceptionTests.m -o /tmp/url-interception-tests
               /tmp/url-interception-tests
@@ -143,6 +147,7 @@ jobs:
       - name: Build unsigned SIContainerRunner1 and SIContainer
         run: |
           xcodebuild -project SIContainer.xcodeproj -scheme SIContainerRunner1 -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/runner1-build.log 2>&1 || { echo 'Runner1 build failed; private diagnostics were not uploaded.'; exit 1; }
+          xcodebuild -project SIContainer.xcodeproj -target SIContainerWidget -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/widget-build.log 2>&1 || { echo 'Widget build failed; private diagnostics were not uploaded.'; exit 1; }
           xcodebuild -project SIContainer.xcodeproj -scheme SIContainer -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CURRENT_PROJECT_VERSION="$BUILD_NUMBER" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build >/tmp/app-build.log 2>&1 || { echo 'Main app build failed; private diagnostics were not uploaded.'; exit 1; }
       - name: Package and audit SIContainer and SIContainerRunner1 binaries
         run: |
@@ -152,6 +157,14 @@ jobs:
           cp -R "$R1_APP" out-runner1/Payload/
           (cd out-runner1 && zip -qry ../publish/SIContainerRunner1.ipa Payload)
           APP=build/Build/Products/Release-iphoneos/SIContainer.app
+          WIDGET_APPEX=build/Build/Products/Release-iphoneos/SIContainerWidget.appex
+          if [[ -d "$WIDGET_APPEX" && ! -d "$APP/PlugIns/SIContainerWidget.appex" ]]; then
+            mkdir -p "$APP/PlugIns"
+            cp -R "$WIDGET_APPEX" "$APP/PlugIns/SIContainerWidget.appex"
+          fi
+          test -f "$APP/PlugIns/SIContainerWidget.appex/SIContainerWidget"
+          xcrun strip -x "$APP/PlugIns/SIContainerWidget.appex/SIContainerWidget"
+          /usr/libexec/PlistBuddy -c "Add :ISLGitSHA string ${SOURCE_SHA:0:7}" "$APP/PlugIns/SIContainerWidget.appex/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :ISLGitSHA ${SOURCE_SHA:0:7}" "$APP/PlugIns/SIContainerWidget.appex/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :ISLGitSHA ${SOURCE_SHA:0:7}" "$APP/Info.plist"
           cp publish/SIContainerRunner1.ipa "$APP/SIContainerRunner1.ipa"
           cp -R "$APP" out/Payload/
