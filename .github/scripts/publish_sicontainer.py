@@ -1,4 +1,4 @@
-"""Publish audited unsigned SIContainer + SIContainerRunner1 code; never accepts user signing data."""
+"""Publish audited unsigned SIContainer + SIContainerRunner1 + SIContainerRunner2 code; never accepts user signing data."""
 import base64, hashlib, json, os, pathlib, subprocess, sys, urllib.request, zipfile, plistlib
 
 repo = os.environ["GITHUB_REPOSITORY"]
@@ -6,6 +6,7 @@ assert repo == "hongson117/iSideload-releases"
 root = pathlib.Path(sys.argv[1])
 ipa = root / "SIContainer.ipa"
 r1_ipa = root / "SIContainerRunner1.ipa"
+r2_ipa = root / "SIContainerRunner2.ipa"
 
 
 def command(*args):
@@ -20,11 +21,14 @@ audit = json.loads((root / "recipient-audit.json").read_text())
 assert audit["passed"] and not audit["failures"]
 r1_audit = json.loads((root / "runner1-audit.json").read_text())
 assert r1_audit["passed"] and not r1_audit["failures"]
+r2_audit = json.loads((root / "runner2-audit.json").read_text())
+assert r2_audit["passed"] and not r2_audit["failures"]
 
 sha = hashlib.sha256(ipa.read_bytes()).hexdigest()
 r1_sha = hashlib.sha256(r1_ipa.read_bytes()).hexdigest()
+r2_sha = hashlib.sha256(r2_ipa.read_bytes()).hexdigest()
 sums = (root / "SHA256SUMS.txt").read_text()
-assert sha in sums and r1_sha in sums
+assert sha in sums and r1_sha in sums and r2_sha in sums
 
 with zipfile.ZipFile(ipa) as z:
     info = plistlib.loads(z.read(next(n for n in z.namelist() if n.count("/") == 2 and n.endswith(".app/Info.plist"))))
@@ -38,28 +42,36 @@ assert r1_info["CFBundleIdentifier"] == "com.hongson117.sicontainer.runner1"
 assert r1_info["CFBundleShortVersionString"] == meta["version"] and str(r1_info["CFBundleVersion"]) == meta["build"]
 assert r1_info["ISLGitSHA"] == meta["source_commit"][:7]
 
+with zipfile.ZipFile(r2_ipa) as z:
+    r2_info = plistlib.loads(z.read(next(n for n in z.namelist() if n.count("/") == 2 and n.endswith(".app/Info.plist"))))
+assert r2_info["CFBundleIdentifier"] == "com.hongson117.sicontainer.runner2"
+assert r2_info["CFBundleShortVersionString"] == meta["version"] and str(r2_info["CFBundleVersion"]) == meta["build"]
+assert r2_info["ISLGitSHA"] == meta["source_commit"][:7]
+
 tag = f"sicontainer-v{meta['version']}-b{meta['build']}"
 notes = root / "release-notes.md"
 notes.write_text(
-    f"""SIContainer {meta['version']} · build {meta['build']} (Bước 1: 1 Chính + 1 Phụ)
+    f"""SIContainer {meta['version']} · build {meta['build']} (Adaptive 2–3 Containers Zero-Config)
 
-- Kiến trúc tách biệt Con Chính (`SIContainer`) chuyên quản lý/ký/điều phối URL và Con Phụ 1 (`SIContainer Phụ 1`) chạy ứng dụng khách độc lập.
-- Dữ liệu người dùng dùng chung qua App Group (`group.com.hongson117.sicontainer.<TEAM_ID>`), trong khi mỗi Slot có bản `Prepared/<slot_bundle_id>/Prepared.app` ký DER/XML riêng cho đúng Bundle ID của Slot đó.
-- Cấp phát Slot theo giao dịch kèm khóa hạt nhân `flock()` (`runner1.alive.lock`, `.writer.lock`) và thu hồi lịch sự qua Darwin Notification.
-- Tích hợp tạo Shortcut Màn hình chính iOS (WebClip `.mobileconfig` không viền và Safari Standalone).
+- Kiến trúc tự động thích ứng 2–3 Container (`SIContainer` Chính + `SIContainer Phụ 1` + `SIContainer Phụ 2`) hoàn toàn tự động (Zero-Config).
+- Khi có đủ Phụ 1 & Phụ 2: Con Chính (`SIContainer`) 100% thuần Quản lý/Thư viện, trong khi Phụ 1 & Phụ 2 chạy song song 2 ứng dụng khách trong RAM với chuyển đổi 0-bounce và vuốt App Switcher tức thì.
+- Khi chỉ có Phụ 1: Tự động chạy ứng dụng trên Phụ 1 và chỉ mượn Con Chính khi Phụ 1 đang giữ ứng dụng phát âm thanh nền.
+- Tự động nhận diện và bảo vệ ứng dụng phát nhạc/âm thanh nền (`UIBackgroundModes: audio`) mà không cần cấu hình thủ công.
 
-IPA chưa ký (`SIContainer.ipa` đã kèm sẵn `SIContainerRunner1.ipa` bên trong để cài nhanh trên máy, đồng thời phát hành rời `SIContainerRunner1.ipa`).
+IPA chưa ký (`SIContainer.ipa` đã kèm sẵn `SIContainerRunner1.ipa` và `SIContainerRunner2.ipa` bên trong để tự động cài đặt).
 """,
     encoding="utf-8",
 )
 assets = [
     ipa,
     r1_ipa,
+    r2_ipa,
     root / "SHA256SUMS.txt",
     root / "ThirdPartyNotices.txt",
     root / "BUILD-SOURCE.json",
     root / "recipient-audit.json",
     root / "runner1-audit.json",
+    root / "runner2-audit.json",
 ]
 exists = subprocess.run(["gh", "release", "view", tag, "--repo", repo], capture_output=True).returncode == 0
 if not exists:
@@ -79,10 +91,13 @@ if not exists:
     )
 url = f"https://github.com/{repo}/releases/download/{tag}/SIContainer.ipa"
 r1_url = f"https://github.com/{repo}/releases/download/{tag}/SIContainerRunner1.ipa"
+r2_url = f"https://github.com/{repo}/releases/download/{tag}/SIContainerRunner2.ipa"
 with urllib.request.urlopen(url, timeout=120) as response:
     assert hashlib.file_digest(response, "sha256").hexdigest() == sha
 with urllib.request.urlopen(r1_url, timeout=120) as response:
     assert hashlib.file_digest(response, "sha256").hexdigest() == r1_sha
+with urllib.request.urlopen(r2_url, timeout=120) as response:
+    assert hashlib.file_digest(response, "sha256").hexdigest() == r2_sha
 
 
 def order(entry):
@@ -120,4 +135,4 @@ for attempt in range(3):
 else:
     raise RuntimeError("Release uploaded but update feed requires retry")
 
-print(json.dumps({"published": True, "ipa": url, "sha256": sha, "runner1_ipa": r1_url, "runner1_sha256": r1_sha}))
+print(json.dumps({"published": True, "ipa": url, "sha256": sha, "runner1_ipa": r1_url, "runner1_sha256": r1_sha, "runner2_ipa": r2_url, "runner2_sha256": r2_sha}))
